@@ -1,0 +1,24 @@
+{% extends "shared/base.html" %}
+{% block title %}Admin Dashboard — SANGAM STUDY{% endblock %}
+{% block content %}
+{% include "admin/_admin_nav.html" %}
+<div class="max-w-6xl mx-auto px-6 py-10">
+  <h1 class="font-display text-3xl text-ink mb-8">Content Overview</h1>
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    {% for label, key in [('Streams','streams'), ('Subjects','subjects'), ('Chapters','chapters'), ('Questions','questions'), ('Tests','tests')] %}
+    <div class="bg-white border border-ink/10 rounded-lg p-5 shadow-sm">
+      <p class="text-3xl font-display text-ink">{{ counts[key] }}</p>
+      <p class="text-sm text-ink/60 mt-1">{{ label }}</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if counts.questions == 0 %}
+  <div class="mt-8 bg-gold/10 border border-gold/30 rounded-lg p-5 text-sm text-ink/80">
+    No questions yet — the site will show "Coming Soon" placeholders until content exists.
+    Start with <a href="{{ url_for('admin.subjects_list') }}" class="text-gold font-medium hover:underline">Subjects</a> →
+    <a href="{{ url_for('admin.chapters_list') }}" class="text-gold font-medium hover:underline">Chapters</a> → Questions (Phase 2).
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
