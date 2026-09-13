@@ -4,10 +4,9 @@ Bulk-paste upload for the Mock Test question pool (`mock_questions`).
 Each question object in the pasted JSON array must carry an explicit
 "subject_name" field (e.g. "Physics", "Chemistry", "Biology"). This
 route resolves that name to the correct subject_id for the stream
-being uploaded into — this is what keeps mock_questions.subject_id
-correctly stream-locked. If subject_name doesn't match any real
-subject for that stream, the row is rejected with a validation error
-rather than guessed at.
+being uploaded into. If subject_name doesn't match any real subject
+for that stream, the row is rejected with a validation error — there
+is no keyword guessing and no needs_review fallback.
 """
 import json
 
@@ -35,9 +34,8 @@ def _validate_mock_question(raw, subject_name_to_id, difficulty_ids, stream_id):
 
     subject_name is matched case-insensitively against the subjects
     that exist for the target stream (subject_name_to_id is built
-    from that stream's rows only) — a name that's valid in general
-    but belongs to a different stream's subject list still fails here,
-    which is exactly the stream-locking this table exists to enforce.
+    from that stream's rows only) — a name valid for a different
+    stream still fails here, which enforces stream-locking.
     """
     if not isinstance(raw, dict):
         return None, "not a JSON object"
@@ -69,7 +67,7 @@ def _validate_mock_question(raw, subject_name_to_id, difficulty_ids, stream_id):
     else:
         pyq_year = None
 
-    # --- Resolve subject_name -> subject_id for this stream ---
+    # --- Resolve subject_name -> subject_id for this stream (no guessing) ---
     subject_name_raw = str(raw["subject_name"]).strip()
     subject_id = subject_name_to_id.get(subject_name_raw.lower())
     if not subject_id:
@@ -150,9 +148,7 @@ def mock_questions_bulk_upload():
     Each row's subject_name is resolved to that subject's id for the
     selected stream (see _validate_mock_question). Rows whose
     subject_name doesn't match a real subject for this stream are
-    rejected outright — there's no needs_review fallback anymore,
-    so a typo'd subject name means that row is skipped and reported,
-    not silently guessed at.
+    rejected outright and reported — nothing is silently guessed at.
     """
     stream_id = request.form.get("stream_id")
     raw_json = request.form.get("bulk_json", "").strip()
@@ -184,9 +180,8 @@ def mock_questions_bulk_upload():
         return redirect_target()
 
     # Pulled once, outside the loop: subject_name_to_id maps this
-    # stream's subject names (lowercased, for case-insensitive
-    # matching) to their subject_id — this is what enforces
-    # stream-locking, since a name that's only valid for a
+    # stream's subject names (lowercased) to their subject_id — this
+    # is what enforces stream-locking, since a name only valid for a
     # different stream simply won't be in this dict.
     subjects_for_stream = (
         supabase_admin.table("subjects")
@@ -215,20 +210,12 @@ def mock_questions_bulk_upload():
         try:
             supabase_admin.table("mock_questions").insert(valid_payloads).execute()
         except Exception as exc:
-            # A DB-level failure (e.g. bad stream_id FK) — don't
-            # report success if the batch never actually landed.
             flash(f"Upload failed at the database level: {exc}", "error")
             return redirect_target()
 
     if valid_payloads and not errors:
         flash(f"Bulk upload complete — {len(valid_payloads)} question(s) inserted.", "success")
     elif valid_payloads and errors:
-        # NOTE: base.html's flash rendering only has two visual states —
-        # 'error' (red) and everything else (green) — there's no amber/
-        # warning style defined. A partial failure is closer to an error
-        # than a clean success, so it uses 'error' here rather than a
-        # 'warning' category that would silently render green and read
-        # as full success.
         flash(
             f"{len(valid_payloads)} question(s) inserted, but "
             f"{len(errors)} row(s) were skipped — {'; '.join(errors[:5])}"
