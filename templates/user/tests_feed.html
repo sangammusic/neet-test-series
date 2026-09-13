@@ -1,0 +1,25 @@
+{% extends "shared/base.html" %}
+{% block title %}Mock Test Series — {{ stream.name }}{% endblock %}
+{% block content %}
+<section class="max-w-3xl mx-auto px-6 pt-12 pb-24">
+  <p class="text-gold font-semibold text-sm mb-2">{{ stream.name.upper() }}</p>
+  <h1 class="font-display text-2xl font-semibold text-ink mb-8">Mock Test Series</h1>
+  <div class="grid gap-4">
+    {% for t in tests %}
+    <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}"
+       class="block p-6 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-sm transition-all bg-white">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="font-display text-lg font-semibold text-ink">{{ t.title }}</p>
+          <p class="text-sm text-ink/60 mt-1">{{ t.duration_minutes }} min · {{ t.total_marks or '—' }} marks</p>
+        </div>
+        {% if t.is_premium %}<span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-1 whitespace-nowrap">Premium 🔒</span>
+        {% else %}<span class="text-xs bg-green-50 text-green-700 font-semibold rounded px-2 py-1 whitespace-nowrap">Free</span>{% endif %}
+      </div>
+    </a>
+    {% else %}
+    <p class="text-ink/50 text-sm">No mock tests published yet for this stream.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
