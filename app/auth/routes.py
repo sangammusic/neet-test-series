@@ -21,6 +21,15 @@ def login():
         flash("Invalid email or password.", "error")
         return render_template("login.html"), 401
 
+    if not result.session:
+        # This happens when "Confirm email" is enabled in Supabase Auth
+        # settings and the user hasn't clicked the confirmation link yet.
+        # sign_in_with_password doesn't raise in this case — it just
+        # returns a user with session=None — so this has to be checked
+        # explicitly or the next two lines crash with an AttributeError.
+        flash("Please confirm your email before logging in — check your inbox.", "error")
+        return render_template("login.html"), 401
+
     session["user_id"] = result.user.id
     session["access_token"] = result.session.access_token
     return redirect(url_for("user.stream_select"))
