@@ -1,0 +1,69 @@
+{% extends "shared/base.html" %}
+{% block title %}Mock Tests — Admin{% endblock %}
+{% block content %}
+{% include "admin/_admin_nav.html" %}
+<div class="max-w-4xl mx-auto px-6 py-10">
+  <h1 class="font-display text-3xl text-ink mb-6">Mock Tests</h1>
+
+  <form method="POST" action="{{ url_for('admin.tests_create') }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 grid grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Stream</label>
+      <select name="stream_id" required class="w-full rounded-md border border-ink/15 px-3 py-2">
+        {% for s in streams %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Category</label>
+      <select name="category_id" required class="w-full rounded-md border border-ink/15 px-3 py-2">
+        {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-span-2">
+      <label class="block text-sm font-medium text-ink mb-1">Test Name</label>
+      <input type="text" name="title" required placeholder="e.g. NEET Full Mock #1" class="w-full rounded-md border border-ink/15 px-3 py-2">
+    </div>
+    <div class="col-span-2">
+      <label class="block text-sm font-medium text-ink mb-1">Description (optional)</label>
+      <textarea name="description" rows="2" class="w-full rounded-md border border-ink/15 px-3 py-2"></textarea>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Duration (minutes)</label>
+      <input type="number" name="duration_minutes" value="180" required class="w-full rounded-md border border-ink/15 px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Total Marks</label>
+      <input type="number" name="total_marks" placeholder="e.g. 720" class="w-full rounded-md border border-ink/15 px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Negative Marking (per wrong answer)</label>
+      <input type="number" step="0.25" name="negative_marking" value="0" class="w-full rounded-md border border-ink/15 px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Price (₹, if premium)</label>
+      <input type="number" step="1" name="price_inr" value="0" class="w-full rounded-md border border-ink/15 px-3 py-2">
+    </div>
+    <label class="col-span-2 flex items-center gap-2 text-sm font-medium text-ink">
+      <input type="checkbox" name="is_premium" class="rounded border-ink/30"> Is Premium?
+    </label>
+    <button type="submit" class="col-span-2 bg-ink text-paper font-medium py-2.5 rounded-md hover:bg-ink-light">
+      Create Test → Map Questions
+    </button>
+  </form>
+
+  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
+    {% for t in tests %}
+    <div class="flex items-center justify-between px-5 py-3">
+      <div>
+        <span class="font-medium text-ink">{{ t.title }}</span>
+        <span class="text-ink/50 text-sm ml-2">{{ t.streams.name if t.streams }} · {{ t.duration_minutes }} min · {{ t.total_marks or '—' }} marks</span>
+        {% if t.is_premium %}<span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5 ml-2">PREMIUM</span>
+        {% else %}<span class="text-xs bg-green-50 text-green-700 rounded px-2 py-0.5 ml-2">FREE</span>{% endif %}
+      </div>
+      <a href="{{ url_for('admin.tests_manage', test_id=t.id) }}" class="text-sm text-gold hover:underline">Manage Questions →</a>
+    </div>
+    {% else %}
+    <p class="px-5 py-6 text-ink/50 text-sm">No tests yet — create one above.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
