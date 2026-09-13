@@ -1,0 +1,18 @@
+{% extends "shared/base.html" %}
+{% block title %}Practice — {{ stream.name }}{% endblock %}
+{% block content %}
+<section class="max-w-3xl mx-auto px-6 pt-12 pb-24">
+  <p class="text-gold font-semibold text-sm mb-2">{{ stream.name.upper() }} · CHAPTER-WISE PRACTICE</p>
+  <h1 class="font-display text-2xl font-semibold text-ink mb-8">Choose a Subject</h1>
+  <div class="grid sm:grid-cols-3 gap-4">
+    {% for s in subjects %}
+    <a href="{{ url_for('user.practice_chapters', slug=stream.slug, subject_id=s.id) }}"
+       class="block p-6 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-sm transition-all bg-white text-center font-medium text-ink">
+      {{ s.name }}
+    </a>
+    {% else %}
+    <p class="text-ink/50 text-sm col-span-full">No subjects yet for this stream.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
