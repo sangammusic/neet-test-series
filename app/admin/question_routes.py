@@ -1,16 +1,13 @@
 """
 Chapter-wise question bank admin (`questions` table).
 
-Bulk upload here follows the 2-level / 4-combination structure
-mirrored from the user-facing practice flow (app/user/routes.py):
-
-    Level 1: MCQ vs PYQ        -> is_pyq (PYQ requires pyq_year)
+Bulk upload follows the 2-level / 4-combination structure:
+    Level 1: MCQ vs PYQ           -> is_pyq (PYQ requires pyq_year)
     Level 2: Topic-wise vs Random -> topic_name (Random -> "General")
 
-Chapters are auto-created from a plain-text chapter name using the
-same _slugify() helper subject_routes.py and chapter_routes.py already
-use for admin-created chapters, so a bulk paste never needs the admin
-to pre-create the chapter by hand first.
+Chapters are auto-created (silently) from a typed chapter name using
+_slugify() from subject_routes.py, so a bulk paste never needs the
+admin to pre-create the chapter by hand first.
 """
 import json
 
@@ -30,12 +27,11 @@ REQUIRED_BULK_FIELDS = (
 
 def _get_or_create_chapter(subject_id, chapter_name):
     """
-    Looks up a chapter by (subject_id, slug); creates it if missing.
-
-    Uses the same _slugify() as the manual "Create Chapter" admin
-    form, so a bulk-pasted chapter name resolves to the identical slug
-    a human typing that same name into the chapter form would get —
-    no duplicate chapters from casing/whitespace differences.
+    Looks up a chapter by (subject_id, slug); creates it silently if
+    missing. Uses the same _slugify() as the manual "Create Chapter"
+    admin form, so a bulk-pasted chapter name resolves to the
+    identical slug a human typing that name into the chapter form
+    would get — no duplicate chapters from casing/whitespace diffs.
     """
     slug = _slugify(chapter_name)
 
@@ -64,17 +60,13 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id):
     array into a payload ready for insert() into `questions`.
 
     Enforces the 2-level / 4-combination rule:
-      Level 1 - question_type: 'mcq' or 'pyq'.
-                'pyq' REQUIRES pyq_year.
+      Level 1 - question_type: 'mcq' or 'pyq'. 'pyq' REQUIRES pyq_year.
       Level 2 - topic_name: if present/non-empty -> Topic-wise;
-                if absent/blank -> Random, stored as "General"
-                (mirrors questions_create()'s manual-form default).
+                if absent/blank -> Random, stored as "General".
 
     Returns (payload_dict, None) on success, or (None, error_string)
     on failure. Never raises — every failure mode is caught and
-    turned into a message, since this runs inside a loop over
-    up to ~100 untrusted, AI-generated rows and one uncaught
-    exception shouldn't take down the whole batch.
+    turned into a message so one bad row doesn't take down the batch.
     """
     if not isinstance(raw, dict):
         return None, "not a JSON object"
@@ -190,43 +182,6 @@ def questions_list():
     )
 
 
-@admin_bp.route("/questions/create", methods=["POST"])
-@admin_required
-def questions_create():
-    chapter_id = request.form.get("chapter_id")
-    question_type = request.form.get("question_type")  # 'mcq' or 'pyq'
-    is_pyq = (question_type == "pyq")
-    pyq_year = request.form.get("pyq_year") or None
-
-    payload = {
-        "chapter_id": chapter_id,
-        "difficulty_id": int(request.form.get("difficulty_id")),
-        "topic_name": request.form.get("topic_name", "").strip() or "General",
-        "question_text": request.form.get("question_text", "").strip(),
-        "option_a": request.form.get("option_a", "").strip(),
-        "option_b": request.form.get("option_b", "").strip(),
-        "option_c": request.form.get("option_c", "").strip(),
-        "option_d": request.form.get("option_d", "").strip(),
-        "correct_option": request.form.get("correct_option"),
-        "explanation": request.form.get("explanation", "").strip() or None,
-        "is_pyq": is_pyq,
-        "pyq_year": int(pyq_year) if (is_pyq and pyq_year) else None,
-        "image_url": request.form.get("image_url", "").strip() or None,
-        "is_premium": request.form.get("is_premium") == "on",
-    }
-
-    try:
-        supabase_admin.table("questions").insert(payload).execute()
-        flash("Question added.", "success")
-    except Exception as exc:
-        flash(f"Could not add question: {exc}", "error")
-
-    # keep the admin on the same chapter view after adding
-    subject_id = request.form.get("subject_id")
-    stream_id = request.form.get("stream_id")
-    return redirect(url_for("admin.questions_list", stream_id=stream_id, subject_id=subject_id, chapter_id=chapter_id))
-
-
 @admin_bp.route("/questions/bulk-upload", methods=["POST"])
 @admin_required
 def questions_bulk_upload():
@@ -234,18 +189,9 @@ def questions_bulk_upload():
     Parses a pasted JSON array of question objects and inserts all
     valid ones into `questions` in a single batch insert() call.
 
-    Unlike the manual single-question form, bulk upload takes a
-    subject_id + a free-text chapter_name (not a pre-picked
-    chapter_id) — the chapter is looked up-or-created via
-    _get_or_create_chapter() so an admin can paste a whole new
-    chapter's worth of questions without visiting /admin/chapters
-    first.
-
-    Each row is validated independently (see _validate_bulk_question
-    above) — one bad row in a 100-question paste doesn't block the
-    other 99. Results (inserted count + any skipped rows, with the
-    reason for each) are reported back via flash so nothing fails
-    silently.
+    Takes subject_id + a free-text chapter_name (not a pre-picked
+    chapter_id) — the chapter is looked up-or-created silently via
+    _get_or_create_chapter().
     """
     stream_id = request.form.get("stream_id")
     subject_id = request.form.get("subject_id")
@@ -284,8 +230,6 @@ def questions_bulk_upload():
         flash(f"Could not create/find chapter '{chapter_name}': {exc}", "error")
         return redirect_target()
 
-    # Pulled once, outside the loop, so validating 100 rows doesn't
-    # mean 100 extra queries to the difficulty_levels table.
     difficulty_ids = {
         d["id"] for d in
         supabase_admin.table("difficulty_levels").select("id").execute().data
@@ -304,9 +248,6 @@ def questions_bulk_upload():
         try:
             supabase_admin.table("questions").insert(valid_payloads).execute()
         except Exception as exc:
-            # The insert can still fail as a whole (e.g. a DB-level
-            # constraint none of our checks above cover) — don't
-            # claim success if that happens.
             flash(f"Upload failed at the database level: {exc}", "error")
             return redirect(url_for(
                 "admin.questions_list", stream_id=stream_id, subject_id=subject_id, chapter_id=chapter_id
@@ -315,13 +256,6 @@ def questions_bulk_upload():
     if valid_payloads and not errors:
         flash(f"Bulk upload complete — {len(valid_payloads)} question(s) inserted into '{chapter_name}'.", "success")
     elif valid_payloads and errors:
-        # NOTE: base.html's flash rendering only has two visual states —
-        # 'error' (red) and everything else (green) — there's no amber/
-        # warning style defined. A partial failure is closer to an error
-        # than a clean success, so it uses 'error' here rather than a
-        # 'warning' category that would silently render green and read
-        # as full success. If you want a real three-way amber state,
-        # that's a one-line addition to the ternary in base.html.
         flash(
             f"{len(valid_payloads)} question(s) inserted into '{chapter_name}', but "
             f"{len(errors)} row(s) were skipped — {'; '.join(errors[:5])}"
