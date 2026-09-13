@@ -9,3 +9,5 @@ admin_bp = Blueprint(
 
 from app.admin import decorators  # noqa: E402,F401
 from app.admin import routes  # noqa: E402,F401
+from app.admin import subject_routes  # noqa: E402,F401
+from app.admin import chapter_routes  # noqa: E402,F401
