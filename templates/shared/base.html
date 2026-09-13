@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SANGAM STUDY{% endblock %}</title>
+
+    <!-- Fonts: Lora (display serif, exam-board gravitas) + Inter (body, long-read comfort) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ink: {
+                            DEFAULT: '#0F1729',
+                            light: '#1B2740',
+                        },
+                        paper: '#FAF7F0',
+                        gold: {
+                            DEFAULT: '#D4A017',
+                            light: '#E8C158',
+                        },
+                    },
+                    fontFamily: {
+                        display: ['Lora', 'serif'],
+                        body: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+
+    <!-- MathJax for LaTeX (Physics/Chem equations) -->
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-paper text-ink font-body antialiased">
+
+    {% include "shared/_nav.html" %}
+
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="max-w-2xl mx-auto mt-6 px-4">
+                    {% for category, message in messages %}
+                        <div class="rounded-md px-4 py-3 mb-2 text-sm font-medium
+                            {{ 'bg-red-50 text-red-800 border border-red-200' if category == 'error'
+                               else 'bg-green-50 text-green-800 border border-green-200' }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    {% include "shared/_footer.html" %}
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
