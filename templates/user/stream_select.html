@@ -1,0 +1,57 @@
+{% extends "shared/base.html" %}
+{% block title %}Choose your stream — SANGAM STUDY{% endblock %}
+
+{% block content %}
+<section class="max-w-4xl mx-auto px-6 pt-16 pb-24">
+    <p class="text-gold font-semibold text-sm tracking-wide mb-3">STEP 1 OF 2</p>
+    <h1 class="font-display text-4xl font-semibold mb-3 text-ink">What are you preparing for?</h1>
+    <p class="text-ink/60 mb-10">Pick as many as apply — you can switch or add more anytime.</p>
+
+    {% if error %}
+        <div class="rounded-sm px-4 py-3 mb-6 text-sm font-medium bg-red-50 text-red-800 border border-red-200">
+            {{ error }}
+        </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('user.stream_select') }}">
+        <div class="grid sm:grid-cols-2 gap-4 mb-10">
+            {% for stream in streams %}
+            <label class="stream-card relative flex items-start gap-4 p-5 border-2 border-ink/10 rounded-sm cursor-pointer hover:border-gold/60 transition-colors">
+                <input type="checkbox" name="stream_ids" value="{{ stream.id }}" class="peer sr-only">
+                <div class="w-11 h-11 rounded-sm bg-ink/5 flex items-center justify-center shrink-0 peer-checked:bg-gold/20">
+                    {% if stream.icon_url %}
+                        <img src="{{ stream.icon_url }}" alt="" class="w-6 h-6">
+                    {% else %}
+                        <span class="font-display font-semibold text-ink/50">{{ stream.name[0] }}</span>
+                    {% endif %}
+                </div>
+                <div>
+                    <p class="font-semibold text-ink">{{ stream.name }}</p>
+                    {% if stream.description %}
+                        <p class="text-sm text-ink/50 mt-0.5">{{ stream.description }}</p>
+                    {% endif %}
+                </div>
+                <div class="absolute top-4 right-4 w-5 h-5 rounded-full border-2 border-ink/20 peer-checked:border-gold peer-checked:bg-gold flex items-center justify-center">
+                    <svg class="w-3 h-3 text-ink hidden peer-checked:block" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+
+        <button type="submit" class="bg-ink text-paper px-8 py-3.5 rounded-sm font-semibold hover:bg-ink-light transition-colors">
+            Continue
+        </button>
+    </form>
+</section>
+
+<style>
+    /* peer-checked border on the label itself needs this since
+       Tailwind's peer-checked utilities target the sibling, not self */
+    .stream-card:has(input:checked) {
+        border-color: #D4A017;
+        background: rgba(212, 160, 23, 0.04);
+    }
+</style>
+{% endblock %}
