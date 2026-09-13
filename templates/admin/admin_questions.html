@@ -1,12 +1,13 @@
 {% extends "shared/base.html" %}
-{% block title %}Questions — Admin{% endblock %}
+{% block title %}Chapter-wise Questions — Admin{% endblock %}
 {% block content %}
 {% include "admin/_admin_nav.html" %}
 <div class="max-w-5xl mx-auto px-6 py-10">
-  <h1 class="font-display text-3xl text-ink mb-6">Questions</h1>
+  <h1 class="font-display text-3xl text-ink mb-6">Chapter-wise Questions</h1>
 
-  <!-- Step 1: pick Stream -> Subject -> Chapter (each reloads the page via GET) -->
-  <div class="bg-white border border-ink/10 rounded-lg p-6 mb-8 grid grid-cols-3 gap-4">
+  <!-- Stream -> Subject (stream-locked: Subject select is disabled/empty -->
+  <!-- until a Stream is chosen, and only lists subjects for that stream). -->
+  <div class="bg-white border border-ink/10 rounded-lg p-6 mb-8 grid grid-cols-2 gap-4">
     <form method="GET" class="contents">
       <div>
         <label class="block text-sm font-medium text-ink mb-1">Stream</label>
@@ -27,66 +28,141 @@
         </select>
         <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
       </div>
-      <div>
-        <label class="block text-sm font-medium text-ink mb-1">Chapter</label>
-        <select name="chapter_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2" {{ 'disabled' if not chapters }}>
-          <option value="">— select —</option>
-          {% for c in chapters %}
-          <option value="{{ c.id }}" {{ 'selected' if c.id == selected_chapter_id }}>{{ c.name }}</option>
-          {% endfor %}
-        </select>
-        <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
-        <input type="hidden" name="subject_id" value="{{ selected_subject_id }}">
-      </div>
     </form>
   </div>
 
-  {% if chapter %}
-  <!-- Bulk AI Upload: paste a JSON array of questions, all inserted in one batch. -->
-  <form method="POST" action="{{ url_for('admin.questions_bulk_upload') }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 space-y-4">
-    <input type="hidden" name="chapter_id" value="{{ chapter.id }}">
+  {% if selected_subject_id %}
+  <form method="POST" action="{{ url_for('admin.questions_bulk_upload') }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 space-y-5">
     <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
     <input type="hidden" name="subject_id" value="{{ selected_subject_id }}">
 
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="font-medium text-ink">Bulk AI Upload</h2>
-        <p class="text-sm text-ink/60 mt-0.5">
-          Paste a JSON array of questions for <strong class="text-ink">{{ chapter.name }}</strong> — all valid rows insert in a single batch. Bad rows are skipped and reported, not silently dropped.
-        </p>
+    <div>
+      <h2 class="font-medium text-ink">Bulk Chapter-wise Upload</h2>
+      <p class="text-sm text-ink/60 mt-0.5">
+        Type the chapter name (created automatically if it doesn't exist), build rows with the
+        toggles below, then upload the JSON array.
+      </p>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Chapter Name</label>
+      <input type="text" name="chapter_name" required placeholder="e.g. Laws of Motion"
+             class="w-full rounded-md border border-ink/15 px-3 py-2">
+      <p class="text-xs text-ink/50 mt-1">Matched by slug against existing chapters in this subject — created silently only if no match is found.</p>
+    </div>
+
+    <!-- ================= 4-combination row builder ================= -->
+    <div class="bg-ink/5 border border-ink/10 rounded-md p-4 space-y-4">
+      <p class="text-sm font-medium text-ink">Build a question row</p>
+
+      <div class="grid grid-cols-2 gap-4">
+        <!-- Level 1: MCQ vs PYQ -->
+        <div>
+          <p class="text-xs font-medium text-ink/70 mb-2">Level 1 — Type</p>
+          <div class="flex gap-6">
+            <label class="flex items-center gap-2 text-sm text-ink">
+              <input type="radio" name="qtype" value="mcq" checked onchange="toggleLevel1()"> MCQ
+            </label>
+            <label class="flex items-center gap-2 text-sm text-ink">
+              <input type="radio" name="qtype" value="pyq" onchange="toggleLevel1()"> PYQ (Previous Year)
+            </label>
+          </div>
+          <div id="pyq_year_wrap" class="hidden mt-2">
+            <label class="block text-xs font-medium text-ink/70 mb-1">Enter Year</label>
+            <input type="number" id="pyq_year_input" placeholder="e.g. 2023"
+                   class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm">
+          </div>
+        </div>
+
+        <!-- Level 2: Random vs Topic-wise -->
+        <div>
+          <p class="text-xs font-medium text-ink/70 mb-2">Level 2 — Grouping</p>
+          <div class="flex gap-6">
+            <label class="flex items-center gap-2 text-sm text-ink">
+              <input type="radio" name="grouping" value="random" checked onchange="toggleLevel2()"> Random
+            </label>
+            <label class="flex items-center gap-2 text-sm text-ink">
+              <input type="radio" name="grouping" value="topic_wise" onchange="toggleLevel2()"> Topic-wise
+            </label>
+          </div>
+          <div id="topic_name_wrap" class="hidden mt-2">
+            <label class="block text-xs font-medium text-ink/70 mb-1">Enter Topic Name</label>
+            <input type="text" id="topic_name_input" placeholder="e.g. Newton's Second Law"
+                   class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm">
+          </div>
+        </div>
       </div>
-      <button type="button" onclick="document.getElementById('bulk_json_example').classList.toggle('hidden')"
+
+      <hr class="border-ink/10">
+
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Question Text</label>
+          <textarea id="row_question_text" rows="2" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm"></textarea></div>
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Difficulty</label>
+          <select id="row_difficulty_id" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm">
+            {% for d in difficulty_levels %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+          </select></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option A</label><input type="text" id="row_option_a" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option B</label><input type="text" id="row_option_b" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option C</label><input type="text" id="row_option_c" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option D</label><input type="text" id="row_option_d" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Correct Option</label>
+          <select id="row_correct_option" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm">
+            <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+          </select></div>
+        <div class="flex items-end">
+          <label class="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" id="row_is_premium" class="rounded border-ink/30"> Premium
+          </label>
+        </div>
+      </div>
+
+      <button type="button" onclick="addRowToJson()"
+              class="bg-ink text-paper text-sm font-medium py-2 px-4 rounded-md hover:bg-ink-light">
+        + Add Row to JSON Below
+      </button>
+    </div>
+    <!-- ================= end row builder ================= -->
+
+    <div class="flex items-center justify-end">
+      <button type="button" onclick="document.getElementById('chapter_bulk_json_example').classList.toggle('hidden')"
               class="text-sm text-ink/50 hover:text-ink underline whitespace-nowrap">
         Show expected format
       </button>
     </div>
 
-    <pre id="bulk_json_example" class="hidden bg-ink/5 border border-ink/10 rounded-md p-4 text-xs text-ink/70 overflow-x-auto">[
+    <pre id="chapter_bulk_json_example" class="hidden bg-ink/5 border border-ink/10 rounded-md p-4 text-xs text-ink/70 overflow-x-auto">[
   {
+    "question_type": "mcq",
+    "topic_name": "Newton's Second Law",
     "question_text": "What is Newton's second law?",
-    "option_a": "F = ma",
-    "option_b": "E = mc^2",
-    "option_c": "V = IR",
-    "option_d": "P = mv",
+    "option_a": "F = ma", "option_b": "E = mc^2", "option_c": "V = IR", "option_d": "P = mv",
     "correct_option": "A",
-    "topic_name": "Newton's Laws",
     "difficulty_id": 2,
-    "is_premium": false,
-    "is_pyq": false,
-    "pyq_year": null,
-    "explanation": "Optional — shown to students after they answer.",
-    "image_url": null
+    "is_premium": false
+  },
+  {
+    "question_type": "pyq",
+    "pyq_year": 2022,
+    "question_text": "No topic_name here, so it's Random / General.",
+    "option_a": "...", "option_b": "...", "option_c": "...", "option_d": "...",
+    "correct_option": "B",
+    "difficulty_id": 3
   }
 ]</pre>
     <p class="text-xs text-ink/50 -mt-2">
-      Required per question: question_text, option_a–d, correct_option (A/B/C/D), topic_name, difficulty_id ({% for d in difficulty_levels %}{{ d.id }}={{ d.name }}{{ ", " if not loop.last }}{% endfor %}).
-      Optional: is_premium, is_pyq, pyq_year, explanation, image_url.
+      Required per question: question_text, option_a–d, correct_option (A/B/C/D), difficulty_id.
+      question_type defaults to "mcq" if omitted; "pyq" requires pyq_year. topic_name defaults to "General" if omitted.
     </p>
 
     <div>
-      <label class="block text-sm font-medium text-ink mb-1">Paste JSON array</label>
-      <textarea name="bulk_json" rows="10" placeholder='[{"question_text": "...", "option_a": "...", ...}]'
-                class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm"></textarea>
+      <label class="block text-sm font-medium text-ink mb-1">JSON array (rows you add above land here — edit freely)</label>
+      <textarea name="bulk_json" id="bulk_json" rows="16" placeholder="[]"
+                class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm">[]</textarea>
     </div>
 
     <button type="submit" class="bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light">
@@ -94,77 +170,66 @@
     </button>
   </form>
 
-  <!-- Step 2: add a question to this chapter -->
-  <form method="POST" action="{{ url_for('admin.questions_create') }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 space-y-4">
-    <input type="hidden" name="chapter_id" value="{{ chapter.id }}">
-    <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
-    <input type="hidden" name="subject_id" value="{{ selected_subject_id }}">
-    <p class="text-sm text-ink/60">Adding a question to <strong class="text-ink">{{ chapter.name }}</strong></p>
+  <script>
+    function toggleLevel1() {
+      const isPyq = document.querySelector('input[name="qtype"]:checked').value === 'pyq';
+      document.getElementById('pyq_year_wrap').classList.toggle('hidden', !isPyq);
+    }
+    function toggleLevel2() {
+      const isTopicWise = document.querySelector('input[name="grouping"]:checked').value === 'topic_wise';
+      document.getElementById('topic_name_wrap').classList.toggle('hidden', !isTopicWise);
+    }
 
-    <div class="grid grid-cols-3 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-ink mb-1">Question Type</label>
-        <select name="question_type" id="question_type" onchange="document.getElementById('pyq_year_wrap').style.display = this.value === 'pyq' ? 'block' : 'none'" class="w-full rounded-md border border-ink/15 px-3 py-2">
-          <option value="mcq">MCQ (Practice)</option>
-          <option value="pyq">PYQ (Previous Year)</option>
-        </select>
-      </div>
-      <div id="pyq_year_wrap" style="display:none">
-        <label class="block text-sm font-medium text-ink mb-1">PYQ Year</label>
-        <input type="number" name="pyq_year" placeholder="e.g. 2023" class="w-full rounded-md border border-ink/15 px-3 py-2">
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-ink mb-1">Difficulty</label>
-        <select name="difficulty_id" required class="w-full rounded-md border border-ink/15 px-3 py-2">
-          {% for d in difficulty_levels %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
-        </select>
-      </div>
-    </div>
+    function addRowToJson() {
+      const qtype = document.querySelector('input[name="qtype"]:checked').value;
+      const grouping = document.querySelector('input[name="grouping"]:checked').value;
 
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Topic Name <span class="text-ink/40 font-normal">(used for Topic-wise Practice sorting)</span></label>
-      <input type="text" name="topic_name" required placeholder="e.g. Newton's Second Law" class="w-full rounded-md border border-ink/15 px-3 py-2">
-    </div>
+      const row = {
+        question_type: qtype,
+        question_text: document.getElementById('row_question_text').value.trim(),
+        option_a: document.getElementById('row_option_a').value.trim(),
+        option_b: document.getElementById('row_option_b').value.trim(),
+        option_c: document.getElementById('row_option_c').value.trim(),
+        option_d: document.getElementById('row_option_d').value.trim(),
+        correct_option: document.getElementById('row_correct_option').value,
+        difficulty_id: parseInt(document.getElementById('row_difficulty_id').value, 10),
+        is_premium: document.getElementById('row_is_premium').checked,
+      };
 
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Question Text (LaTeX via \( \) supported)</label>
-      <textarea name="question_text" required rows="3" class="w-full rounded-md border border-ink/15 px-3 py-2"></textarea>
-    </div>
+      if (qtype === 'pyq') {
+        row.pyq_year = parseInt(document.getElementById('pyq_year_input').value, 10) || null;
+      }
+      if (grouping === 'topic_wise') {
+        row.topic_name = document.getElementById('topic_name_input').value.trim() || 'General';
+      }
+      // Random -> topic_name intentionally omitted; backend defaults it to "General".
 
-    <div class="grid grid-cols-2 gap-4">
-      <div><label class="block text-sm font-medium text-ink mb-1">Option A</label><input type="text" name="option_a" required class="w-full rounded-md border border-ink/15 px-3 py-2"></div>
-      <div><label class="block text-sm font-medium text-ink mb-1">Option B</label><input type="text" name="option_b" required class="w-full rounded-md border border-ink/15 px-3 py-2"></div>
-      <div><label class="block text-sm font-medium text-ink mb-1">Option C</label><input type="text" name="option_c" required class="w-full rounded-md border border-ink/15 px-3 py-2"></div>
-      <div><label class="block text-sm font-medium text-ink mb-1">Option D</label><input type="text" name="option_d" required class="w-full rounded-md border border-ink/15 px-3 py-2"></div>
-    </div>
+      const textarea = document.getElementById('bulk_json');
+      let current = [];
+      try {
+        const parsed = JSON.parse(textarea.value);
+        if (Array.isArray(parsed)) current = parsed;
+      } catch (e) {
+        // If the textarea has invalid/hand-edited JSON, don't silently
+        // discard it — start a fresh array only if it was truly empty.
+        if (textarea.value.trim() !== '' && textarea.value.trim() !== '[]') {
+          alert('Current JSON in the textarea is invalid — fix it before adding another row.');
+          return;
+        }
+      }
+      current.push(row);
+      textarea.value = JSON.stringify(current, null, 2);
+    }
+  </script>
+  {% else %}
+  <p class="text-ink/50 text-sm">Select a Stream and Subject above to upload chapter-wise questions.</p>
+  {% endif %}
 
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-ink mb-1">Correct Option</label>
-        <select name="correct_option" required class="w-full rounded-md border border-ink/15 px-3 py-2">
-          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-ink mb-1">Image URL (optional)</label>
-        <input type="text" name="image_url" class="w-full rounded-md border border-ink/15 px-3 py-2">
-      </div>
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Explanation (optional)</label>
-      <textarea name="explanation" rows="2" class="w-full rounded-md border border-ink/15 px-3 py-2"></textarea>
-    </div>
-
-    <label class="flex items-center gap-2 text-sm font-medium text-ink">
-      <input type="checkbox" name="is_premium" class="rounded border-ink/30"> Is Premium? (locks this question's topic behind paid access)
-    </label>
-
-    <button type="submit" class="bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light">+ Add Question</button>
-  </form>
-
-  <!-- Existing questions in this chapter -->
+  {% if chapter %}
   <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
+    <div class="px-5 py-3 bg-ink/5">
+      <p class="text-sm font-medium text-ink">Questions in {{ chapter.name }}</p>
+    </div>
     {% for q in questions %}
     <div class="flex items-center justify-between px-5 py-3 gap-4">
       <div class="min-w-0">
@@ -183,8 +248,6 @@
     <p class="px-5 py-6 text-ink/50 text-sm">No questions in this chapter yet.</p>
     {% endfor %}
   </div>
-  {% else %}
-  <p class="text-ink/50 text-sm">Select a Stream, Subject and Chapter above to view or add questions.</p>
   {% endif %}
 </div>
 {% endblock %}
