@@ -1,0 +1,19 @@
+<nav class="bg-ink text-paper border-b-2 border-gold/30">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <a href="{{ url_for('user.landing') }}" class="font-display font-semibold text-xl tracking-tight">
+            SANGAM <span class="text-gold">STUDY</span>
+        </a>
+        <div class="flex items-center gap-6 text-sm font-medium">
+            {% if session.get('user_id') %}
+                <a href="{{ url_for('user.switch_stream') }}" class="hover:text-gold transition-colors">Switch stream</a>
+                <a href="{{ url_for('auth.logout') }}" class="hover:text-gold transition-colors">Log out</a>
+            {% else %}
+                <a href="{{ url_for('auth.login') }}" class="hover:text-gold transition-colors">Log in</a>
+                <a href="{{ url_for('auth.register') }}"
+                   class="bg-gold text-ink px-4 py-2 rounded-sm font-semibold hover:bg-gold-light transition-colors">
+                    Create account
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</nav>
