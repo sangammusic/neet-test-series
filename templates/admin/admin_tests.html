@@ -23,8 +23,8 @@
       <input type="text" name="title" required placeholder="e.g. NEET Full Mock #1" class="w-full rounded-md border border-ink/15 px-3 py-2">
     </div>
     <div class="col-span-2">
-      <label class="block text-sm font-medium text-ink mb-1">Description (optional)</label>
-      <textarea name="description" rows="2" class="w-full rounded-md border border-ink/15 px-3 py-2"></textarea>
+      <label class="block text-sm font-medium text-ink mb-1">Test Syllabus (Topics covered)</label>
+      <textarea name="description" rows="2" placeholder="e.g. Full syllabus — Physics, Chemistry, Biology (Class 11 + 12)" class="w-full rounded-md border border-ink/15 px-3 py-2"></textarea>
     </div>
     <div>
       <label class="block text-sm font-medium text-ink mb-1">Duration (minutes)</label>
@@ -59,7 +59,7 @@
         {% if t.is_premium %}<span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5 ml-2">PREMIUM</span>
         {% else %}<span class="text-xs bg-green-50 text-green-700 rounded px-2 py-0.5 ml-2">FREE</span>{% endif %}
       </div>
-      <a href="{{ url_for('admin.tests_manage', test_id=t.id) }}" class="text-sm text-gold hover:underline">Manage Questions →</a>
+      <a href="{{ url_for('admin.tests_manage', test_id=t.id) }}" class="text-sm text-gold hover:underline">Map Questions →</a>
     </div>
     {% else %}
     <p class="px-5 py-6 text-ink/50 text-sm">No tests yet — create one above.</p>
