@@ -1,0 +1,29 @@
+{% extends "shared/base.html" %}
+{% block title %}Login — SANGAM STUDY{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto mt-16 px-4">
+  <h1 class="font-display text-3xl text-ink mb-2">Welcome back</h1>
+  <p class="text-ink/60 mb-8">Log in to continue your prep.</p>
+
+  <form method="POST" class="space-y-5">
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Email</label>
+      <input type="email" name="email" required
+             class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Password</label>
+      <input type="password" name="password" required
+             class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
+    </div>
+    <button type="submit"
+            class="w-full bg-ink text-paper font-medium py-2.5 rounded-md hover:bg-ink-light transition-colors">
+      Log In
+    </button>
+  </form>
+
+  <p class="text-sm text-ink/60 mt-6 text-center">
+    New here? <a href="{{ url_for('auth.register') }}" class="text-gold font-medium hover:underline">Create an account</a>
+  </p>
+</div>
+{% endblock %}
