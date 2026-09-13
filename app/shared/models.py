@@ -22,6 +22,44 @@ def get_active_streams():
     return res.data
 
 
+def get_streams_for_user_or_guest(user_id: str = None, guest_id: str = None):
+    """
+    Returns the list of streams (id, name, slug) a logged-in user or
+    a guest has already selected, by reading user_streams /
+    guest_streams. Returns [] if neither id is given, or if the
+    person hasn't picked any stream yet.
+
+    Pass exactly one of user_id / guest_id — this mirrors how
+    stream_select()'s POST handler already branches on is_logged_in()
+    in app/user/routes.py, just for reading instead of writing.
+
+    Used to decide whether to show the stream-selection page again
+    or skip straight to the dashboard — see landing() and
+    stream_select() in app/user/routes.py.
+    """
+    if user_id:
+        res = (
+            supabase_public.table("user_streams")
+            .select("streams(id, name, slug)")
+            .eq("user_id", user_id)
+            .execute()
+        )
+    elif guest_id:
+        res = (
+            supabase_public.table("guest_streams")
+            .select("streams(id, name, slug)")
+            .eq("guest_id", guest_id)
+            .execute()
+        )
+    else:
+        return []
+
+    # Each row looks like {"streams": {"id": ..., "name": ..., "slug": ...}}
+    # because of the FK-join select syntax above — unwrap it into a
+    # flat list of stream dicts.
+    return [row["streams"] for row in res.data if row.get("streams")]
+
+
 def get_stream_by_slug(slug: str):
     res = (
         supabase_public.table("streams")
