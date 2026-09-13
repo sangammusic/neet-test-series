@@ -1,0 +1,10 @@
+{% extends "shared/base.html" %}
+{% block title %}Premium Content{% endblock %}
+{% block content %}
+<section class="max-w-md mx-auto px-6 pt-20 pb-24 text-center">
+  <p class="text-4xl mb-4">🔒</p>
+  <h1 class="font-display text-2xl font-semibold text-ink mb-3">This is Premium content</h1>
+  <p class="text-ink/60 mb-8">Log in and unlock premium access to practice this topic.</p>
+  <a href="{{ url_for('auth.login') }}" class="inline-block bg-gold text-ink font-semibold py-2.5 px-6 rounded-md hover:bg-gold-light">Log In to Continue</a>
+</section>
+{% endblock %}
