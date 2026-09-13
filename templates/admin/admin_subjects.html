@@ -1,0 +1,58 @@
+{% extends "shared/base.html" %}
+{% block title %}Subjects — Admin{% endblock %}
+{% block content %}
+{% include "admin/_admin_nav.html" %}
+<div class="max-w-4xl mx-auto px-6 py-10">
+  <h1 class="font-display text-3xl text-ink mb-6">Subjects</h1>
+
+  <form method="POST" action="{{ url_for('admin.subjects_create') }}"
+        class="bg-white border border-ink/10 rounded-lg p-6 mb-8 grid grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Stream</label>
+      <select name="stream_id" required class="w-full rounded-md border border-ink/15 px-3 py-2">
+        {% for s in streams %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Display Order</label>
+      <input type="number" name="display_order" value="0" class="w-full rounded-md border border-ink/15 px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Name</label>
+      <input type="text" name="name" required placeholder="e.g. Physics"
+             class="w-full rounded-md border border-ink/15 px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Slug (optional)</label>
+      <input type="text" name="slug" placeholder="auto-generated if blank"
+             class="w-full rounded-md border border-ink/15 px-3 py-2">
+    </div>
+    <button type="submit" class="col-span-2 bg-ink text-paper font-medium py-2.5 rounded-md hover:bg-ink-light">
+      + Add Subject
+    </button>
+  </form>
+
+  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
+    {% for sub in subjects %}
+    <div class="flex items-center justify-between px-5 py-3">
+      <div>
+        <span class="font-medium text-ink">{{ sub.name }}</span>
+        <span class="text-ink/50 text-sm ml-2">{{ sub.streams.name if sub.streams }} · /{{ sub.slug }}</span>
+        {% if not sub.is_active %}<span class="text-xs bg-red-100 text-red-700 rounded px-2 py-0.5 ml-2">inactive</span>{% endif %}
+      </div>
+      <div class="flex gap-2">
+        <form method="POST" action="{{ url_for('admin.subjects_toggle', subject_id=sub.id) }}">
+          <button class="text-sm text-gold hover:underline">{{ 'Deactivate' if sub.is_active else 'Activate' }}</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin.subjects_delete', subject_id=sub.id) }}"
+              onsubmit="return confirm('Delete this subject? This fails if chapters exist under it.');">
+          <button class="text-sm text-red-600 hover:underline">Delete</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <p class="px-5 py-6 text-ink/50 text-sm">No subjects yet — add one above.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
