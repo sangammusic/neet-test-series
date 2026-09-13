@@ -1,0 +1,131 @@
+{% extends "shared/base.html" %}
+{% block title %}Mock Test Questions — Admin{% endblock %}
+{% block content %}
+{% include "admin/_admin_nav.html" %}
+<div class="max-w-5xl mx-auto px-6 py-10">
+  <h1 class="font-display text-3xl text-ink mb-6">Mock Test Questions</h1>
+
+  <!-- Stream dropdown ONLY. Subject filter here is for browsing the -->
+  <!-- list below, not for upload — subject comes from subject_name -->
+  <!-- inside each pasted JSON row. -->
+  <div class="bg-white border border-ink/10 rounded-lg p-6 mb-8 grid grid-cols-2 gap-4">
+    <form method="GET" class="contents">
+      <div>
+        <label class="block text-sm font-medium text-ink mb-1">Stream</label>
+        <select name="stream_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2">
+          <option value="">— select —</option>
+          {% for s in streams %}
+          <option value="{{ s.id }}" {{ 'selected' if s.id == selected_stream_id }}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-ink mb-1">Subject <span class="text-ink/40 font-normal">(filter list only)</span></label>
+        <select name="subject_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2" {{ 'disabled' if not subjects }}>
+          <option value="">All subjects</option>
+          {% for s in subjects %}
+          <option value="{{ s.id }}" {{ 'selected' if s.id == selected_subject_id }}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+        <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
+      </div>
+    </form>
+  </div>
+
+  {% if selected_stream_id %}
+  <!-- Bulk Mock Question Upload: Stream dropdown (above) + one big -->
+  <!-- textarea for the JSON array. NO chapter field. NO radio buttons. -->
+  <!-- subject_name lives inside each JSON object and is resolved -->
+  <!-- server-side — nothing else on this page decides the subject. -->
+  <form method="POST" action="{{ url_for('admin.mock_questions_bulk_upload') }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 space-y-4">
+    <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
+
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="font-medium text-ink">Bulk Mock Question Upload</h2>
+        <p class="text-sm text-ink/60 mt-0.5">
+          Paste a JSON array of mixed-subject mock questions — each object must include its own
+          <code class="bg-ink/5 px-1 rounded">subject_name</code>. Rows with a subject_name that
+          doesn't match a subject for this stream are rejected and reported.
+        </p>
+      </div>
+      <button type="button" onclick="document.getElementById('mock_bulk_json_example').classList.toggle('hidden')"
+              class="text-sm text-ink/50 hover:text-ink underline whitespace-nowrap">
+        Show expected format
+      </button>
+    </div>
+
+    <pre id="mock_bulk_json_example" class="hidden bg-ink/5 border border-ink/10 rounded-md p-4 text-xs text-ink/70 overflow-x-auto">[
+  {
+    "subject_name": "Physics",
+    "topic_name": "Vectors",
+    "question_text": "What is a unit vector?",
+    "option_a": "A vector of magnitude 1",
+    "option_b": "A vector of magnitude 0",
+    "option_c": "Any vector along the x-axis",
+    "option_d": "A scalar quantity",
+    "correct_option": "A",
+    "difficulty_id": 2,
+    "is_premium": false,
+    "is_pyq": false,
+    "pyq_year": null,
+    "explanation": "Optional — shown to students after they answer.",
+    "image_url": null
+  },
+  {
+    "subject_name": "Chemistry",
+    "topic_name": "Mole Concept",
+    "question_text": "1 mole of any gas at STP occupies how much volume?",
+    "option_a": "22.4 L",
+    "option_b": "11.2 L",
+    "option_c": "44.8 L",
+    "option_d": "1 L",
+    "correct_option": "A",
+    "difficulty_id": 1,
+    "is_pyq": true,
+    "pyq_year": 2021
+  }
+]</pre>
+    <p class="text-xs text-ink/50 -mt-2">
+      Required per question: subject_name (must match an existing subject for the selected stream),
+      topic_name, question_text, option_a–d, correct_option (A/B/C/D).
+      Optional: difficulty_id ({% for d in difficulty_levels %}{{ d.id }}={{ d.name }}{{ ", " if not loop.last }}{% endfor %}),
+      is_premium, is_pyq, pyq_year, explanation, image_url.
+    </p>
+
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Paste JSON array</label>
+      <textarea name="bulk_json" rows="16" placeholder='[{"subject_name": "Physics", "topic_name": "...", "question_text": "...", ...}]'
+                class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm"></textarea>
+    </div>
+
+    <button type="submit" class="bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light">
+      Upload Batch
+    </button>
+  </form>
+
+  <!-- Existing mock questions for this stream -->
+  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
+    {% for q in questions %}
+    <div class="flex items-center justify-between px-5 py-3 gap-4">
+      <div class="min-w-0">
+        <p class="text-ink truncate">{{ q.question_text }}</p>
+        <p class="text-xs text-ink/50 mt-0.5">
+          {{ q.subjects.name if q.subjects else '—' }} · Topic: {{ q.topic_name }}
+          {% if q.is_pyq %}· PYQ {{ q.pyq_year }}{% endif %}
+        </p>
+      </div>
+      <form method="POST" action="{{ url_for('admin.mock_questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id) }}"
+            onsubmit="return confirm('Delete this mock question?');">
+        <button class="text-sm text-red-600 hover:underline whitespace-nowrap">Delete</button>
+      </form>
+    </div>
+    {% else %}
+    <p class="px-5 py-6 text-ink/50 text-sm">No mock questions uploaded for this stream yet.</p>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-ink/50 text-sm">Select a Stream above to upload or view mock test questions.</p>
+  {% endif %}
+</div>
+{% endblock %}
