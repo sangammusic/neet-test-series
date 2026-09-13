@@ -42,6 +42,58 @@
   </div>
 
   {% if chapter %}
+  <!-- Bulk AI Upload: paste a JSON array of questions, all inserted in one batch. -->
+  <form method="POST" action="{{ url_for('admin.questions_bulk_upload') }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 space-y-4">
+    <input type="hidden" name="chapter_id" value="{{ chapter.id }}">
+    <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
+    <input type="hidden" name="subject_id" value="{{ selected_subject_id }}">
+
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="font-medium text-ink">Bulk AI Upload</h2>
+        <p class="text-sm text-ink/60 mt-0.5">
+          Paste a JSON array of questions for <strong class="text-ink">{{ chapter.name }}</strong> — all valid rows insert in a single batch. Bad rows are skipped and reported, not silently dropped.
+        </p>
+      </div>
+      <button type="button" onclick="document.getElementById('bulk_json_example').classList.toggle('hidden')"
+              class="text-sm text-ink/50 hover:text-ink underline whitespace-nowrap">
+        Show expected format
+      </button>
+    </div>
+
+    <pre id="bulk_json_example" class="hidden bg-ink/5 border border-ink/10 rounded-md p-4 text-xs text-ink/70 overflow-x-auto">[
+  {
+    "question_text": "What is Newton's second law?",
+    "option_a": "F = ma",
+    "option_b": "E = mc^2",
+    "option_c": "V = IR",
+    "option_d": "P = mv",
+    "correct_option": "A",
+    "topic_name": "Newton's Laws",
+    "difficulty_id": 2,
+    "is_premium": false,
+    "is_pyq": false,
+    "pyq_year": null,
+    "explanation": "Optional — shown to students after they answer.",
+    "image_url": null
+  }
+]</pre>
+    <p class="text-xs text-ink/50 -mt-2">
+      Required per question: question_text, option_a–d, correct_option (A/B/C/D), topic_name, difficulty_id ({% for d in difficulty_levels %}{{ d.id }}={{ d.name }}{{ ", " if not loop.last }}{% endfor %}).
+      Optional: is_premium, is_pyq, pyq_year, explanation, image_url.
+    </p>
+
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Paste JSON array</label>
+      <textarea name="bulk_json" rows="10" placeholder='[{"question_text": "...", "option_a": "...", ...}]'
+                class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm"></textarea>
+    </div>
+
+    <button type="submit" class="bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light">
+      Upload Batch
+    </button>
+  </form>
+
   <!-- Step 2: add a question to this chapter -->
   <form method="POST" action="{{ url_for('admin.questions_create') }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 space-y-4">
     <input type="hidden" name="chapter_id" value="{{ chapter.id }}">
