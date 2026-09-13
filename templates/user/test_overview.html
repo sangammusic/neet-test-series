@@ -1,0 +1,40 @@
+{% extends "shared/base.html" %}
+{% block title %}{{ test.title }}{% endblock %}
+{% block content %}
+<section class="max-w-2xl mx-auto px-6 pt-12 pb-24">
+  <h1 class="font-display text-2xl font-semibold text-ink mb-2">{{ test.title }}</h1>
+  {% if test.description %}<p class="text-ink/60 mb-6">{{ test.description }}</p>{% endif %}
+
+  <div class="grid grid-cols-3 gap-4 mb-8">
+    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
+      <p class="text-2xl font-display text-ink">{{ test.total_marks or '—' }}</p>
+      <p class="text-xs text-ink/50 mt-1">Total Marks</p>
+    </div>
+    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
+      <p class="text-2xl font-display text-ink">{{ test.duration_minutes }}</p>
+      <p class="text-xs text-ink/50 mt-1">Minutes</p>
+    </div>
+    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
+      <p class="text-2xl font-display text-ink">-{{ test.negative_marking }}</p>
+      <p class="text-xs text-ink/50 mt-1">Negative Marking</p>
+    </div>
+  </div>
+
+  <h2 class="font-display text-lg font-semibold text-ink mb-3">Syllabus Covered</h2>
+  <div class="bg-white border border-ink/10 rounded-lg p-5 mb-8">
+    {% for subject, chapters in syllabus.items() %}
+    <p class="text-sm mb-2"><span class="font-medium text-ink">{{ subject }}:</span> <span class="text-ink/60">{{ chapters|join(', ') }}</span></p>
+    {% else %}
+    <p class="text-sm text-ink/50">Syllabus not mapped yet.</p>
+    {% endfor %}
+  </div>
+
+  {% if has_access %}
+  <a href="{{ url_for('user.practice_run', slug=stream.slug, chapter_id='', mode='mcq') }}"
+     class="block text-center bg-ink text-paper font-semibold py-3 rounded-md hover:bg-ink-light">Start Test</a>
+  {% elif test.is_premium and not has_access %}
+  <a href="{{ url_for('auth.login') if not session.get('user_id') else '#' }}"
+     class="block text-center bg-gold text-ink font-semibold py-3 rounded-md hover:bg-gold-light">Unlock Premium 🔒</a>
+  {% endif %}
+</section>
+{% endblock %}
