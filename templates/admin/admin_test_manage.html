@@ -1,0 +1,73 @@
+{% extends "shared/base.html" %}
+{% block title %}Manage Test — Admin{% endblock %}
+{% block content %}
+{% include "admin/_admin_nav.html" %}
+<div class="max-w-4xl mx-auto px-6 py-10">
+  <h1 class="font-display text-3xl text-ink mb-2">{{ test.title }}</h1>
+  <p class="text-ink/50 text-sm mb-8">Map questions to this test by browsing a chapter and checking the ones to include.</p>
+
+  <form method="GET" class="bg-white border border-ink/10 rounded-lg p-6 mb-6 grid grid-cols-3 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Stream</label>
+      <select name="stream_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2">
+        {% for s in streams %}<option value="{{ s.id }}" {{ 'selected' if s.id == selected_stream_id }}>{{ s.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Subject</label>
+      <select name="subject_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2">
+        <option value="">— select —</option>
+        {% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if s.id == selected_subject_id }}>{{ s.name }}</option>{% endfor %}
+      </select>
+      <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Chapter</label>
+      <select name="chapter_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2">
+        <option value="">— select —</option>
+        {% for c in chapters %}<option value="{{ c.id }}" {{ 'selected' if c.id == selected_chapter_id }}>{{ c.name }}</option>{% endfor %}
+      </select>
+      <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
+      <input type="hidden" name="subject_id" value="{{ selected_subject_id }}">
+    </div>
+  </form>
+
+  {% if chapter_questions %}
+  <form method="POST" action="{{ url_for('admin.tests_add_questions', test_id=test.id) }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8">
+    <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
+    <input type="hidden" name="subject_id" value="{{ selected_subject_id }}">
+    <input type="hidden" name="chapter_id" value="{{ selected_chapter_id }}">
+    <div class="space-y-2 mb-4">
+      {% for q in chapter_questions %}
+      <label class="flex items-start gap-3 text-sm">
+        <input type="checkbox" name="question_ids" value="{{ q.id }}" {{ 'checked disabled' if q.id in mapped_ids }} class="mt-1 rounded border-ink/30">
+        <span class="{{ 'text-ink/40' if q.id in mapped_ids }}">
+          {{ q.question_text }} <span class="text-ink/40">({{ q.topic_name }}{{ ' · PYQ' if q.is_pyq }}{{ ' — already added' if q.id in mapped_ids }})</span>
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="bg-ink text-paper font-medium py-2 px-5 rounded-md hover:bg-ink-light text-sm">Add Selected to Test</button>
+  </form>
+  {% endif %}
+
+  <h2 class="font-display text-xl text-ink mb-3">Questions in this test ({{ mapped|length }})</h2>
+  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
+    {% for m in mapped %}
+    <div class="flex items-center justify-between px-5 py-3">
+      <p class="text-sm text-ink truncate">{{ m.questions.question_text if m.questions }}
+        <span class="text-ink/40">
+          — {{ m.questions.chapters.subjects.name if m.questions and m.questions.chapters and m.questions.chapters.subjects }}
+          › {{ m.questions.chapters.name if m.questions and m.questions.chapters }}
+        </span>
+      </p>
+      <form method="POST" action="{{ url_for('admin.tests_remove_question', test_id=test.id, question_id=m.question_id) }}">
+        <button class="text-sm text-red-600 hover:underline">Remove</button>
+      </form>
+    </div>
+    {% else %}
+    <p class="px-5 py-6 text-ink/50 text-sm">No questions mapped yet.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
