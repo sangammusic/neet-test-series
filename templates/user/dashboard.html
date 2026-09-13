@@ -1,0 +1,55 @@
+{% extends "shared/base.html" %}
+{% block title %}{{ stream.name }} — SANGAM STUDY{% endblock %}
+
+{% block content %}
+<section class="max-w-6xl mx-auto px-6 pt-12 pb-24">
+    <div class="flex items-baseline justify-between mb-10 flex-wrap gap-3">
+        <div>
+            <p class="text-gold font-semibold text-sm tracking-wide mb-2">{{ stream.name.upper() }}</p>
+            <h1 class="font-display text-3xl font-semibold text-ink">Your test series</h1>
+        </div>
+        <a href="{{ url_for('user.switch_stream') }}" class="text-sm text-ink/50 hover:text-ink underline underline-offset-2">
+            Switch stream
+        </a>
+    </div>
+
+    <!-- Free section -->
+    <div class="mb-16">
+        <h2 class="font-display text-xl font-semibold mb-5 text-ink flex items-center gap-3">
+            Free
+            <span class="h-px flex-1 bg-ink/10"></span>
+        </h2>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {% for cat in free_categories %}
+            <a href="{{ url_for('user.stream_dashboard', slug=stream.slug) }}#{{ cat.slug }}"
+               class="block p-6 border border-ink/10 rounded-sm hover:border-gold/50 hover:shadow-sm transition-all bg-white">
+                <p class="font-semibold text-ink mb-1">{{ cat.name }}</p>
+                <p class="text-sm text-ink/50">Timed · difficulty selector on start</p>
+            </a>
+            {% else %}
+            <p class="text-ink/40 text-sm col-span-full">No free tests available yet in this stream.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Paid section -->
+    <div>
+        <h2 class="font-display text-xl font-semibold mb-5 text-ink flex items-center gap-3">
+            Premium
+            <span class="h-px flex-1 bg-ink/10"></span>
+        </h2>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {% for cat in paid_categories %}
+            <a href="{{ url_for('user.stream_dashboard', slug=stream.slug) }}#{{ cat.slug }}"
+               class="block p-6 border-2 border-gold/30 rounded-sm hover:border-gold transition-all bg-ink text-paper relative overflow-hidden">
+                <span class="absolute top-3 right-3 text-[10px] font-semibold tracking-wide text-gold bg-gold/15 px-2 py-1 rounded-sm">PREMIUM</span>
+                <p class="font-semibold mb-1">{{ cat.name }}</p>
+                <p class="text-sm text-paper/50">Full NTA-pattern mock</p>
+            </a>
+            {% else %}
+            <p class="text-ink/40 text-sm col-span-full">No premium series live yet in this stream.</p>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}
