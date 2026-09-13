@@ -2,15 +2,26 @@ from flask import render_template
 
 from app.admin import admin_bp
 from app.admin.decorators import admin_required
+from app.extensions import supabase_admin
 
 
 @admin_bp.route("/dashboard")
 @admin_required
 def dashboard():
     """
-    Landing page after admin login. Stream/Question/Test/Transaction
-    CRUD routes (stream_routes.py, question_routes.py, etc. from the
-    architecture doc) plug in as separate files registered the same
-    way — this file stays as just the dashboard + shared admin nav.
+    Landing page after admin login. Shows quick content counts so it's
+    obvious at a glance what's populated and what still needs data.
     """
-    return render_template("dashboard.html")
+    def _count(table):
+        res = supabase_admin.table(table).select("id", count="exact").execute()
+        return res.count or 0
+
+    counts = {
+        "streams": _count("streams"),
+        "subjects": _count("subjects"),
+        "chapters": _count("chapters"),
+        "questions": _count("questions"),
+        "tests": _count("tests"),
+    }
+
+    return render_template("admin_dashboard.html", counts=counts)
