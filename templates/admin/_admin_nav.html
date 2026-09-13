@@ -1,0 +1,13 @@
+<nav class="bg-ink text-paper px-6 py-4">
+  <div class="max-w-6xl mx-auto flex items-center justify-between">
+    <a href="{{ url_for('admin.dashboard') }}" class="font-display text-lg text-gold">SANGAM Admin</a>
+    <div class="flex gap-6 text-sm">
+      <a href="{{ url_for('admin.dashboard') }}" class="hover:text-gold transition-colors">Dashboard</a>
+      <a href="{{ url_for('admin.subjects_list') }}" class="hover:text-gold transition-colors">Subjects</a>
+      <a href="{{ url_for('admin.chapters_list') }}" class="hover:text-gold transition-colors">Chapters</a>
+      <span class="text-paper/30" title="Coming in Phase 2">Questions</span>
+      <span class="text-paper/30" title="Coming in Phase 2">Tests</span>
+      <a href="{{ url_for('user.landing') }}" class="text-paper/60 hover:text-gold transition-colors">← Back to site</a>
+    </div>
+  </div>
+</nav>
