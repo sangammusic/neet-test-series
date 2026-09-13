@@ -1,0 +1,22 @@
+{% extends "shared/base.html" %}
+{% block title %}Practice{% endblock %}
+{% block content %}
+<section class="max-w-2xl mx-auto px-6 pt-12 pb-24">
+  <p class="text-xs bg-ink/5 text-ink/60 inline-block rounded px-2 py-1 mb-6">Practice preview — untimed, answers revealed. Full timed test-runner is next on the build list.</p>
+  {% for q in questions %}
+  <div class="border border-ink/10 rounded-lg p-6 mb-5 bg-white">
+    <p class="text-ink font-medium mb-4">{{ loop.index }}. {{ q.question_text }}</p>
+    <div class="space-y-2 text-sm">
+      {% for opt in ['A','B','C','D'] %}
+      <div class="p-2 rounded {{ 'bg-green-50 border border-green-300' if opt == q.correct_option else 'border border-ink/10' }}">
+        {{ opt }}. {{ q['option_' ~ opt.lower()] }}
+      </div>
+      {% endfor %}
+    </div>
+    {% if q.explanation %}<p class="text-xs text-ink/50 mt-3">Explanation: {{ q.explanation }}</p>{% endif %}
+  </div>
+  {% else %}
+  <p class="text-ink/50 text-sm">No questions available here yet.</p>
+  {% endfor %}
+</section>
+{% endblock %}
