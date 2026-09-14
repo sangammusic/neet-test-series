@@ -59,7 +59,16 @@
         {% if t.is_premium %}<span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5 ml-2">PREMIUM</span>
         {% else %}<span class="text-xs bg-green-50 text-green-700 rounded px-2 py-0.5 ml-2">FREE</span>{% endif %}
       </div>
-      <a href="{{ url_for('admin.tests_manage', test_id=t.id) }}" class="text-sm text-gold hover:underline">Map Questions →</a>
+      <div class="flex items-center gap-4">
+        <a href="{{ url_for('admin.tests_manage', test_id=t.id) }}" class="text-sm text-gold hover:underline">Map Questions →</a>
+        <!-- FEATURE (was missing): delete an uploaded test. Confirm dialog
+             warns that this also removes any student attempts, since
+             test_attempts cascades off tests via ON DELETE CASCADE. -->
+        <form method="POST" action="{{ url_for('admin.tests_delete', test_id=t.id) }}"
+              onsubmit="return confirm('Delete &quot;{{ t.title }}&quot;? This also removes its question mapping and any student attempts against it. This cannot be undone.');">
+          <button type="submit" class="text-sm text-red-600 hover:underline">Delete</button>
+        </form>
+      </div>
     </div>
     {% else %}
     <p class="px-5 py-6 text-ink/50 text-sm">No tests yet — create one above.</p>
