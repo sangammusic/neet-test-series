@@ -50,7 +50,7 @@
 </head>
 <body class="bg-paper text-ink font-body antialiased">
 
-    {% include "shared/_nav.html" %}
+    {% block nav %}{% include "shared/_nav.html" %}{% endblock %}
 
     <main>
         {% with messages = get_flashed_messages(with_categories=true) %}
