@@ -1,58 +1,171 @@
 {% extends "shared/base.html" %}
 {% block title %}My Dashboard{% endblock %}
 {% block content %}
-<section class="max-w-3xl mx-auto px-6 pt-12 pb-24">
-  <h1 class="font-display text-2xl font-semibold text-ink mb-1">My Dashboard</h1>
-  <p class="text-ink/50 text-sm mb-8">Your test attempts and scores</p>
+<section class="max-w-4xl mx-auto px-4 md:px-6 pt-12 pb-24 font-body">
+  
+  <!-- Header & Nuclear Button -->
+  <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10 border-b border-ink/10 pb-6">
+    <div>
+      <h1 class="font-display text-3xl md:text-4xl font-bold text-ink mb-2">My Dashboard</h1>
+      <p class="text-ink/60 text-sm font-medium tracking-wide">Manage your test history, analytics, and active sessions.</p>
+    </div>
+    
+    {% if attempts %}
+    <form action="{{ url_for('user.clear_history') }}" method="POST" onsubmit="return confirm('⚠️ DANGER: This will permanently wipe ALL your test history, scores, and analytics. You cannot undo this. Are you absolutely sure?');">
+      <button type="submit" class="flex items-center gap-2 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-red-200">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+        </svg>
+        Reset All My Progress
+      </button>
+    </form>
+    {% endif %}
+  </div>
 
   {% if attempts %}
-  <div class="grid grid-cols-3 gap-3 mb-8">
-    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
-      <p class="text-xl font-display font-semibold text-ink">{{ attempts|length }}</p>
-      <p class="text-xs text-ink/50 mt-1">Tests Attempted</p>
+  <!-- Premium Stats Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+    <div class="bg-white border border-ink/10 rounded-2xl p-6 text-center shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+      <div class="absolute -right-4 -top-4 w-16 h-16 bg-ink/5 rounded-full"></div>
+      <p class="text-4xl font-display font-bold text-ink mb-1">{{ attempts|length }}</p>
+      <p class="text-xs font-bold text-ink/50 uppercase tracking-wider">Total Tests Attempted</p>
     </div>
-    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
-      <p class="text-xl font-display font-semibold text-ink">
+    
+    <div class="bg-white border border-ink/10 rounded-2xl p-6 text-center shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+      <div class="absolute -right-4 -top-4 w-16 h-16 bg-green-500/10 rounded-full"></div>
+      <p class="text-4xl font-display font-bold text-green-600 mb-1">
         {{ attempts|selectattr('submitted_at')|list|length }}
       </p>
-      <p class="text-xs text-ink/50 mt-1">Completed</p>
+      <p class="text-xs font-bold text-ink/50 uppercase tracking-wider">Tests Completed</p>
     </div>
-    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
-      <p class="text-xl font-display font-semibold text-ink">
+    
+    <div class="bg-white border border-ink/10 rounded-2xl p-6 text-center shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+      <div class="absolute -right-4 -top-4 w-16 h-16 bg-gold/10 rounded-full"></div>
+      <p class="text-4xl font-display font-bold text-gold-light mb-1">
         {% set scored = attempts|selectattr('score', 'defined')|selectattr('score', 'ne', none)|list %}
         {{ (scored|sum(attribute='score') / scored|length)|round(1) if scored else '—' }}
       </p>
-      <p class="text-xs text-ink/50 mt-1">Average Score</p>
+      <p class="text-xs font-bold text-ink/50 uppercase tracking-wider">Average Score</p>
     </div>
   </div>
 
-  <div class="space-y-3">
-    {% for a in attempts %}
-    <div class="bg-white border border-ink/10 rounded-lg p-4 flex items-center justify-between">
-      <div>
-        <p class="font-semibold text-ink text-sm">{{ a.tests.title if a.tests else 'Test' }}</p>
-        <p class="text-xs text-ink/50 mt-0.5">
+  <!-- Extract Unique Categories for Grouping -->
+  {% set categories = [] %}
+  {% for a in attempts %}
+    {% set cat_name = a.tests.get('test_categories', {}).get('name', 'General Tests') if a.tests else 'General Tests' %}
+    {% if cat_name not in categories %}
+      {% set _ = categories.append(cat_name) %}
+    {% endif %}
+  {% endfor %}
+
+  <!-- Display Grouped Tests -->
+  {% for cat in categories %}
+  <div class="mb-10 animate-fade-in">
+    <h2 class="font-display text-xl font-bold text-ink mb-4 pb-2 border-b border-ink/10">{{ cat }}</h2>
+    
+    <div class="space-y-4">
+      {% for a in attempts %}
+      {% set current_cat = a.tests.get('test_categories', {}).get('name', 'General Tests') if a.tests else 'General Tests' %}
+      {% if current_cat == cat %}
+      
+      <!-- Test Attempt Card -->
+      <div class="bg-white border border-ink/10 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-5 shadow-sm hover:shadow-md transition-all duration-200">
+        
+        <!-- Left: Test Info & Badges -->
+        <div class="flex-1">
+          <h3 class="font-bold text-ink text-lg mb-2">{{ a.tests.title if a.tests else 'Mock Test' }}</h3>
+          
+          <div class="flex flex-wrap items-center gap-2 text-xs font-medium text-ink/60">
+            {% if a.submitted_at %}
+              <span class="text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-md tracking-wide uppercase">Completed</span>
+              <span class="hidden sm:inline text-ink/30">•</span>
+              <span class="bg-ink/5 px-2.5 py-1 rounded-md">{{ a.correct_count }} Correct</span>
+              <span class="bg-ink/5 px-2.5 py-1 rounded-md">{{ a.wrong_count }} Wrong</span>
+              <span class="bg-ink/5 px-2.5 py-1 rounded-md">{{ a.skipped_count }} Skipped</span>
+            {% else %}
+              <span class="text-gold-light bg-gold/10 border border-gold/20 px-2.5 py-1 rounded-md tracking-wide uppercase">In Progress</span>
+              <span class="hidden sm:inline text-ink/30">•</span>
+              <span class="bg-ink/5 px-2.5 py-1 rounded-md">Started: {{ a.started_at[:10] }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Right: Scores & Actions -->
+        <div class="flex items-center gap-6 md:gap-8 justify-between md:justify-end border-t md:border-t-0 border-ink/10 pt-4 md:pt-0 mt-2 md:mt-0">
+          
+          <!-- Score Display -->
           {% if a.submitted_at %}
-            Completed · {{ a.correct_count }} correct, {{ a.wrong_count }} wrong, {{ a.skipped_count }} skipped
-          {% else %}
-            In progress
+          <div class="text-right">
+            <p class="font-display text-2xl font-bold text-ink leading-none">{{ a.score }}</p>
+            <p class="text-[10px] uppercase font-bold tracking-wider text-ink/40 mt-1">/ {{ a.tests.total_marks if a.tests else a.total_questions }} Marks</p>
+          </div>
           {% endif %}
-        </p>
+
+          <!-- Action Buttons -->
+          <div class="flex gap-2.5 shrink-0">
+            {% set stream_slug = a.tests.get('streams', {}).get('slug', 'neet') if a.tests else 'neet' %}
+            
+            {% if a.submitted_at %}
+              <!-- Submitted Actions -->
+              <a href="{{ url_for('user.test_attempt_review', slug=stream_slug, test_id=a.test_id, attempt_id=a.id) }}"
+                 class="px-5 py-2.5 bg-gold text-ink font-bold text-sm rounded-lg hover:bg-gold-light transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-gold/50">
+                 Analyze
+              </a>
+              <form action="{{ url_for('user.test_start', slug=stream_slug, test_id=a.test_id) }}" method="POST" class="inline m-0 p-0">
+                <button type="submit" class="px-5 py-2.5 border-2 border-ink/10 text-ink font-bold text-sm rounded-lg hover:border-ink/30 hover:bg-ink/5 transition-all focus:outline-none">
+                   Retake
+                </button>
+              </form>
+            {% else %}
+              <!-- In-Progress Actions -->
+              <a href="{{ url_for('user.test_attempt', slug=stream_slug, test_id=a.test_id, attempt_id=a.id) }}"
+                 class="px-5 py-2.5 bg-ink text-paper font-bold text-sm rounded-lg hover:bg-ink-light transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-ink/50">
+                 Resume
+              </a>
+              <form action="{{ url_for('user.test_start', slug=stream_slug, test_id=a.test_id) }}" method="POST" class="inline m-0 p-0" onsubmit="return confirm('Starting a new attempt will delete this in-progress one automatically. Do you want to restart?');">
+                <button type="submit" class="px-5 py-2.5 text-red-600 font-bold text-sm rounded-lg hover:bg-red-50 transition-colors focus:outline-none">
+                   Restart
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+
       </div>
-      <div class="text-right">
-        {% if a.submitted_at %}
-        <p class="font-display text-lg font-semibold text-ink">{{ a.score }}<span class="text-xs text-ink/40"> / {{ a.tests.total_marks if a.tests else a.total_questions }}</span></p>
-        {% else %}
-        <span class="text-xs text-gold font-semibold">Not submitted</span>
-        {% endif %}
-      </div>
+      <!-- End Test Attempt Card -->
+      
+      {% endif %}
+      {% endfor %}
     </div>
-    {% endfor %}
   </div>
+  {% endfor %}
+
   {% else %}
-  <div class="bg-white border border-ink/10 rounded-lg p-8 text-center">
-    <p class="text-ink/50 text-sm">You haven't attempted any tests yet.</p>
+  <!-- Beautiful Empty State -->
+  <div class="bg-white border border-ink/10 rounded-2xl p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[400px]">
+    <div class="w-20 h-20 bg-ink/5 rounded-full flex items-center justify-center mb-6">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-ink/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+      </svg>
+    </div>
+    <h2 class="font-display text-2xl font-bold text-ink mb-2">No Attempts Yet</h2>
+    <p class="text-ink/60 text-sm max-w-sm mb-8">You haven't taken any mock tests or practice sets yet. When you do, your detailed analytics and history will appear here.</p>
+    <a href="{{ url_for('user.stream_select') }}" class="px-6 py-3 bg-gold text-ink font-bold rounded-xl hover:bg-gold-light transition-colors shadow-md">
+      Explore Mock Tests
+    </a>
   </div>
   {% endif %}
+
 </section>
+
+<!-- Simple fade-in animation for categories -->
+<style>
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
 {% endblock %}
