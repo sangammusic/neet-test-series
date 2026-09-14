@@ -20,5 +20,43 @@
     <a href="{{ url_for('admin.chapters_list') }}" class="text-gold font-medium hover:underline">Chapters</a> → Questions (Phase 2).
   </div>
   {% endif %}
+
+  <!-- Storage usage: Supabase Free tier gives 1GB total. Every image
+       is compressed to ~30-100KB on upload (see image_routes.py), so
+       this is an estimate at a conservative 100KB/image — actual
+       usage is typically lower. -->
+  <div class="mt-8 bg-white border border-ink/10 rounded-lg p-6">
+    <h2 class="font-display text-lg text-ink mb-3">Image Storage</h2>
+    {% if storage_info.uploaded_count is none %}
+    <p class="text-sm text-ink/60">
+      Storage bucket not set up yet — create a public bucket named <code class="bg-ink/5 px-1 rounded">question-images</code>
+      in the Supabase Dashboard (Storage tab). See <code class="bg-ink/5 px-1 rounded">sql/migration_question_images.sql</code> for the one-time steps.
+    </p>
+    {% else %}
+    <div class="grid grid-cols-3 gap-4 mb-4">
+      <div>
+        <p class="text-2xl font-display text-ink">{{ storage_info.uploaded_count }}</p>
+        <p class="text-xs text-ink/50 mt-0.5">Images uploaded</p>
+      </div>
+      <div>
+        <p class="text-2xl font-display text-ink">~{{ storage_info.estimated_mb }} MB</p>
+        <p class="text-xs text-ink/50 mt-0.5">Estimated storage used (of 1024 MB free)</p>
+      </div>
+      <div>
+        <p class="text-2xl font-display {{ 'text-gold' if (storage_info.pending_questions + storage_info.pending_mock_questions) > 0 else 'text-ink' }}">
+          {{ storage_info.pending_questions + storage_info.pending_mock_questions }}
+        </p>
+        <p class="text-xs text-ink/50 mt-0.5">Images still pending upload</p>
+      </div>
+    </div>
+    <div class="w-full bg-ink/5 rounded-full h-2 overflow-hidden">
+      <div class="bg-gold h-2 rounded-full" style="width: {{ [(storage_info.estimated_mb / 1024 * 100), 100] | min }}%"></div>
+    </div>
+    <p class="text-xs text-ink/40 mt-2">
+      At ~100KB/image (compressed), 1GB comfortably holds ~10,000 diagrams — this estimate is intentionally
+      conservative, actual usage is usually lower since most diagrams compress smaller than that.
+    </p>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}
