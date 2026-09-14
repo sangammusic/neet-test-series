@@ -70,20 +70,20 @@
     "is_pyq": false,
     "pyq_year": null,
     "explanation": "Optional — shown to students after they answer.",
+    "has_image": false,
     "image_url": null
   },
   {
-    "subject_name": "Chemistry",
-    "topic_name": "Mole Concept",
-    "question_text": "1 mole of any gas at STP occupies how much volume?",
+    "subject_name": "Biology",
+    "topic_name": "Human Eye",
+    "question_text": "The diagram shows a cross-section of the human eye. Identify part X.",
     "option_a": "22.4 L",
     "option_b": "11.2 L",
     "option_c": "44.8 L",
     "option_d": "1 L",
     "correct_option": "A",
     "difficulty_id": 1,
-    "is_pyq": true,
-    "pyq_year": 2021
+    "has_image": true
   }
 ]</pre>
     <p class="text-xs text-ink/50 -mt-2">
@@ -91,6 +91,8 @@
       topic_name, question_text, option_a–d, correct_option (A/B/C/D).
       Optional: difficulty_id ({% for d in difficulty_levels %}{{ d.id }}={{ d.name }}{{ ", " if not loop.last }}{% endfor %}),
       is_premium, is_pyq, pyq_year, explanation, image_url.
+      Set <code class="bg-ink/5 px-1 rounded">has_image: true</code> for any diagram-based question — an
+      "Upload Image" box will appear for it in the list below once this batch is uploaded.
     </p>
 
     <div>
@@ -106,19 +108,53 @@
 
   <!-- Existing mock questions for this stream -->
   <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
+    <div class="px-5 py-3 bg-ink/5 flex items-center justify-between">
+      <p class="text-sm font-medium text-ink">Mock questions for this stream</p>
+      {% set pending = questions|selectattr('has_image')|rejectattr('image_url')|list %}
+      {% if pending %}
+      <span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5">{{ pending|length }} image(s) pending upload</span>
+      {% endif %}
+    </div>
     {% for q in questions %}
-    <div class="flex items-center justify-between px-5 py-3 gap-4">
-      <div class="min-w-0">
-        <p class="text-ink truncate">{{ q.question_text }}</p>
-        <p class="text-xs text-ink/50 mt-0.5">
-          {{ q.subjects.name if q.subjects else '—' }} · Topic: {{ q.topic_name }}
-          {% if q.is_pyq %}· PYQ {{ q.pyq_year }}{% endif %}
-        </p>
+    <div class="px-5 py-3 gap-4" data-question-row data-table="mock_questions" data-question-id="{{ q.id }}">
+      <div class="flex items-center justify-between gap-4">
+        <div class="min-w-0">
+          <p class="text-ink truncate">{{ q.question_text }}</p>
+          <p class="text-xs text-ink/50 mt-0.5">
+            {{ q.subjects.name if q.subjects else '—' }} · Topic: {{ q.topic_name }}
+            {% if q.is_pyq %}· PYQ {{ q.pyq_year }}{% endif %}
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('admin.mock_questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id) }}"
+              onsubmit="return confirm('Delete this mock question?');">
+          <button class="text-sm text-red-600 hover:underline whitespace-nowrap">Delete</button>
+        </form>
       </div>
-      <form method="POST" action="{{ url_for('admin.mock_questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id) }}"
-            onsubmit="return confirm('Delete this mock question?');">
-        <button class="text-sm text-red-600 hover:underline whitespace-nowrap">Delete</button>
-      </form>
+
+      {% if q.has_image %}
+      <div class="mt-2">
+        {% if q.image_url %}
+        <div class="flex items-center gap-3" data-image-uploaded>
+          <img src="{{ q.image_url }}" alt="" class="h-16 w-16 object-cover rounded border border-ink/10">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-ink/60 hover:text-ink underline cursor-pointer w-fit">
+              Replace image
+              <input type="file" accept="image/*" class="hidden" data-image-input>
+            </label>
+            <button type="button" class="text-xs text-red-600 hover:underline text-left" data-remove-image>Remove image</button>
+          </div>
+        </div>
+        {% else %}
+        <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3" data-image-pending>
+          <p class="text-xs text-ink/70">📷 This question needs a diagram — <span data-upload-status>no image uploaded yet</span></p>
+          <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
+            Upload Image
+            <input type="file" accept="image/*" class="hidden" data-image-input>
+          </label>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
     {% else %}
     <p class="px-5 py-6 text-ink/50 text-sm">No mock questions uploaded for this stream yet.</p>
@@ -128,4 +164,63 @@
   <p class="text-ink/50 text-sm">Select a Stream above to upload or view mock test questions.</p>
   {% endif %}
 </div>
+
+<script>
+  // Same delegated-upload handler as the chapter-wise questions page —
+  // duplicated here (rather than shared) because this template has no
+  // build step to import a shared JS file from; both copies call the
+  // same backend route family under /admin/questions/<table_name>/...
+  document.addEventListener('change', async (e) => {
+    const input = e.target.closest('[data-image-input]');
+    if (!input || !input.files[0]) return;
+
+    const row = input.closest('[data-question-row]');
+    const tableName = row.dataset.table;
+    const questionId = row.dataset.questionId;
+    const statusEl = row.querySelector('[data-upload-status]');
+    if (statusEl) statusEl.textContent = 'Uploading…';
+
+    const formData = new FormData();
+    formData.append('image', input.files[0]);
+
+    try {
+      const res = await fetch(`/admin/questions/${tableName}/${questionId}/upload-image`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        alert('Upload failed: ' + data.error);
+        if (statusEl) statusEl.textContent = 'no image uploaded yet';
+      }
+    } catch (err) {
+      alert('Upload failed: ' + err);
+      if (statusEl) statusEl.textContent = 'no image uploaded yet';
+    }
+  });
+
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-remove-image]');
+    if (!btn) return;
+    if (!confirm('Remove this image? The question will show the upload box again.')) return;
+
+    const row = btn.closest('[data-question-row]');
+    const tableName = row.dataset.table;
+    const questionId = row.dataset.questionId;
+
+    try {
+      const res = await fetch(`/admin/questions/${tableName}/${questionId}/remove-image`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        alert('Could not remove image: ' + data.error);
+      }
+    } catch (err) {
+      alert('Could not remove image: ' + err);
+    }
+  });
+</script>
 {% endblock %}
