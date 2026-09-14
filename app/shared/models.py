@@ -7,7 +7,7 @@ that only admin performs (create/edit/delete streams etc.) live in
 app/admin/*_routes.py instead, using supabase_admin directly — no
 need to funnel every admin write through this shared file.
 """
-from app.extensions import supabase_public
+from app.extensions import supabase_public, supabase_admin
 
 
 def get_active_streams():
@@ -257,8 +257,6 @@ def create_test_attempt(test_id, user_id=None, guest_id=None):
     attempt_owner_check constraint on test_attempts.
     Returns the new attempt's id, or None on failure.
     """
-    from app.extensions import supabase_admin  # write op — use the admin client
-
     payload = {"test_id": test_id}
     if user_id:
         payload["user_id"] = user_id
@@ -283,7 +281,6 @@ def get_attempt_by_id(attempt_id):
     session user_id/guest_id), so reading here via the admin client is
     safe and is what makes the freshly-created attempt visible at all.
     """
-    from app.extensions import supabase_admin
     res = supabase_admin.table("test_attempts").select("*").eq("id", attempt_id).execute()
     if not res.data:
         return None
@@ -300,8 +297,6 @@ def save_attempt_progress(attempt_id, mock_question_id, selected_option, status,
     bypassing Flask cookies entirely. This guarantees progress never drops due
     to size limits.
     """
-    from app.extensions import supabase_admin
-
     row = {
         "attempt_id": attempt_id,
         "mock_question_id": mock_question_id,
@@ -320,8 +315,6 @@ def bulk_save_attempt_progress(attempt_id, entries):
     entire Alpine.js state so even if a student lost internet momentarily,
     all answers hit the DB in one shot.
     """
-    from app.extensions import supabase_admin
-
     if not entries:
         return
     rows = [
@@ -346,8 +339,6 @@ def get_attempt_answers_map(attempt_id):
     Reads back every attempt_answers row for this attempt. Used to hydrate
     Alpine state on page reload, and to pull exact time/options for Review Mode.
     """
-    from app.extensions import supabase_admin
-
     res = (
         supabase_admin.table("attempt_answers")
         .select("mock_question_id, selected_option, is_correct, time_taken_sec, status")
@@ -363,8 +354,9 @@ def get_mock_questions_for_test_review(test_id, attempt_id):
     Unlike the live attempt version, this DOES include correct_option safely,
     and merges the user's saved answers directly into the output for UI highlighting.
     """
+    # Use supabase_admin here too to bypass RLS blocks and fetch mapped data securely for review.
     res = (
-        supabase_public.table("mock_test_questions")
+        supabase_admin.table("mock_test_questions")
         .select(
             "question_order, "
             "mock_questions(id, question_text, option_a, option_b, option_c, "
@@ -410,11 +402,10 @@ def submit_test_attempt(attempt_id, test_id, answers=None, time_by_question=None
     network drops or sync mismatches causing incorrect scores or zeroes in time tracking.
     
     Looks up the real correct_option directly from `mock_questions` (server-side,
-    so a tampered client payload can't self-report a fake score), applies negative_marking,
-    updates the `is_correct` flags on the existing DB rows via upsert, and updates the 
-    `test_attempts` row with the final score/counts.
+    so a tampered client payload can't self-report a fake score), calculates dynamic marks 
+    based on total_marks / total_questions, applies negative_marking, updates the `is_correct` 
+    flags on the existing DB rows via upsert, and updates the `test_attempts` row.
     """
-    from app.extensions import supabase_admin
     import datetime
 
     # Kept in signature for backwards compatibility with route calls, but default to empty.
@@ -439,8 +430,13 @@ def submit_test_attempt(attempt_id, test_id, answers=None, time_by_question=None
     # This is the foolproof source of truth saved by bulk_save_attempt_progress.
     progress_map = get_attempt_answers_map(attempt_id)
 
-    negative_marking = float(test.get("negative_marking") or 0)
     total_questions = len(mapped)
+    total_marks = int(test.get("total_marks") or total_questions)
+    negative_marking = abs(float(test.get("negative_marking") or 0)) # Ensure it's positive before subtraction
+    
+    # Calculate exactly how much each question is worth (e.g. 120 marks / 30 Qs = 4 marks per correct Q)
+    marks_per_question = float(total_marks) / total_questions if total_questions > 0 else 1.0
+
     correct_count = 0
     wrong_count = 0
     skipped_count = 0
@@ -491,7 +487,8 @@ def submit_test_attempt(attempt_id, test_id, answers=None, time_by_question=None
             answer_rows, on_conflict="attempt_id,mock_question_id"
         ).execute()
 
-    score = correct_count - (wrong_count * negative_marking)
+    # Dynamic Scoring logic properly applies Marks_per_Question
+    score = (correct_count * marks_per_question) - (wrong_count * negative_marking)
 
     summary = {
         "submitted_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -509,8 +506,9 @@ def submit_test_attempt(attempt_id, test_id, answers=None, time_by_question=None
 
 def get_attempts_for_user(user_id):
     """All of this user's attempts, most recent first — for the profile/dashboard page."""
+    # Used supabase_admin to ensure data retrieval regardless of RLS edge-cases on view.
     res = (
-        supabase_public.table("test_attempts")
+        supabase_admin.table("test_attempts")
         .select("id, test_id, started_at, submitted_at, score, total_questions, "
                 "correct_count, wrong_count, skipped_count, tests(title, total_marks)")
         .eq("user_id", user_id)
@@ -524,27 +522,11 @@ def get_attempt_time_breakdown(attempt_id, test_id):
     """
     Per-question and per-subject time spent, for the result page.
 
-    Reads attempt_answers (joined through mock_questions -> subjects)
-    for this attempt and returns:
-        {
-          "by_subject": {"Physics": 734, "Chemistry": 610, "Biology": 512},  # seconds
-          "by_question": [
-            {"question_order": 1, "subject_name": "Physics",
-             "question_text": "...", "time_taken_sec": 45,
-             "selected_option": "C", "is_correct": True},
-            ...
-          ],
-        }
-    question_order comes from mock_test_questions so the breakdown
-    can be shown in the same order the student saw the questions in.
-    Questions with no attempt_answers row at all (never visited) are
-    included with time_taken_sec = 0 so every mapped question shows
-    up in the breakdown, not just the ones the student touched.
-    test_id is passed in by the caller (test_result() already has it
-    from the URL) rather than looked up again here.
+    BUGFIX: Switched to supabase_admin to bypass RLS blocks that were causing
+    the backend to receive 0 rows, resulting in "0s" time and everything "Skipped".
     """
     order_res = (
-        supabase_public.table("mock_test_questions")
+        supabase_admin.table("mock_test_questions")
         .select("mock_question_id, question_order")
         .eq("test_id", test_id)
         .order("question_order")
@@ -553,11 +535,12 @@ def get_attempt_time_breakdown(attempt_id, test_id):
     order_by_qid = {row["mock_question_id"]: row.get("question_order", 0) for row in order_res.data}
 
     questions_res = (
-        supabase_public.table("mock_questions")
+        supabase_admin.table("mock_questions")
         .select("id, question_text, subjects(name)")
         .in_("id", list(order_by_qid.keys()))
         .execute()
     ) if order_by_qid else None
+    
     question_lookup = {}
     if questions_res:
         for q in questions_res.data:
@@ -565,7 +548,7 @@ def get_attempt_time_breakdown(attempt_id, test_id):
             question_lookup[q["id"]] = {"question_text": q["question_text"], "subject_name": subj_name}
 
     answers_res = (
-        supabase_public.table("attempt_answers")
+        supabase_admin.table("attempt_answers")
         .select("mock_question_id, selected_option, is_correct, time_taken_sec")
         .eq("attempt_id", attempt_id)
         .execute()
