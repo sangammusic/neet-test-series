@@ -159,8 +159,20 @@ def tests_bulk_map_questions(test_id):
 
     if inserted_ids:
         try:
-            mapping_rows = [{"test_id": test_id, "mock_question_id": qid} for qid in inserted_ids]
-            supabase_admin.table("mock_test_questions").upsert(mapping_rows).execute()
+            # BUGFIX: question_order was never set here, so every mapped
+            # question defaulted to question_order = 0 in the DB. Since
+            # get_mock_questions_for_test() sorts by question_order, every
+            # batch of questions ended up with an undefined/arbitrary order
+            # on the actual test-attempt screen. Use the order they were
+            # pasted in (paired with inserted_ids, which insert() returns
+            # in the same order valid_payloads was built in).
+            mapping_rows = [
+                {"test_id": test_id, "mock_question_id": qid, "question_order": i}
+                for i, qid in enumerate(inserted_ids, start=1)
+            ]
+            supabase_admin.table("mock_test_questions").upsert(
+                mapping_rows, on_conflict="test_id,mock_question_id"
+            ).execute()
         except Exception as exc:
             flash(
                 f"{len(inserted_ids)} question(s) were inserted into the question pool, "
@@ -194,3 +206,27 @@ def tests_remove_question(test_id, question_id):
     """question_id here refers to mock_questions.id (the mock_test_questions FK target)."""
     supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).eq("mock_question_id", question_id).execute()
     return redirect(url_for("admin.tests_manage", test_id=test_id))
+
+
+@admin_bp.route("/tests/<test_id>/delete", methods=["POST"])
+@admin_required
+def tests_delete(test_id):
+    """
+    FEATURE (was missing): delete an uploaded/created test entirely.
+
+    `tests` has ON DELETE CASCADE from test_questions, test_attempts,
+    mock_test_questions, and test_access_grants (see schema.sql /
+    migration_mock_test_attempts.sql), so deleting the test row also
+    cleans up its question-mapping and any student attempts against
+    it automatically — nothing orphaned is left behind.
+
+    Deliberately does NOT delete the underlying mock_questions rows
+    themselves (a question may be reused across multiple tests) —
+    only this test and its mapping to those questions.
+    """
+    try:
+        supabase_admin.table("tests").delete().eq("id", test_id).execute()
+        flash("Test deleted.", "success")
+    except Exception as exc:
+        flash(f"Could not delete test: {exc}", "error")
+    return redirect(url_for("admin.tests_list"))
