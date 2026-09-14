@@ -302,6 +302,8 @@ def test_attempt_submit(slug, test_id, attempt_id):
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id:
         abort(404)
+        
+    # Agar already submit ho chuka hai, directly result pe redirect
     if attempt.get("submitted_at"):
         return jsonify({
             "ok": True,
