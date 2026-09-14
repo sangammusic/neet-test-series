@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, session, jsonify, abort
+from flask import render_template, request, redirect, url_for, session, jsonify, abort, flash
 
 from app.user import user_bp
 from app.extensions import supabase_admin
@@ -11,7 +11,7 @@ from app.shared.models import (
     get_mock_question_ids_for_test, create_test_attempt, get_attempt_by_id,
     submit_test_attempt, get_attempts_for_user, get_attempt_time_breakdown,
     save_attempt_progress, bulk_save_attempt_progress, get_attempt_answers_map,
-    get_mock_questions_for_test_review,
+    get_mock_questions_for_test_review, delete_all_attempts_for_user
 )
 from app.shared.utils import GUEST_COOKIE_NAME, get_or_create_guest_id, set_guest_cookie, is_logged_in, current_user_id
 
@@ -403,3 +403,17 @@ def profile():
         return redirect(url_for("auth.login"))
     attempts = get_attempts_for_user(current_user_id())
     return render_template("profile.html", attempts=attempts)
+
+
+@user_bp.route("/profile/clear-history", methods=["POST"])
+def clear_history():
+    """
+    Nuclear Option for Users: Instantly wipes all test attempts and answers.
+    """
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
+    
+    delete_all_attempts_for_user(current_user_id())
+    
+    flash("All your test history and attempts have been permanently deleted.", "success")
+    return redirect(url_for("user.profile"))
