@@ -1,0 +1,372 @@
+{% extends "shared/base.html" %}
+{% block title %}{{ test.title }} — Attempt{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Palette status colors — matches NTA's exam-interface convention */
+  .status-not-visited   { background: #E5E7EB; color: #374151; }
+  .status-not-answered  { background: #DC2626; color: #fff; }
+  .status-answered      { background: #16A34A; color: #fff; }
+  .status-marked        { background: #7C3AED; color: #fff; }
+  .status-answered-marked {
+    background: #7C3AED; color: #fff;
+    box-shadow: inset 0 0 0 3px #16A34A;
+  }
+  .subject-tab.active { border-color: #D4A017; color: #0F1729; background: #FAF7F0; }
+  .subject-tab { border-color: transparent; color: #6b7280; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="testAttempt()" x-init="init()" class="min-h-screen bg-ink-light/5">
+
+  <!-- Top bar: title + timer -->
+  <div class="bg-ink text-paper px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20">
+    <div>
+      <p class="font-display text-sm md:text-base font-semibold">{{ test.title }}</p>
+      <p class="text-xs text-paper/60">{{ test.total_marks or '—' }} marks · -{{ test.negative_marking }} negative marking</p>
+    </div>
+    <div class="flex items-center gap-2 bg-ink-light px-4 py-2 rounded-md">
+      <span class="text-xs text-paper/60">Time Left</span>
+      <span class="font-display text-lg font-semibold tabular-nums" x-text="formattedTime"></span>
+    </div>
+  </div>
+
+  <div class="flex flex-col lg:flex-row">
+
+    <!-- Main question area -->
+    <div class="flex-1 p-4 md:p-6 max-w-3xl mx-auto lg:mx-0 w-full">
+
+      <!-- Subject tabs -->
+      <div class="flex gap-2 mb-6 border-b border-ink/10 overflow-x-auto">
+        <template x-for="subject in subjects" :key="subject">
+          <button
+            @click="switchSubject(subject)"
+            class="subject-tab px-4 py-2 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors"
+            :class="{ 'active': currentSubject === subject }"
+            x-text="subject"></button>
+        </template>
+      </div>
+
+      <!-- Current question -->
+      <template x-if="currentQuestion">
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <p class="text-sm font-semibold text-ink/70">
+              Question <span x-text="currentIndexInSubject + 1"></span> of <span x-text="currentSubjectQuestions.length"></span>
+              <span class="text-ink/40">· <span x-text="currentSubject"></span></span>
+            </p>
+            <p class="flex items-center gap-1.5 text-xs font-semibold text-ink/50 bg-ink/5 px-2.5 py-1 rounded-full">
+              <span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span>
+              <span x-text="formattedQuestionTime"></span> on this question
+            </p>
+          </div>
+
+          <div class="bg-white border border-ink/10 rounded-lg p-5 mb-4">
+            <p class="text-base leading-relaxed mb-4" x-html="currentQuestion.question_text"></p>
+            <img :src="currentQuestion.image_url" x-show="currentQuestion.image_url" class="max-w-full rounded-md mb-4" alt="">
+
+            <div class="space-y-2">
+              <template x-for="opt in ['A','B','C','D']" :key="opt">
+                <label
+                  class="flex items-start gap-3 p-3 rounded-md border cursor-pointer transition-colors"
+                  :class="selectedOption(currentQuestion.id) === opt
+                    ? 'border-gold bg-gold/10'
+                    : 'border-ink/10 hover:border-ink/30'">
+                  <input type="radio" class="mt-1" :name="'q_' + currentQuestion.id" :value="opt"
+                         :checked="selectedOption(currentQuestion.id) === opt"
+                         @change="selectOption(currentQuestion.id, opt)">
+                  <span class="text-sm" x-text="opt + '. ' + currentQuestion['option_' + opt.toLowerCase()]"></span>
+                </label>
+              </template>
+            </div>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <button @click="clearResponse(currentQuestion.id)"
+              class="py-2.5 rounded-md text-sm font-semibold border border-ink/20 text-ink/70 hover:bg-ink/5">
+              Clear Response
+            </button>
+            <button @click="markForReview(currentQuestion.id, false); goNext()"
+              class="py-2.5 rounded-md text-sm font-semibold bg-purple-100 text-purple-700 hover:bg-purple-200">
+              Mark for Review &amp; Next
+            </button>
+            <button @click="saveAndNext(currentQuestion.id)"
+              class="py-2.5 rounded-md text-sm font-semibold bg-ink text-paper hover:bg-ink-light col-span-2 md:col-span-1">
+              Save &amp; Next
+            </button>
+            <button @click="openSubmitConfirm()"
+              class="py-2.5 rounded-md text-sm font-semibold bg-gold text-ink hover:bg-gold-light">
+              Submit Test
+            </button>
+          </div>
+
+          <div class="flex justify-between mt-4 text-sm">
+            <button @click="goPrev()" :disabled="currentIndexInSubject === 0"
+              class="text-ink/50 hover:text-ink disabled:opacity-30 disabled:cursor-not-allowed">← Previous</button>
+            <button @click="goNext()" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
+              class="text-ink/50 hover:text-ink disabled:opacity-30 disabled:cursor-not-allowed">Next →</button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Side palette -->
+    <div class="lg:w-80 w-full bg-white border-t lg:border-t-0 lg:border-l border-ink/10 p-4 md:p-6">
+      <p class="text-sm font-semibold text-ink mb-3">Question Palette</p>
+
+      <template x-for="subject in subjects" :key="'palette-' + subject">
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-ink/50 mb-2" x-text="subject"></p>
+          <div class="grid grid-cols-6 gap-1.5">
+            <template x-for="(q, idx) in questionsBySubject[subject]" :key="q.id">
+              <button
+                @click="jumpTo(subject, idx)"
+                class="w-9 h-9 rounded text-xs font-semibold flex items-center justify-center transition-transform hover:scale-105"
+                :class="paletteClass(q.id)"
+                x-text="idx + 1"></button>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <div class="text-xs space-y-1.5 mt-5 pt-4 border-t border-ink/10">
+        <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-not-visited inline-block"></span> Not Visited</p>
+        <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-not-answered inline-block"></span> Not Answered</p>
+        <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-answered inline-block"></span> Answered</p>
+        <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-marked inline-block"></span> Marked for Review</p>
+        <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-answered-marked inline-block"></span> Answered &amp; Marked</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submit confirmation modal -->
+  <div x-show="showSubmitConfirm" x-cloak class="fixed inset-0 bg-black/50 flex items-center justify-center z-30 p-4">
+    <div class="bg-white rounded-lg p-6 max-w-sm w-full">
+      <h3 class="font-display text-lg font-semibold mb-3">Submit test?</h3>
+      <div class="text-sm text-ink/70 space-y-1 mb-5">
+        <p>Answered: <span class="font-semibold text-ink" x-text="counts.answered"></span></p>
+        <p>Not Answered: <span class="font-semibold text-ink" x-text="counts.notAnswered"></span></p>
+        <p>Marked for Review: <span class="font-semibold text-ink" x-text="counts.marked"></span></p>
+        <p>Not Visited: <span class="font-semibold text-ink" x-text="counts.notVisited"></span></p>
+      </div>
+      <div class="flex gap-2">
+        <button @click="showSubmitConfirm = false" class="flex-1 py-2.5 rounded-md text-sm font-semibold border border-ink/20">Cancel</button>
+        <form :action="submitUrl" method="POST" class="flex-1">
+          <button type="submit" class="w-full py-2.5 rounded-md text-sm font-semibold bg-gold text-ink hover:bg-gold-light">Yes, Submit</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+<script>
+function testAttempt() {
+  return {
+    questionsBySubject: {{ questions_by_subject | tojson }},
+    subjects: Object.keys({{ questions_by_subject | tojson }}),
+    currentSubject: null,
+    currentIndexInSubject: 0,
+    progress: {},  // { questionId: { selected_option, status } }
+    timeSpent: {},  // { questionId: totalSecondsSpent } — accumulates across every visit
+    activeQuestionId: null,
+    activeQuestionSeconds: 0,   // seconds spent on the CURRENT visit to activeQuestionId
+    questionTimerHandle: null,
+    durationSeconds: {{ (test.duration_minutes or 60) * 60 }},
+    secondsLeft: {{ (test.duration_minutes or 60) * 60 }},
+    timerHandle: null,
+    showSubmitConfirm: false,
+    saveUrl: "{{ url_for('user.test_attempt_save_answer', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
+    submitUrl: "{{ url_for('user.test_attempt_submit', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
+
+    init() {
+      this.currentSubject = this.subjects[0] || null;
+      this.startTimer();
+      this.markVisited();
+      this.startQuestionTimer();
+    },
+
+    get currentSubjectQuestions() {
+      return this.questionsBySubject[this.currentSubject] || [];
+    },
+
+    get currentQuestion() {
+      return this.currentSubjectQuestions[this.currentIndexInSubject] || null;
+    },
+
+    get formattedTime() {
+      const m = Math.floor(this.secondsLeft / 60).toString().padStart(2, '0');
+      const s = (this.secondsLeft % 60).toString().padStart(2, '0');
+      return m + ':' + s;
+    },
+
+    get formattedQuestionTime() {
+      const m = Math.floor(this.activeQuestionSeconds / 60).toString().padStart(2, '0');
+      const s = (this.activeQuestionSeconds % 60).toString().padStart(2, '0');
+      return m + ':' + s;
+    },
+
+    get counts() {
+      let answered = 0, notAnswered = 0, marked = 0, notVisited = 0;
+      for (const subject of this.subjects) {
+        for (const q of this.questionsBySubject[subject]) {
+          const entry = this.progress[q.id];
+          if (!entry || entry.status === 'not_visited' || !entry.status) { notVisited++; continue; }
+          if (entry.status === 'answered' || entry.status === 'answered_marked') answered++;
+          else if (entry.status === 'marked') marked++;
+          else notAnswered++;
+        }
+      }
+      return { answered, notAnswered, marked, notVisited };
+    },
+
+    startTimer() {
+      this.timerHandle = setInterval(() => {
+        if (this.secondsLeft <= 0) {
+          clearInterval(this.timerHandle);
+          this.autoSubmit();
+          return;
+        }
+        this.secondsLeft--;
+      }, 1000);
+    },
+
+    // --- Per-question stopwatch ---
+    // Runs alongside the main countdown. Every tick adds a second to
+    // BOTH the live on-screen counter (activeQuestionSeconds) and the
+    // running total for that question (timeSpent[id]) — so switching
+    // away and back later resumes accumulating instead of resetting.
+    startQuestionTimer() {
+      if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
+      const q = this.currentQuestion;
+      this.activeQuestionId = q ? q.id : null;
+      this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
+
+      this.questionTimerHandle = setInterval(() => {
+        if (!this.activeQuestionId) return;
+        this.activeQuestionSeconds++;
+        this.timeSpent[this.activeQuestionId] = this.activeQuestionSeconds;
+      }, 1000);
+    },
+
+    autoSubmit() {
+      const q = this.currentQuestion;
+      if (q) this.persist(q.id);
+      // fire-and-forget the save; submit right after so the timer
+      // running out doesn't leave the last question's time unsaved
+      setTimeout(() => {
+        document.querySelector('form[action="' + this.submitUrl + '"]')?.submit();
+      }, 300);
+    },
+
+    switchSubject(subject) {
+      this.currentSubject = subject;
+      this.currentIndexInSubject = 0;
+      this.markVisited();
+      this.startQuestionTimer();
+    },
+
+    jumpTo(subject, idx) {
+      this.currentSubject = subject;
+      this.currentIndexInSubject = idx;
+      this.markVisited();
+      this.startQuestionTimer();
+    },
+
+    markVisited() {
+      const q = this.currentQuestion;
+      if (!q) return;
+      if (!this.progress[q.id]) {
+        this.progress[q.id] = { selected_option: null, status: 'not_answered' };
+      }
+    },
+
+    selectedOption(questionId) {
+      return this.progress[questionId]?.selected_option || null;
+    },
+
+    selectOption(questionId, opt) {
+      const entry = this.progress[questionId] || {};
+      const wasMarked = entry.status === 'marked' || entry.status === 'answered_marked';
+      this.progress[questionId] = {
+        selected_option: opt,
+        status: wasMarked ? 'answered_marked' : 'answered',
+      };
+    },
+
+    clearResponse(questionId) {
+      const entry = this.progress[questionId] || {};
+      const wasMarked = entry.status === 'marked' || entry.status === 'answered_marked';
+      this.progress[questionId] = {
+        selected_option: null,
+        status: wasMarked ? 'marked' : 'not_answered',
+      };
+      this.persist(questionId);
+    },
+
+    markForReview(questionId, andClear) {
+      const entry = this.progress[questionId] || {};
+      const hasAnswer = !!entry.selected_option;
+      this.progress[questionId] = {
+        selected_option: andClear ? null : entry.selected_option,
+        status: hasAnswer && !andClear ? 'answered_marked' : 'marked',
+      };
+      this.persist(questionId);
+    },
+
+    saveAndNext(questionId) {
+      this.persist(questionId);
+      this.goNext();
+    },
+
+    persist(questionId) {
+      const entry = this.progress[questionId];
+      if (!entry) return;
+      fetch(this.saveUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question_id: questionId,
+          selected_option: entry.selected_option,
+          status: entry.status,
+          time_taken_sec: this.timeSpent[questionId] || 0,
+        }),
+      }).catch(() => { /* best-effort — final scoring happens server-side from session on submit */ });
+    },
+
+    goNext() {
+      if (this.currentIndexInSubject < this.currentSubjectQuestions.length - 1) {
+        this.currentIndexInSubject++;
+        this.markVisited();
+        this.startQuestionTimer();
+      }
+    },
+
+    goPrev() {
+      if (this.currentIndexInSubject > 0) {
+        this.currentIndexInSubject--;
+        this.markVisited();
+        this.startQuestionTimer();
+      }
+    },
+
+    paletteClass(questionId) {
+      const entry = this.progress[questionId];
+      if (!entry || !entry.status || entry.status === 'not_visited') return 'status-not-visited';
+      if (entry.status === 'answered') return 'status-answered';
+      if (entry.status === 'answered_marked') return 'status-answered-marked';
+      if (entry.status === 'marked') return 'status-marked';
+      return 'status-not-answered';
+    },
+
+    openSubmitConfirm() {
+      const q = this.currentQuestion;
+      if (q) this.persist(q.id);
+      this.showSubmitConfirm = true;
+    },
+  };
+}
+</script>
+{% endblock %}

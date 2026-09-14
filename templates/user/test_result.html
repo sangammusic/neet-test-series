@@ -1,0 +1,92 @@
+{% extends "shared/base.html" %}
+{% block title %}{{ test.title }} — Result{% endblock %}
+{% block content %}
+<section class="max-w-xl mx-auto px-6 pt-12 pb-24">
+  <h1 class="font-display text-2xl font-semibold text-ink mb-1">{{ test.title }}</h1>
+  <p class="text-ink/50 text-sm mb-8">Result Summary</p>
+
+  <div class="bg-ink text-paper rounded-lg p-6 text-center mb-6">
+    <p class="text-xs text-paper/60 mb-1">Your Score</p>
+    <p class="font-display text-4xl font-semibold">
+      {{ attempt.score }} <span class="text-lg text-paper/50">/ {{ test.total_marks or attempt.total_questions }}</span>
+    </p>
+  </div>
+
+  <div class="grid grid-cols-3 gap-3 mb-8">
+    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
+      <p class="text-xl font-display font-semibold text-green-600">{{ attempt.correct_count }}</p>
+      <p class="text-xs text-ink/50 mt-1">Correct</p>
+    </div>
+    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
+      <p class="text-xl font-display font-semibold text-red-600">{{ attempt.wrong_count }}</p>
+      <p class="text-xs text-ink/50 mt-1">Wrong</p>
+    </div>
+    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
+      <p class="text-xl font-display font-semibold text-ink/50">{{ attempt.skipped_count }}</p>
+      <p class="text-xs text-ink/50 mt-1">Skipped</p>
+    </div>
+  </div>
+
+  {% if time_by_subject %}
+  {% set total_seconds = time_by_subject.values() | sum %}
+  <h2 class="font-display text-lg font-semibold text-ink mb-3">Time Spent by Subject</h2>
+  <div class="bg-white border border-ink/10 rounded-lg p-5 mb-4 space-y-3">
+    {% for subject, seconds in time_by_subject.items() %}
+    <div>
+      <div class="flex justify-between text-sm mb-1">
+        <span class="font-medium text-ink">{{ subject }}</span>
+        <span class="text-ink/60">{{ (seconds // 60) }}m {{ (seconds % 60) }}s</span>
+      </div>
+      <div class="w-full bg-ink/5 rounded-full h-2">
+        <div class="bg-gold h-2 rounded-full" style="width: {{ ((seconds / total_seconds * 100) if total_seconds else 0)|round(1) }}%"></div>
+      </div>
+    </div>
+    {% endfor %}
+    <p class="text-xs text-ink/40 pt-2 border-t border-ink/10">
+      Total time: {{ (total_seconds // 60) }}m {{ (total_seconds % 60) }}s
+    </p>
+  </div>
+
+  <details class="mb-8">
+    <summary class="cursor-pointer font-display text-lg font-semibold text-ink mb-3">Time Spent per Question</summary>
+    <div class="bg-white border border-ink/10 rounded-lg overflow-hidden mt-3">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-ink/5 text-ink/50 text-xs uppercase tracking-wide">
+            <th class="text-left px-4 py-2 font-semibold">Q#</th>
+            <th class="text-left px-4 py-2 font-semibold">Subject</th>
+            <th class="text-left px-4 py-2 font-semibold">Result</th>
+            <th class="text-right px-4 py-2 font-semibold">Time Spent</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for q in time_by_question %}
+          <tr class="border-t border-ink/5">
+            <td class="px-4 py-2 text-ink/70">{{ loop.index }}</td>
+            <td class="px-4 py-2 text-ink/70">{{ q.subject_name }}</td>
+            <td class="px-4 py-2">
+              {% if q.selected_option is none %}
+                <span class="text-ink/40">Skipped</span>
+              {% elif q.is_correct %}
+                <span class="text-green-600 font-medium">Correct</span>
+              {% else %}
+                <span class="text-red-600 font-medium">Wrong</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2 text-right text-ink/70 tabular-nums">{{ q.time_taken_sec }}s</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endif %}
+
+  <div class="flex gap-3">
+    <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}"
+       class="flex-1 text-center py-3 rounded-md border border-ink/20 text-sm font-semibold hover:bg-ink/5">Back to Tests</a>
+    <a href="{{ url_for('user.profile') }}"
+       class="flex-1 text-center py-3 rounded-md bg-ink text-paper text-sm font-semibold hover:bg-ink-light">View Dashboard</a>
+  </div>
+</section>
+{% endblock %}
