@@ -104,6 +104,30 @@ def switch_stream():
     return redirect(url_for("user.stream_select", force="1"))
 
 
+@user_bp.route("/dashboard")
+def my_dashboard():
+    """
+    BUGFIX: the nav bar's "My Dashboard" link used to point straight at
+    /profile, which only shows past test attempts (often empty for a
+    new user) and has no way back to the actual stream dashboard (the
+    "Chapter-wise Practice" / "Mock Test Series" cards) — that page was
+    only ever reachable via /streams/<slug>, which nothing in the nav
+    linked to. This route re-derives the user's (or guest's) first
+    saved stream, same lookup as landing(), and sends them to the real
+    dashboard. If they haven't picked a stream yet, send them to pick
+    one instead of 404ing.
+    """
+    if is_logged_in():
+        existing = get_streams_for_user_or_guest(user_id=current_user_id())
+    else:
+        guest_id = request.cookies.get(GUEST_COOKIE_NAME)
+        existing = get_streams_for_user_or_guest(guest_id=guest_id) if guest_id else []
+
+    if existing:
+        return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
+    return redirect(url_for("user.stream_select"))
+
+
 # ---------- Menu 1: Chapter-wise MCQ Practice ----------
 
 @user_bp.route("/streams/<slug>/practice")
