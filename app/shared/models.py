@@ -401,33 +401,24 @@ def get_mock_questions_for_test_review(test_id, attempt_id):
     return grouped
 
 
-def submit_test_attempt(attempt_id, test_id, answers, time_by_question=None):
+def submit_test_attempt(attempt_id, test_id, answers=None, time_by_question=None):
     """
-    Scores and finalizes an attempt.
-
-    answers: dict of {mock_question_id: "A"|"B"|"C"|"D"} for every
-    question the student selected an option for (unanswered
-    questions simply aren't in this dict — they count as skipped).
-
-    time_by_question: optional dict of {mock_question_id: seconds}
-    — the per-question stopwatch total tracked client-side. A row is
-    still written to attempt_answers for a SKIPPED question if time
-    was spent on it (selected_option stays null, is_correct stays
-    null), so "visited but didn't answer" time isn't lost — this is
-    what powers the per-question/per-subject time breakdown on the
-    result page.
-
-    Looks up the real correct_option + is_premium-safe fields for
-    every mapped question directly from mock_questions (server-side,
-    so a tampered client payload can't self-report a fake score),
-    applies the test's negative_marking, writes attempt_answers rows,
-    and updates the test_attempts row with the final score/counts.
-
-    Returns the summary dict that was written to test_attempts, or
-    None if the test/attempt couldn't be loaded.
+    Scores and finalizes an attempt using the database as the absolute source of truth.
+    
+    This function pulls the finalized durable state directly from the `attempt_answers` 
+    table (populated earlier by `bulk_save_attempt_progress`). This eliminates the risk of
+    network drops or sync mismatches causing incorrect scores or zeroes in time tracking.
+    
+    Looks up the real correct_option directly from `mock_questions` (server-side,
+    so a tampered client payload can't self-report a fake score), applies negative_marking,
+    updates the `is_correct` flags on the existing DB rows via upsert, and updates the 
+    `test_attempts` row with the final score/counts.
     """
     from app.extensions import supabase_admin
+    import datetime
 
+    # Kept in signature for backwards compatibility with route calls, but default to empty.
+    answers = answers or {}
     time_by_question = time_by_question or {}
 
     test = supabase_admin.table("tests").select("negative_marking, total_marks").eq("id", test_id).single().execute().data
@@ -444,8 +435,8 @@ def submit_test_attempt(attempt_id, test_id, answers, time_by_question=None):
     if not mapped:
         return None
 
-    # CRITICAL BUGFIX: We must fetch the existing status map so our UPSERT
-    # below doesn't blindly wipe out "marked" or "answered_marked" statuses to NULL.
+    # CRITICAL BUGFIX: We fetch the existing, durable map from the DB directly.
+    # This is the foolproof source of truth saved by bulk_save_attempt_progress.
     progress_map = get_attempt_answers_map(attempt_id)
 
     negative_marking = float(test.get("negative_marking") or 0)
@@ -458,15 +449,17 @@ def submit_test_attempt(attempt_id, test_id, answers, time_by_question=None):
     for row in mapped:
         qid = row["mock_question_id"]
         correct_option = (row.get("mock_questions") or {}).get("correct_option")
-        selected = answers.get(qid)
-        time_taken = int(time_by_question.get(qid) or 0)
-        existing_status = progress_map.get(qid, {}).get("status")
+        
+        # Read exact state from DB, fallback to route dictionaries if DB is somehow empty.
+        student_data = progress_map.get(qid, {})
+        selected = student_data.get("selected_option") or answers.get(qid)
+        time_taken = student_data.get("time_taken_sec") or time_by_question.get(qid) or 0
+        existing_status = student_data.get("status") or "not_visited"
 
         if not selected:
             skipped_count += 1
-            # Still record time spent on a skipped-but-visited question,
-            # so it shows up in the result page's time breakdown.
-            if time_taken > 0 or existing_status:
+            # Still record time spent on a skipped-but-visited question
+            if time_taken > 0 or existing_status != "not_visited":
                 answer_rows.append({
                     "attempt_id": attempt_id,
                     "mock_question_id": qid,
@@ -493,8 +486,7 @@ def submit_test_attempt(attempt_id, test_id, answers, time_by_question=None):
         })
 
     if answer_rows:
-        # CRITICAL BUGFIX: Changed .insert() to .upsert() because rows will now 
-        # already exist in the database due to live per-question saving.
+        # Update is_correct flag safely without destroying previously saved status/time
         supabase_admin.table("attempt_answers").upsert(
             answer_rows, on_conflict="attempt_id,mock_question_id"
         ).execute()
@@ -502,17 +494,13 @@ def submit_test_attempt(attempt_id, test_id, answers, time_by_question=None):
     score = correct_count - (wrong_count * negative_marking)
 
     summary = {
-        "submitted_at": "now()",
+        "submitted_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "score": score,
         "total_questions": total_questions,
         "correct_count": correct_count,
         "wrong_count": wrong_count,
         "skipped_count": skipped_count,
     }
-    # Supabase python client doesn't accept the literal string "now()"
-    # as a value — use an actual ISO timestamp instead.
-    import datetime
-    summary["submitted_at"] = datetime.datetime.utcnow().isoformat()
 
     supabase_admin.table("test_attempts").update(summary).eq("id", attempt_id).execute()
     summary["attempt_id"] = attempt_id
@@ -618,4 +606,3 @@ def user_has_access_to_test(test, user_id):
         .execute()
     )
     return len(res.data) > 0
-
