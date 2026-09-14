@@ -1,4 +1,4 @@
-from flask import render_template
+from flask import render_template, redirect, url_for, flash
 
 from app.admin import admin_bp
 from app.admin.decorators import admin_required
@@ -35,6 +35,14 @@ def dashboard():
         "tests": _count("tests"),
     }
 
+    # FEATURE: Garbage tracking (to show Admin how much junk can be cleaned).
+    # Check constraint: either user_id or guest_id is set. 
+    # So is_('user_id', 'null') perfectly filters out guest attempts safely.
+    garbage_info = {
+        "guest_attempts": supabase_admin.table("test_attempts").select("id", count="exact").is_("user_id", "null").execute().count or 0,
+        "incomplete_attempts": supabase_admin.table("test_attempts").select("id", count="exact").is_("submitted_at", "null").execute().count or 0,
+    }
+
     # Storage usage: every uploaded image is compressed to ~30-100KB
     # (see app/admin/image_routes.py compress_image()), so counting
     # objects and estimating at a conservative 100KB/image gives a
@@ -63,4 +71,35 @@ def dashboard():
         "pending_mock_questions": _count_pending_images("mock_questions"),
     }
 
-    return render_template("admin_dashboard.html", counts=counts, storage_info=storage_info)
+    return render_template("admin_dashboard.html", counts=counts, storage_info=storage_info, garbage_info=garbage_info)
+
+
+@admin_bp.route("/cleanup/guests", methods=["POST"])
+@admin_required
+def cleanup_guest_attempts():
+    """
+    Nuclear option for Admin: Deletes all test attempts made by Guests.
+    Because of the DB's ON DELETE CASCADE, this automatically wipes millions 
+    of linked `attempt_answers` rows instantly, saving massive DB storage.
+    """
+    try:
+        supabase_admin.table("test_attempts").delete().is_("user_id", "null").execute()
+        flash("All Guest attempts and their data have been permanently wiped.", "success")
+    except Exception as exc:
+        flash(f"Cleanup failed: {exc}", "error")
+    return redirect(url_for("admin.dashboard"))
+
+
+@admin_bp.route("/cleanup/incomplete", methods=["POST"])
+@admin_required
+def cleanup_incomplete_attempts():
+    """
+    Nuclear option for Admin: Deletes all abandoned test attempts (never submitted).
+    Frees up storage taken by students who started a test but closed the tab.
+    """
+    try:
+        supabase_admin.table("test_attempts").delete().is_("submitted_at", "null").execute()
+        flash("All abandoned/incomplete test attempts have been permanently wiped.", "success")
+    except Exception as exc:
+        flash(f"Cleanup failed: {exc}", "error")
+    return redirect(url_for("admin.dashboard"))
