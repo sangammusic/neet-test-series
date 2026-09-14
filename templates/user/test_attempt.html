@@ -1,18 +1,20 @@
 {% extends "shared/base.html" %}
-{% block title %}{{ test.title }} — Attempt{% endblock %}
+{% block title %}{{ test.title }} — {{ 'Review' if is_review_mode else 'Attempt' }}{% endblock %}
 
 {% block nav %}{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* Palette status colors — matches NTA's exam-interface convention */
-  .status-not-visited   { background: #374151; color: #E5E7EB; }
+  /* Palette status colors — matches NTA's exam-interface convention,
+     with the Marked/Answered-Marked pair reworked to a premium bronze/amber
+     tone in the app's own gold family instead of the clashing purple. */
+  .status-not-visited   { background: #2A2A2A; color: #9CA3AF; }
   .status-not-answered  { background: #DC2626; color: #fff; }
   .status-answered      { background: #16A34A; color: #fff; }
-  .status-marked        { background: #7C3AED; color: #fff; }
+  .status-marked        { background: #8A6A1F; color: #F3E3B8; }
   .status-answered-marked {
-    background: #7C3AED; color: #fff;
-    box-shadow: inset 0 0 0 3px #16A34A;
+    background: #8A6A1F; color: #F3E3B8;
+    box-shadow: inset 0 0 0 2px #16A34A;
   }
   .subject-tab.active { border-color: #D4A017; color: #fff; background: rgba(212,160,23,0.12); }
   .subject-tab { border-color: transparent; color: #9CA3AF; }
@@ -21,9 +23,7 @@
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
   /* This page is a distraction-free full-screen runner — the global
-     footer is still included by base.html (only the nav was made
-     block-overridable), so hide it here with a scoped rule instead
-     of touching base.html a second time. */
+     footer is still included by base.html, so hide it here with a scoped rule. */
   body:has(#nta-runner) > footer,
   body:has(#nta-runner) [data-footer] {
     display: none !important;
@@ -36,10 +36,18 @@
 
   <!-- Top bar: timer (left) / subject tabs (center) / submit (right) -->
   <div class="bg-[#111111] border-b border-white/10 px-3 md:px-6 py-2.5 flex items-center gap-3 sticky top-0 z-20">
-    <div class="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-md shrink-0">
-      <span class="text-[11px] text-gray-400 hidden sm:inline">Time Left</span>
-      <span class="font-display text-base md:text-lg font-semibold tabular-nums text-gold-light" x-text="formattedTime"></span>
-    </div>
+    <template x-if="!isReviewMode">
+      <div class="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-md shrink-0">
+        <span class="text-[11px] text-gray-400 hidden sm:inline">Time Left</span>
+        <span class="font-display text-base md:text-lg font-semibold tabular-nums text-gold-light" x-text="formattedTime"></span>
+      </div>
+    </template>
+    
+    <template x-if="isReviewMode">
+      <div class="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-md shrink-0">
+        <span class="text-xs font-semibold text-gray-300">Review Mode</span>
+      </div>
+    </template>
 
     <div class="flex-1 flex justify-center gap-1 overflow-x-auto no-scrollbar">
       <template x-for="subject in subjects" :key="subject">
@@ -51,10 +59,19 @@
       </template>
     </div>
 
-    <button @click="openSubmitConfirm()"
-      class="shrink-0 py-1.5 px-3 md:px-4 rounded-md text-xs md:text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
-      Submit
-    </button>
+    <template x-if="!isReviewMode">
+      <button @click="openSubmitConfirm()"
+        class="shrink-0 py-1.5 px-3 md:px-4 rounded-md text-xs md:text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
+        Submit
+      </button>
+    </template>
+    
+    <template x-if="isReviewMode">
+      <a :href="resultUrl"
+        class="shrink-0 py-1.5 px-3 md:px-4 rounded-md text-xs md:text-sm font-semibold bg-white/10 text-white hover:bg-white/20 transition-colors">
+        Back to Result
+      </a>
+    </template>
   </div>
 
   <!-- Horizontal question palette strip -->
@@ -64,7 +81,7 @@
         <button
           @click="jumpTo(currentSubject, idx)"
           class="w-8 h-8 shrink-0 rounded text-xs font-semibold flex items-center justify-center transition-transform hover:scale-105"
-          :class="[paletteClass(q.id), currentIndexInSubject === idx ? 'ring-2 ring-gold' : '']"
+          :class="[paletteClass(q), currentIndexInSubject === idx ? 'ring-2 ring-gold' : '']"
           x-text="idx + 1"></button>
       </template>
     </div>
@@ -85,74 +102,89 @@
     <template x-if="currentQuestion">
       <div>
         <div class="flex items-center justify-between mb-4">
-          <p class="text-sm font-semibold text-gray-300">
-            Question <span x-text="currentIndexInSubject + 1"></span> of <span x-text="currentSubjectQuestions.length"></span>
-            <span class="text-gray-500">· <span x-text="currentSubject"></span></span>
-          </p>
-          <p class="flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-white/5 px-2.5 py-1 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span>
-            <span x-text="formattedQuestionTime"></span> on this question
-          </p>
+          <div class="flex items-center gap-2.5">
+            <p class="text-sm font-semibold text-gray-300">
+              Question <span x-text="currentIndexInSubject + 1"></span> of <span x-text="currentSubjectQuestions.length"></span>
+              <span class="text-gray-500">· <span x-text="currentSubject"></span></span>
+            </p>
+            <!-- Mark for review — premium bookmark icon next to the question label -->
+            <button x-show="!isReviewMode" type="button" @click="toggleMark(currentQuestion.id)"
+              class="w-6 h-6 rounded flex items-center justify-center transition-colors"
+              :class="isMarked(currentQuestion.id) ? 'text-gold bg-gold/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'"
+              :aria-pressed="isMarked(currentQuestion.id)"
+              title="Mark for review">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"
+                :fill="isMarked(currentQuestion.id) ? 'currentColor' : 'none'"
+                stroke="currentColor" stroke-width="2">
+                <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/>
+              </svg>
+            </button>
+          </div>
+
+          <template x-if="!isReviewMode">
+            <p class="flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-white/5 px-2.5 py-1 rounded-full">
+              <span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span>
+              <span x-text="formattedQuestionTime"></span> on this question
+            </p>
+          </template>
+          
+          <template x-if="isReviewMode">
+            <p class="text-xs font-semibold text-gray-400 bg-white/5 px-2.5 py-1 rounded-full">
+              <span x-text="formatSeconds(currentQuestion.time_taken_sec)"></span> spent
+            </p>
+          </template>
         </div>
 
         <div class="bg-[#161616] border border-white/10 rounded-lg p-5 mb-4">
           <p class="text-base leading-relaxed mb-4 text-gray-100" x-html="currentQuestion.question_text"></p>
 
-          <!-- Reactive media: SVG preferred, falls back to image, renders nothing if neither present -->
+          <!-- Reactive media: SVG preferred, falls back to image -->
           <div x-show="currentQuestion.svg_markup" x-html="currentQuestion.svg_markup"
                class="max-h-[250px] w-auto max-w-full mx-auto my-4 flex justify-center [&_svg]:max-h-[250px] [&_svg]:w-auto"></div>
           <img :src="currentQuestion.image_url"
                x-show="!currentQuestion.svg_markup && currentQuestion.image_url"
                class="max-h-[250px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-4 shadow-sm" alt="Diagram">
 
-          <div class="space-y-2.5">
+          <div class="space-y-3">
             <template x-for="opt in ['A','B','C','D']" :key="opt">
               <button
                 type="button"
+                :disabled="isReviewMode"
                 @click="selectOption(currentQuestion.id, opt)"
-                class="w-full flex items-start gap-3 p-3.5 rounded-md border text-left cursor-pointer transition-colors"
-                :class="selectedOption(currentQuestion.id) === opt
-                  ? 'border-gold bg-gold/10 text-white'
-                  : 'border-white/10 bg-white/[0.02] text-gray-200 hover:border-white/30'">
+                class="w-full flex items-start gap-3 p-4 rounded-lg border text-left transition-colors"
+                :class="optionClass(opt)">
                 <span class="mt-0.5 w-5 h-5 shrink-0 rounded-full border flex items-center justify-center text-[10px] font-bold"
-                  :class="selectedOption(currentQuestion.id) === opt ? 'border-gold bg-gold text-ink' : 'border-white/30 text-gray-400'"
+                  :class="optionBadgeClass(opt)"
                   x-text="opt"></span>
-                <span class="text-sm" x-text="currentQuestion['option_' + opt.toLowerCase()]"></span>
+                <span class="text-sm leading-relaxed" x-text="currentQuestion['option_' + opt.toLowerCase()]"></span>
               </button>
             </template>
           </div>
         </div>
 
-        <div class="flex justify-between mt-4 text-sm">
+        <!-- Navigation actions only: Previous, and Save & Next -->
+        <div class="grid grid-cols-2 gap-3 mt-4">
           <button @click="goPrev()" :disabled="currentIndexInSubject === 0"
-            class="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">← Previous</button>
-          <button @click="goNext()" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
-            class="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">Next →</button>
+            class="py-3 rounded-md text-sm font-semibold border border-white/15 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            ← Previous
+          </button>
+          
+          <template x-if="!isReviewMode">
+            <button @click="saveAndNext(currentQuestion.id)" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
+              class="py-3 rounded-md text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+              Save &amp; Next →
+            </button>
+          </template>
+          
+          <template x-if="isReviewMode">
+            <button @click="goNext()" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
+              class="py-3 rounded-md text-sm font-semibold bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+              Next →
+            </button>
+          </template>
         </div>
       </div>
     </template>
-  </div>
-
-  <!-- Bottom action bar — sticky -->
-  <div class="sticky bottom-0 z-20 bg-[#111111] border-t border-white/10 px-3 md:px-6 py-3">
-    <div class="max-w-3xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-2">
-      <button @click="clearResponse(currentQuestion.id)"
-        class="py-2.5 rounded-md text-sm font-semibold border border-white/20 text-gray-300 hover:bg-white/5">
-        Clear Response
-      </button>
-      <button @click="markForReview(currentQuestion.id, false); goNext()"
-        class="py-2.5 rounded-md text-sm font-semibold bg-purple-500/20 text-purple-300 hover:bg-purple-500/30">
-        Mark for Review &amp; Next
-      </button>
-      <button @click="saveAndNext(currentQuestion.id)"
-        class="py-2.5 rounded-md text-sm font-semibold bg-white text-ink hover:bg-gray-200 col-span-2 md:col-span-1">
-        Save &amp; Next
-      </button>
-      <button @click="openSubmitConfirm()"
-        class="py-2.5 rounded-md text-sm font-semibold bg-gold text-ink hover:bg-gold-light">
-        Submit Test
-      </button>
-    </div>
   </div>
 
   <!-- Full question grid modal -->
@@ -171,7 +203,7 @@
               <button
                 @click="jumpTo(subject, idx); showGridModal = false"
                 class="w-9 h-9 rounded text-xs font-semibold flex items-center justify-center transition-transform hover:scale-105"
-                :class="paletteClass(q.id)"
+                :class="paletteClass(q)"
                 x-text="idx + 1"></button>
             </template>
           </div>
@@ -198,11 +230,14 @@
         <p>Marked for Review: <span class="font-semibold text-white" x-text="counts.marked"></span></p>
         <p>Not Visited: <span class="font-semibold text-white" x-text="counts.notVisited"></span></p>
       </div>
+      <p x-show="submitError" x-cloak class="text-xs text-red-400 mb-3" x-text="submitError"></p>
       <div class="flex gap-2">
-        <button @click="showSubmitConfirm = false" class="flex-1 py-2.5 rounded-md text-sm font-semibold border border-white/20 text-gray-200">Cancel</button>
-        <form :action="submitUrl" method="POST" class="flex-1">
-          <button type="submit" class="w-full py-2.5 rounded-md text-sm font-semibold bg-gold text-ink hover:bg-gold-light">Yes, Submit</button>
-        </form>
+        <button @click="showSubmitConfirm = false" :disabled="submitting"
+          class="flex-1 py-2.5 rounded-md text-sm font-semibold border border-white/20 text-gray-200 disabled:opacity-50">Cancel</button>
+        <button @click="submitTest()" :disabled="submitting"
+          class="flex-1 py-2.5 rounded-md text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-60">
+          <span x-text="submitting ? 'Submitting…' : 'Yes, Submit'"></span>
+        </button>
       </div>
     </div>
   </div>
@@ -214,32 +249,50 @@ function testAttempt() {
   return {
     questionsBySubject: {{ questions_by_subject | tojson }},
     subjects: Object.keys({{ questions_by_subject | tojson }}),
+    isReviewMode: {{ 'true' if is_review_mode else 'false' }},
     currentSubject: null,
     currentIndexInSubject: 0,
-    progress: {},  // { questionId: { selected_option, status } }
-    timeSpent: {},  // { questionId: totalSecondsSpent } — accumulates across every visit
+    progress: {},  
+    timeSpent: {},  
     activeQuestionId: null,
-    activeQuestionSeconds: 0,   // seconds spent on the CURRENT visit to activeQuestionId
+    activeQuestionSeconds: 0,   
     questionTimerHandle: null,
     durationSeconds: {{ (test.duration_minutes or 60) * 60 }},
     secondsLeft: {{ (test.duration_minutes or 60) * 60 }},
     timerHandle: null,
     showSubmitConfirm: false,
     showGridModal: false,
+    submitting: false,
+    submitError: null,
     saveUrl: "{{ url_for('user.test_attempt_save_answer', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     submitUrl: "{{ url_for('user.test_attempt_submit', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
+    resultUrl: "{{ url_for('user.test_result', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
 
     init() {
       this.currentSubject = this.subjects[0] || null;
+
+      if (this.isReviewMode) {
+        this.typesetMath();
+        return;
+      }
+
+      // Hydrate from DB
+      const saved = {{ saved_progress | tojson if saved_progress else '{}' }};
+      for (const qid in saved) {
+        const entry = saved[qid];
+        this.progress[qid] = {
+          selected_option: entry.selected_option,
+          status: entry.status || (entry.selected_option ? 'answered' : 'not_answered'),
+        };
+        this.timeSpent[qid] = entry.time_taken_sec || 0;
+      }
+
       this.startTimer();
       this.markVisited();
       this.startQuestionTimer();
       this.typesetMath();
     },
 
-    // Re-triggers MathJax on the newly-rendered question/subject content.
-    // MathJax only scans the DOM once on page load, so without this,
-    // LaTeX in any question after the first would render as raw \(...\).
     typesetMath() {
       this.$nextTick(() => {
         if (window.MathJax && window.MathJax.typesetPromise) {
@@ -268,6 +321,13 @@ function testAttempt() {
       return m + ':' + s;
     },
 
+    formatSeconds(total) {
+      total = total || 0;
+      const m = Math.floor(total / 60).toString().padStart(2, '0');
+      const s = (total % 60).toString().padStart(2, '0');
+      return m + ':' + s;
+    },
+
     get counts() {
       let answered = 0, notAnswered = 0, marked = 0, notVisited = 0;
       for (const subject of this.subjects) {
@@ -293,11 +353,6 @@ function testAttempt() {
       }, 1000);
     },
 
-    // --- Per-question stopwatch ---
-    // Runs alongside the main countdown. Every tick adds a second to
-    // BOTH the live on-screen counter (activeQuestionSeconds) and the
-    // running total for that question (timeSpent[id]) — so switching
-    // away and back later resumes accumulating instead of resetting.
     startQuestionTimer() {
       if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
       const q = this.currentQuestion;
@@ -314,11 +369,7 @@ function testAttempt() {
     autoSubmit() {
       const q = this.currentQuestion;
       if (q) this.persist(q.id);
-      // fire-and-forget the save; submit right after so the timer
-      // running out doesn't leave the last question's time unsaved
-      setTimeout(() => {
-        document.querySelector('form[action="' + this.submitUrl + '"]')?.submit();
-      }, 300);
+      this.submitTest();
     },
 
     switchSubject(subject) {
@@ -338,6 +389,7 @@ function testAttempt() {
     },
 
     markVisited() {
+      if (this.isReviewMode) return;
       const q = this.currentQuestion;
       if (!q) return;
       if (!this.progress[q.id]) {
@@ -349,31 +401,49 @@ function testAttempt() {
       return this.progress[questionId]?.selected_option || null;
     },
 
-    selectOption(questionId, opt) {
-      const entry = this.progress[questionId] || {};
-      const wasMarked = entry.status === 'marked' || entry.status === 'answered_marked';
-      this.progress[questionId] = {
-        selected_option: opt,
-        status: wasMarked ? 'answered_marked' : 'answered',
-      };
+    isMarked(questionId) {
+      const status = this.progress[questionId]?.status;
+      return status === 'marked' || status === 'answered_marked';
     },
 
-    clearResponse(questionId) {
+    // Clicking an already-selected option unchecks it
+    selectOption(questionId, opt) {
+      if (this.isReviewMode) return;
       const entry = this.progress[questionId] || {};
       const wasMarked = entry.status === 'marked' || entry.status === 'answered_marked';
-      this.progress[questionId] = {
-        selected_option: null,
-        status: wasMarked ? 'marked' : 'not_answered',
-      };
+      const alreadySelected = entry.selected_option === opt;
+
+      if (alreadySelected) {
+        this.progress[questionId] = {
+          selected_option: null,
+          status: wasMarked ? 'marked' : 'not_answered',
+        };
+      } else {
+        this.progress[questionId] = {
+          selected_option: opt,
+          status: wasMarked ? 'answered_marked' : 'answered',
+        };
+      }
       this.persist(questionId);
     },
 
-    markForReview(questionId, andClear) {
+    // Toggles the bookmark icon logic
+    toggleMark(questionId) {
+      if (this.isReviewMode) return;
       const entry = this.progress[questionId] || {};
       const hasAnswer = !!entry.selected_option;
+      const currentlyMarked = entry.status === 'marked' || entry.status === 'answered_marked';
+
+      let nextStatus;
+      if (currentlyMarked) {
+        nextStatus = hasAnswer ? 'answered' : 'not_answered';
+      } else {
+        nextStatus = hasAnswer ? 'answered_marked' : 'marked';
+      }
+
       this.progress[questionId] = {
-        selected_option: andClear ? null : entry.selected_option,
-        status: hasAnswer && !andClear ? 'answered_marked' : 'marked',
+        selected_option: entry.selected_option || null,
+        status: nextStatus,
       };
       this.persist(questionId);
     },
@@ -395,7 +465,7 @@ function testAttempt() {
           status: entry.status,
           time_taken_sec: this.timeSpent[questionId] || 0,
         }),
-      }).catch(() => { /* best-effort — final scoring happens server-side from session on submit */ });
+      }).catch(() => { /* handled by bulk sync later */ });
     },
 
     goNext() {
@@ -416,8 +486,12 @@ function testAttempt() {
       }
     },
 
-    paletteClass(questionId) {
-      const entry = this.progress[questionId];
+    paletteClass(question) {
+      if (this.isReviewMode) {
+        if (question.selected_option == null) return 'status-not-visited';
+        return question.is_correct ? 'status-answered' : 'status-not-answered';
+      }
+      const entry = this.progress[question.id];
       if (!entry || !entry.status || entry.status === 'not_visited') return 'status-not-visited';
       if (entry.status === 'answered') return 'status-answered';
       if (entry.status === 'answered_marked') return 'status-answered-marked';
@@ -425,10 +499,73 @@ function testAttempt() {
       return 'status-not-answered';
     },
 
+    optionClass(opt) {
+      const q = this.currentQuestion;
+      if (this.isReviewMode) {
+        const isCorrectOpt = opt === q.correct_option;
+        const isUserWrongPick = opt === q.selected_option && q.selected_option !== q.correct_option;
+        if (isCorrectOpt) return 'border-green-500 bg-green-500/10 text-white cursor-default';
+        if (isUserWrongPick) return 'border-red-500 bg-red-500/10 text-white cursor-default';
+        return 'border-white/10 bg-[#1a1a1a] text-gray-300 cursor-default';
+      }
+      return this.selectedOption(q.id) === opt
+        ? 'border-gold bg-gold/10 text-white cursor-pointer'
+        : 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 cursor-pointer';
+    },
+
+    optionBadgeClass(opt) {
+      const q = this.currentQuestion;
+      if (this.isReviewMode) {
+        if (opt === q.correct_option) return 'border-green-500 bg-green-500 text-ink';
+        if (opt === q.selected_option && q.selected_option !== q.correct_option) return 'border-red-500 bg-red-500 text-white';
+        return 'border-white/30 text-gray-400';
+      }
+      return this.selectedOption(q.id) === opt
+        ? 'border-gold bg-gold text-ink'
+        : 'border-white/30 text-gray-400';
+    },
+
     openSubmitConfirm() {
       const q = this.currentQuestion;
       if (q) this.persist(q.id);
+      this.submitError = null;
       this.showSubmitConfirm = true;
+    },
+
+    // BULK JSON SUBMIT - Fixes BUG 1 permanently
+    submitTest() {
+      if (this.submitting) return;
+      this.submitting = true;
+      this.submitError = null;
+
+      const answers = {};
+      for (const subject of this.subjects) {
+        for (const q of this.questionsBySubject[subject]) {
+          const entry = this.progress[q.id];
+          answers[q.id] = {
+            selected_option: entry ? entry.selected_option : null,
+            status: entry ? entry.status : 'not_visited',
+            time_taken_sec: this.timeSpent[q.id] || 0,
+          };
+        }
+      }
+
+      fetch(this.submitUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers }),
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('submit failed');
+          return res.json();
+        })
+        .then(data => {
+          window.location.href = data.redirect || this.resultUrl;
+        })
+        .catch(() => {
+          this.submitting = false;
+          this.submitError = "Couldn't submit — check your connection and try again.";
+        });
     },
   };
 }
