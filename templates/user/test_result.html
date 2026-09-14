@@ -1,92 +1,86 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ test.title }} — Result{% endblock %}
 {% block content %}
-<section class="max-w-xl mx-auto px-6 pt-12 pb-24">
-  <h1 class="font-display text-2xl font-semibold text-ink mb-1">{{ test.title }}</h1>
-  <p class="text-ink/50 text-sm mb-8">Result Summary</p>
+<section class="max-w-xl mx-auto px-6 pt-12 pb-24 font-body">
+  <div class="text-center mb-8">
+    <h1 class="font-display text-2xl md:text-3xl font-semibold text-ink mb-2">{{ test.title }}</h1>
+    <p class="text-ink/60 text-sm font-medium uppercase tracking-wide">Result Summary</p>
+  </div>
 
-  <div class="bg-ink text-paper rounded-lg p-6 text-center mb-6">
-    <p class="text-xs text-paper/60 mb-1">Your Score</p>
-    <p class="font-display text-4xl font-semibold">
-      {{ attempt.score }} <span class="text-lg text-paper/50">/ {{ test.total_marks or attempt.total_questions }}</span>
+  <!-- Score Card -->
+  <div class="bg-ink text-paper rounded-2xl p-8 text-center mb-6 shadow-lg relative overflow-hidden">
+    <div class="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-bl-full"></div>
+    <div class="absolute bottom-0 left-0 w-24 h-24 bg-gold opacity-10 rounded-tr-full"></div>
+    
+    <p class="text-sm font-semibold text-gold-light mb-2 uppercase tracking-wider relative z-10">Your Score</p>
+    <p class="font-display text-5xl font-bold relative z-10">
+      {{ attempt.score }} <span class="text-2xl text-paper/50 font-medium">/ {{ test.total_marks or attempt.total_questions }}</span>
     </p>
   </div>
 
-  <div class="grid grid-cols-3 gap-3 mb-8">
-    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
-      <p class="text-xl font-display font-semibold text-green-600">{{ attempt.correct_count }}</p>
-      <p class="text-xs text-ink/50 mt-1">Correct</p>
+  <!-- Accuracy Stats -->
+  <div class="grid grid-cols-3 gap-4 mb-10">
+    <div class="bg-white border border-ink/10 rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-shadow">
+      <p class="text-3xl font-display font-bold text-green-600 mb-1">{{ attempt.correct_count }}</p>
+      <p class="text-xs font-semibold text-ink/60 uppercase tracking-wide">Correct</p>
     </div>
-    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
-      <p class="text-xl font-display font-semibold text-red-600">{{ attempt.wrong_count }}</p>
-      <p class="text-xs text-ink/50 mt-1">Wrong</p>
+    <div class="bg-white border border-ink/10 rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-shadow">
+      <p class="text-3xl font-display font-bold text-red-600 mb-1">{{ attempt.wrong_count }}</p>
+      <p class="text-xs font-semibold text-ink/60 uppercase tracking-wide">Wrong</p>
     </div>
-    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
-      <p class="text-xl font-display font-semibold text-ink/50">{{ attempt.skipped_count }}</p>
-      <p class="text-xs text-ink/50 mt-1">Skipped</p>
+    <div class="bg-white border border-ink/10 rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-shadow">
+      <p class="text-3xl font-display font-bold text-ink/40 mb-1">{{ attempt.skipped_count }}</p>
+      <p class="text-xs font-semibold text-ink/60 uppercase tracking-wide">Skipped</p>
     </div>
   </div>
 
+  <!-- MAIN ACTION: Analyze Test Button (Links to Review Mode) -->
+  <div class="mb-12">
+    <a href="{{ url_for('user.test_attempt_review', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}"
+       class="flex items-center justify-center gap-3 w-full py-4 rounded-xl bg-gold text-ink font-display font-bold text-lg hover:bg-gold-light hover:-translate-y-1 transition-all duration-200 shadow-md focus:outline-none focus:ring-4 focus:ring-gold/30">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+      Analyze Your Test
+    </a>
+    <p class="text-center text-xs text-ink/50 mt-3 font-medium">Review your mistakes, correct answers, and exact time taken per question.</p>
+  </div>
+
+  <!-- Time Spent by Subject -->
   {% if time_by_subject %}
   {% set total_seconds = time_by_subject.values() | sum %}
-  <h2 class="font-display text-lg font-semibold text-ink mb-3">Time Spent by Subject</h2>
-  <div class="bg-white border border-ink/10 rounded-lg p-5 mb-4 space-y-3">
-    {% for subject, seconds in time_by_subject.items() %}
-    <div>
-      <div class="flex justify-between text-sm mb-1">
-        <span class="font-medium text-ink">{{ subject }}</span>
-        <span class="text-ink/60">{{ (seconds // 60) }}m {{ (seconds % 60) }}s</span>
+  <div class="mb-10">
+    <h2 class="font-display text-xl font-semibold text-ink mb-4">Time Spent by Subject</h2>
+    <div class="bg-white border border-ink/10 rounded-xl p-6 space-y-5 shadow-sm">
+      {% for subject, seconds in time_by_subject.items() %}
+      <div>
+        <div class="flex justify-between items-end text-sm mb-2">
+          <span class="font-semibold text-ink">{{ subject }}</span>
+          <span class="text-ink/60 font-medium tabular-nums">{{ (seconds // 60) }}m {{ (seconds % 60) }}s</span>
+        </div>
+        <div class="w-full bg-ink/5 rounded-full h-2.5 overflow-hidden">
+          <div class="bg-gold h-full rounded-full transition-all duration-500 ease-out" style="width: {{ ((seconds / total_seconds * 100) if total_seconds else 0)|round(1) }}%"></div>
+        </div>
       </div>
-      <div class="w-full bg-ink/5 rounded-full h-2">
-        <div class="bg-gold h-2 rounded-full" style="width: {{ ((seconds / total_seconds * 100) if total_seconds else 0)|round(1) }}%"></div>
+      {% endfor %}
+      <div class="pt-4 mt-2 border-t border-ink/10 flex justify-between items-center">
+        <span class="text-xs font-semibold text-ink/50 uppercase tracking-wider">Total Duration</span>
+        <span class="text-sm font-bold text-ink tabular-nums">{{ (total_seconds // 60) }}m {{ (total_seconds % 60) }}s</span>
       </div>
     </div>
-    {% endfor %}
-    <p class="text-xs text-ink/40 pt-2 border-t border-ink/10">
-      Total time: {{ (total_seconds // 60) }}m {{ (total_seconds % 60) }}s
-    </p>
   </div>
-
-  <details class="mb-8">
-    <summary class="cursor-pointer font-display text-lg font-semibold text-ink mb-3">Time Spent per Question</summary>
-    <div class="bg-white border border-ink/10 rounded-lg overflow-hidden mt-3">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="bg-ink/5 text-ink/50 text-xs uppercase tracking-wide">
-            <th class="text-left px-4 py-2 font-semibold">Q#</th>
-            <th class="text-left px-4 py-2 font-semibold">Subject</th>
-            <th class="text-left px-4 py-2 font-semibold">Result</th>
-            <th class="text-right px-4 py-2 font-semibold">Time Spent</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for q in time_by_question %}
-          <tr class="border-t border-ink/5">
-            <td class="px-4 py-2 text-ink/70">{{ loop.index }}</td>
-            <td class="px-4 py-2 text-ink/70">{{ q.subject_name }}</td>
-            <td class="px-4 py-2">
-              {% if q.selected_option is none %}
-                <span class="text-ink/40">Skipped</span>
-              {% elif q.is_correct %}
-                <span class="text-green-600 font-medium">Correct</span>
-              {% else %}
-                <span class="text-red-600 font-medium">Wrong</span>
-              {% endif %}
-            </td>
-            <td class="px-4 py-2 text-right text-ink/70 tabular-nums">{{ q.time_taken_sec }}s</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </details>
   {% endif %}
 
-  <div class="flex gap-3">
+  <!-- Bottom Navigation -->
+  <div class="flex gap-4">
     <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}"
-       class="flex-1 text-center py-3 rounded-md border border-ink/20 text-sm font-semibold hover:bg-ink/5">Back to Tests</a>
+       class="flex-1 text-center py-3.5 rounded-xl border-2 border-ink/10 text-sm font-semibold hover:border-ink/30 hover:bg-ink/5 transition-all text-ink">
+       Back to Tests
+    </a>
     <a href="{{ url_for('user.profile') }}"
-       class="flex-1 text-center py-3 rounded-md bg-ink text-paper text-sm font-semibold hover:bg-ink-light">View Dashboard</a>
+       class="flex-1 text-center py-3.5 rounded-xl bg-ink text-paper text-sm font-semibold hover:bg-ink-light transition-colors shadow-md">
+       View Dashboard
+    </a>
   </div>
 </section>
 {% endblock %}
