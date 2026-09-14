@@ -13,6 +13,8 @@
 --    this instead of forcing login.
 -- 4. Difficulty is a lookup table, not a hardcoded enum, so Admin
 --    can rename/add levels later without a migration.
+-- 5. UPDATED: Schema now acts as the absolute Single Source of Truth,
+--    incorporating mock test structures and durable attempt tracking.
 -- =========================================================
 
 -- ---------- EXTENSIONS ----------
@@ -111,7 +113,7 @@ insert into difficulty_levels (id, name, display_order) values
     (1, 'Easy', 1), (2, 'Medium', 2), (3, 'Hard', 3)
 on conflict (id) do nothing;
 
--- ---------- QUESTIONS ----------
+-- ---------- QUESTIONS (Chapter-wise pool) ----------
 -- question_text/options support LaTeX (MathJax renders client-side,
 -- so we just store raw text containing \( ... \) delimiters).
 create table if not exists questions (
@@ -128,6 +130,28 @@ create table if not exists questions (
     is_pyq          boolean not null default false,   -- Previous Year Question flag
     pyq_year        int,
     image_url       text,                              -- optional diagram
+    created_by      uuid references profiles(id),
+    created_at      timestamptz not null default now()
+);
+
+-- ---------- MOCK QUESTIONS (Flat, mixed-subject pool) ----------
+create table if not exists mock_questions (
+    id              uuid primary key default uuid_generate_v4(),
+    stream_id       uuid not null references streams(id) on delete cascade,
+    subject_id      uuid not null references subjects(id),
+    topic_name      text not null,
+    difficulty_id   smallint references difficulty_levels(id),
+    question_text   text not null,
+    option_a        text not null,
+    option_b        text not null,
+    option_c        text not null,
+    option_d        text not null,
+    correct_option  char(1) not null check (correct_option in ('A','B','C','D')),
+    explanation     text,
+    is_pyq          boolean not null default false,
+    pyq_year        int,
+    image_url       text,
+    is_premium      boolean not null default false,
     created_by      uuid references profiles(id),
     created_at      timestamptz not null default now()
 );
@@ -150,25 +174,34 @@ create table if not exists tests (
     category_id     uuid not null references test_categories(id) on delete cascade,
     stream_id       uuid not null references streams(id) on delete cascade,
     subject_id      uuid references subjects(id),      -- nullable: full mocks span subjects
-    chapter_id      uuid references chapters(id),       -- nullable: only for chapter-wise
+    chapter_id      uuid references chapters(id),      -- nullable: only for chapter-wise
     title           text not null,
     description     text,
     duration_minutes int not null default 60,
     total_marks     int,
     negative_marking numeric(4,2) default 0,
     is_premium      boolean not null default false,
-    price_inr       numeric(8,2) default 0,             -- relevant if is_premium
+    price_inr       numeric(8,2) default 0,            -- relevant if is_premium
     is_active       boolean not null default true,
     created_by      uuid references profiles(id),
     created_at      timestamptz not null default now()
 );
 
--- Which questions belong to which test, in what order
+-- ---------- TEST <-> QUESTION MAPPINGS ----------
+-- For chapter-wise tests
 create table if not exists test_questions (
     test_id         uuid not null references tests(id) on delete cascade,
     question_id     uuid not null references questions(id) on delete cascade,
     question_order  int not null default 0,
     primary key (test_id, question_id)
+);
+
+-- For mock tests
+create table if not exists mock_test_questions (
+    test_id           uuid not null references tests(id) on delete cascade,
+    mock_question_id  uuid not null references mock_questions(id) on delete cascade,
+    question_order    int not null default 0,
+    primary key (test_id, mock_question_id)
 );
 
 -- ---------- ATTEMPTS (both users and guests can attempt free tests) ----------
@@ -191,14 +224,31 @@ create table if not exists test_attempts (
     )
 );
 
+-- Unified answers table for both Chapter Questions and Mock Questions.
+-- Contains durable state (`status`, `time_taken_sec`) to eliminate cookie session size crashes.
 create table if not exists attempt_answers (
-    attempt_id      uuid not null references test_attempts(id) on delete cascade,
-    question_id     uuid not null references questions(id) on delete cascade,
-    selected_option char(1) check (selected_option in ('A','B','C','D')),
-    is_correct      boolean,
-    time_taken_sec  int,
-    primary key (attempt_id, question_id)
+    id                uuid primary key default uuid_generate_v4(),
+    attempt_id        uuid not null references test_attempts(id) on delete cascade,
+    question_id       uuid references questions(id) on delete cascade,
+    mock_question_id  uuid references mock_questions(id) on delete cascade,
+    selected_option   char(1) check (selected_option in ('A','B','C','D')),
+    is_correct        boolean,
+    time_taken_sec    int default 0,
+    status            text check (status in ('answered', 'marked', 'answered_marked', 'not_answered', 'not_visited')),
+    
+    -- Exactly one of question_id / mock_question_id must be set
+    constraint attempt_answers_source_check check (
+        (question_id is not null and mock_question_id is null) or
+        (question_id is null and mock_question_id is not null)
+    )
 );
+
+-- Unique indexes to support Supabase UPSERT (on_conflict) logic safely
+create unique index if not exists uq_attempt_answers_chapter 
+    on attempt_answers(attempt_id, question_id) where question_id is not null;
+    
+create unique index if not exists uq_attempt_answers_mock 
+    on attempt_answers(attempt_id, mock_question_id) where mock_question_id is not null;
 
 -- ---------- TRANSACTIONS (manual UTR-based payment verification) ----------
 create table if not exists transactions (
@@ -239,6 +289,10 @@ create index if not exists idx_attempts_user on test_attempts(user_id);
 create index if not exists idx_attempts_guest on test_attempts(guest_id);
 create index if not exists idx_transactions_status on transactions(status);
 create index if not exists idx_transactions_user on transactions(user_id);
+create index if not exists idx_mock_questions_stream on mock_questions(stream_id);
+create index if not exists idx_mock_questions_subject on mock_questions(subject_id);
+create index if not exists idx_mock_test_questions_test on mock_test_questions(test_id);
+create index if not exists idx_attempt_answers_mock_question on attempt_answers(mock_question_id);
 
 -- =========================================================
 -- ROW LEVEL SECURITY (RLS) — Supabase requires this to be explicit
@@ -247,6 +301,4 @@ alter table profiles enable row level security;
 alter table transactions enable row level security;
 alter table test_attempts enable row level security;
 alter table attempt_answers enable row level security;
--- BUGFIX: this file was truncated exactly here (missing "security;"),
--- which made schema.sql fail with a SQL syntax error on a fresh run.
 alter table test_access_grants enable row level security;
