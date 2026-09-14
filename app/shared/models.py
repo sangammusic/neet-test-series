@@ -290,6 +290,117 @@ def get_attempt_by_id(attempt_id):
     return res.data[0]
 
 
+# =====================================================================
+# NEW FOUNDATION FUNCTIONS FOR ROBUST DATA SYNC & REVIEW MODE
+# =====================================================================
+
+def save_attempt_progress(attempt_id, mock_question_id, selected_option, status, time_taken_sec):
+    """
+    Durable per-question progress save. Upserts directly into attempt_answers
+    bypassing Flask cookies entirely. This guarantees progress never drops due
+    to size limits.
+    """
+    from app.extensions import supabase_admin
+
+    row = {
+        "attempt_id": attempt_id,
+        "mock_question_id": mock_question_id,
+        "selected_option": selected_option,
+        "status": status,
+        "time_taken_sec": int(time_taken_sec) if time_taken_sec is not None else 0,
+    }
+    supabase_admin.table("attempt_answers").upsert(
+        row, on_conflict="attempt_id,mock_question_id"
+    ).execute()
+
+
+def bulk_save_attempt_progress(attempt_id, entries):
+    """
+    Foolproof bulk sync called right before grading. It batch-upserts the
+    entire Alpine.js state so even if a student lost internet momentarily,
+    all answers hit the DB in one shot.
+    """
+    from app.extensions import supabase_admin
+
+    if not entries:
+        return
+    rows = [
+        {
+            "attempt_id": attempt_id,
+            "mock_question_id": e["mock_question_id"],
+            "selected_option": e.get("selected_option"),
+            "status": e.get("status"),
+            "time_taken_sec": int(e.get("time_taken_sec") or 0),
+        }
+        for e in entries
+        if e.get("mock_question_id")
+    ]
+    if rows:
+        supabase_admin.table("attempt_answers").upsert(
+            rows, on_conflict="attempt_id,mock_question_id"
+        ).execute()
+
+
+def get_attempt_answers_map(attempt_id):
+    """
+    Reads back every attempt_answers row for this attempt. Used to hydrate
+    Alpine state on page reload, and to pull exact time/options for Review Mode.
+    """
+    from app.extensions import supabase_admin
+
+    res = (
+        supabase_admin.table("attempt_answers")
+        .select("mock_question_id, selected_option, is_correct, time_taken_sec, status")
+        .eq("attempt_id", attempt_id)
+        .execute()
+    )
+    return {row["mock_question_id"]: row for row in res.data if row.get("mock_question_id")}
+
+
+def get_mock_questions_for_test_review(test_id, attempt_id):
+    """
+    Review-mode variant of get_mock_questions_for_test().
+    Unlike the live attempt version, this DOES include correct_option safely,
+    and merges the user's saved answers directly into the output for UI highlighting.
+    """
+    res = (
+        supabase_public.table("mock_test_questions")
+        .select(
+            "question_order, "
+            "mock_questions(id, question_text, option_a, option_b, option_c, "
+            "option_d, image_url, correct_option, subjects(name))"
+        )
+        .eq("test_id", test_id)
+        .order("question_order")
+        .execute()
+    )
+    answers_by_qid = get_attempt_answers_map(attempt_id)
+
+    grouped = {}
+    for row in res.data:
+        q = row.get("mock_questions")
+        if not q:
+            continue
+        subj_name = q["subjects"]["name"] if q.get("subjects") else "General"
+        answer = answers_by_qid.get(q["id"], {})
+        grouped.setdefault(subj_name, []).append({
+            "id": q["id"],
+            "question_text": q["question_text"],
+            "option_a": q["option_a"],
+            "option_b": q["option_b"],
+            "option_c": q["option_c"],
+            "option_d": q["option_d"],
+            "image_url": q.get("image_url"),
+            "correct_option": q["correct_option"],
+            "subject_name": subj_name,
+            "question_order": row.get("question_order", 0),
+            "selected_option": answer.get("selected_option"),
+            "is_correct": answer.get("is_correct"),
+            "time_taken_sec": answer.get("time_taken_sec") or 0,
+        })
+    return grouped
+
+
 def submit_test_attempt(attempt_id, test_id, answers, time_by_question=None):
     """
     Scores and finalizes an attempt.
@@ -333,6 +444,10 @@ def submit_test_attempt(attempt_id, test_id, answers, time_by_question=None):
     if not mapped:
         return None
 
+    # CRITICAL BUGFIX: We must fetch the existing status map so our UPSERT
+    # below doesn't blindly wipe out "marked" or "answered_marked" statuses to NULL.
+    progress_map = get_attempt_answers_map(attempt_id)
+
     negative_marking = float(test.get("negative_marking") or 0)
     total_questions = len(mapped)
     correct_count = 0
@@ -345,18 +460,20 @@ def submit_test_attempt(attempt_id, test_id, answers, time_by_question=None):
         correct_option = (row.get("mock_questions") or {}).get("correct_option")
         selected = answers.get(qid)
         time_taken = int(time_by_question.get(qid) or 0)
+        existing_status = progress_map.get(qid, {}).get("status")
 
         if not selected:
             skipped_count += 1
             # Still record time spent on a skipped-but-visited question,
             # so it shows up in the result page's time breakdown.
-            if time_taken > 0:
+            if time_taken > 0 or existing_status:
                 answer_rows.append({
                     "attempt_id": attempt_id,
                     "mock_question_id": qid,
                     "selected_option": None,
                     "is_correct": None,
                     "time_taken_sec": time_taken,
+                    "status": existing_status
                 })
             continue
 
@@ -372,10 +489,15 @@ def submit_test_attempt(attempt_id, test_id, answers, time_by_question=None):
             "selected_option": selected,
             "is_correct": is_correct,
             "time_taken_sec": time_taken,
+            "status": existing_status
         })
 
     if answer_rows:
-        supabase_admin.table("attempt_answers").insert(answer_rows).execute()
+        # CRITICAL BUGFIX: Changed .insert() to .upsert() because rows will now 
+        # already exist in the database due to live per-question saving.
+        supabase_admin.table("attempt_answers").upsert(
+            answer_rows, on_conflict="attempt_id,mock_question_id"
+        ).execute()
 
     score = correct_count - (wrong_count * negative_marking)
 
@@ -496,3 +618,4 @@ def user_has_access_to_test(test, user_id):
         .execute()
     )
     return len(res.data) > 0
+
