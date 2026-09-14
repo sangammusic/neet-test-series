@@ -14,3 +14,4 @@ from app.admin import chapter_routes  # noqa: E402,F401
 from app.admin import question_routes  # noqa: E402,F401
 from app.admin import mock_question_routes  # noqa: E402,F401
 from app.admin import test_routes  # noqa: E402,F401
+from app.admin import image_routes  # noqa: E402,F401
