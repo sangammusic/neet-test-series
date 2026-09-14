@@ -106,6 +106,14 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id):
     # --- Level 2: Topic-wise vs Random ---
     topic_name = str(raw.get("topic_name", "")).strip() or "General"
 
+    image_url = str(raw["image_url"]).strip() if raw.get("image_url") else None
+    # has_image: explicit flag from the JSON if given; otherwise infer
+    # from image_url already being set (e.g. a re-paste of previously
+    # exported data). This is what drives the per-question "Upload
+    # Image" prompt on the admin questions page for any row where
+    # has_image is true but image_url is still empty.
+    has_image = bool(raw.get("has_image", bool(image_url)))
+
     payload = {
         "chapter_id": chapter_id,
         "difficulty_id": difficulty_id,
@@ -119,7 +127,8 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id):
         "explanation": (str(raw["explanation"]).strip() if raw.get("explanation") else None),
         "is_pyq": is_pyq,
         "pyq_year": pyq_year,
-        "image_url": (str(raw["image_url"]).strip() if raw.get("image_url") else None),
+        "image_url": image_url,
+        "has_image": has_image,
         "is_premium": bool(raw.get("is_premium", False)),
     }
     return payload, None
@@ -165,7 +174,7 @@ def questions_list():
         chapter = supabase_admin.table("chapters").select("id, name").eq("id", chapter_id).single().execute().data
         questions = (
             supabase_admin.table("questions")
-            .select("id, question_text, is_pyq, pyq_year, topic_name, is_premium, difficulty_id")
+            .select("id, question_text, is_pyq, pyq_year, topic_name, is_premium, difficulty_id, has_image, image_url")
             .eq("chapter_id", chapter_id)
             .order("created_at", desc=True)
             .execute()
