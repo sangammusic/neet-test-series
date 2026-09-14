@@ -30,6 +30,7 @@ def login():
         flash("Please confirm your email before logging in — check your inbox.", "error")
         return render_template("login.html"), 401
 
+    session.permanent = True  # BUGFIX: without this the login cookie dies on browser close / redirect
     session["user_id"] = result.user.id
     session["access_token"] = result.session.access_token
     return redirect(url_for("user.stream_select"))
@@ -115,6 +116,7 @@ def register():
         flash("Account created — please log in.", "success")
         return redirect(url_for("auth.login"))
 
+    session.permanent = True  # BUGFIX: same as login() — keep the auto-login session alive past this request
     session["user_id"] = sign_in_result.user.id
     session["access_token"] = sign_in_result.session.access_token
     flash("Account created — you're all set.", "success")
