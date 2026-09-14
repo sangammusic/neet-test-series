@@ -247,4 +247,6 @@ alter table profiles enable row level security;
 alter table transactions enable row level security;
 alter table test_attempts enable row level security;
 alter table attempt_answers enable row level security;
-alter table test_access_grants enable row level
+-- BUGFIX: this file was truncated exactly here (missing "security;"),
+-- which made schema.sql fail with a SQL syntax error on a fresh run.
+alter table test_access_grants enable row level security;
