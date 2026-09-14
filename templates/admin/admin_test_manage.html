@@ -3,7 +3,15 @@
 {% block content %}
 {% include "admin/_admin_nav.html" %}
 <div class="max-w-4xl mx-auto px-6 py-10">
-  <h1 class="font-display text-3xl text-ink mb-1">{{ test.title }}</h1>
+  <div class="flex items-start justify-between gap-4 mb-1">
+    <h1 class="font-display text-3xl text-ink">{{ test.title }}</h1>
+    <!-- FEATURE (was missing): delete this test from its own manage page too,
+         not just the list page — same route, same cascade-delete warning. -->
+    <form method="POST" action="{{ url_for('admin.tests_delete', test_id=test.id) }}"
+          onsubmit="return confirm('Delete &quot;{{ test.title }}&quot;? This also removes its question mapping and any student attempts against it. This cannot be undone.');">
+      <button type="submit" class="text-sm text-red-600 hover:underline whitespace-nowrap">Delete this test</button>
+    </form>
+  </div>
   {% if test.description %}
   <p class="text-ink/60 text-sm mb-8"><span class="font-medium text-ink/80">Syllabus:</span> {{ test.description }}</p>
   {% else %}
