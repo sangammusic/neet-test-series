@@ -76,6 +76,9 @@ def _validate_mock_question(raw, subject_name_to_id, difficulty_ids, stream_id):
 
     topic_name = str(raw["topic_name"]).strip()
 
+    image_url = str(raw["image_url"]).strip() if raw.get("image_url") else None
+    has_image = bool(raw.get("has_image", bool(image_url)))
+
     payload = {
         "stream_id": stream_id,
         "subject_id": subject_id,
@@ -90,7 +93,8 @@ def _validate_mock_question(raw, subject_name_to_id, difficulty_ids, stream_id):
         "difficulty_id": difficulty_id,
         "is_pyq": is_pyq,
         "pyq_year": pyq_year,
-        "image_url": (str(raw["image_url"]).strip() if raw.get("image_url") else None),
+        "image_url": image_url,
+        "has_image": has_image,
         "is_premium": bool(raw.get("is_premium", False)),
     }
     return payload, None
@@ -120,7 +124,7 @@ def mock_questions_list():
 
         query = (
             supabase_admin.table("mock_questions")
-            .select("id, question_text, topic_name, subject_id, is_pyq, pyq_year, subjects(name)")
+            .select("id, question_text, topic_name, subject_id, is_pyq, pyq_year, has_image, image_url, subjects(name)")
             .eq("stream_id", stream_id)
         )
         if subject_id:
