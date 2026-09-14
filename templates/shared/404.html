@@ -1,0 +1,13 @@
+{% extends "shared/base.html" %}
+{% block title %}Page not found — SANGAM STUDY{% endblock %}
+{% block content %}
+<section class="max-w-xl mx-auto px-6 pt-24 pb-24 text-center">
+  <p class="text-gold font-semibold text-sm tracking-wide mb-2">404</p>
+  <h1 class="font-display text-3xl font-semibold text-ink mb-4">We couldn't find that page</h1>
+  <p class="text-ink/60 mb-8">The stream, test, or page you're looking for doesn't exist or may have been removed.</p>
+  <a href="{{ url_for('user.landing') }}"
+     class="inline-block bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light">
+    Back to home
+  </a>
+</section>
+{% endblock %}
