@@ -236,9 +236,7 @@ def test_attempt(slug, test_id, attempt_id):
     The NTA-style attempt screen: questions grouped by subject for
     tab-switching, with a client-side timer and a question-status
     palette. All answer-saving happens via AJAX to
-    test_attempt_save_answer() below — this route just renders the
-    initial state, hydrated from any progress already saved in the
-    DB (so a refreshed/resumed attempt isn't blank).
+    test_attempt_save_answer() below.
     """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id:
@@ -249,6 +247,8 @@ def test_attempt(slug, test_id, attempt_id):
     stream = get_stream_by_slug(slug)
     test = get_test_by_id(test_id)
     questions_by_subject = get_mock_questions_for_test(test_id)
+    
+    # HYDRATE PROGRESS: Pull from DB directly so page refresh doesn't lose state.
     saved_progress = get_attempt_answers_map(attempt_id)
 
     return render_template(
@@ -265,14 +265,8 @@ def test_attempt(slug, test_id, attempt_id):
 def test_attempt_save_answer(slug, test_id, attempt_id):
     """
     AJAX endpoint the attempt screen calls every time the student
-    picks/changes/clears an option, so progress survives a refresh
-    or a dropped connection. Upserts directly into attempt_answers
-    (see save_attempt_progress) instead of writing into the
-    cookie-backed Flask session — a session cookie is capped at
-    ~4KB by browsers and silently drops updates once a ~30-question
-    attempt's progress dict grows past that, which is what
-    previously caused the result page to show garbage wrong/skipped
-    counts and time_taken_sec: 0 for everything.
+    picks/changes/clears an option. Upserts directly into attempt_answers
+    instead of writing into the cookie-backed Flask session. No cookie limits, no data loss.
     """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id or attempt.get("submitted_at"):
@@ -282,7 +276,7 @@ def test_attempt_save_answer(slug, test_id, attempt_id):
     question_id = payload.get("question_id")
     selected_option = payload.get("selected_option")  # "A"/"B"/"C"/"D"/None (None = clear)
     status = payload.get("status")  # "answered" / "marked" / "answered_marked" / "not_answered"
-    time_taken_sec = payload.get("time_taken_sec")  # running total the client has tracked for this question
+    time_taken_sec = payload.get("time_taken_sec")  # running total
 
     if not question_id:
         return jsonify({"ok": False, "error": "question_id required"}), 400
@@ -292,6 +286,7 @@ def test_attempt_save_answer(slug, test_id, attempt_id):
     except (TypeError, ValueError):
         time_taken_sec = 0
 
+    # UPSERT directly to DB (Replaces the broken session[session_key] = progress code)
     save_attempt_progress(attempt_id, question_id, selected_option, status, time_taken_sec)
 
     return jsonify({"ok": True})
@@ -302,14 +297,7 @@ def test_attempt_submit(slug, test_id, attempt_id):
     """
     Finalizes the attempt. The client sends one final bulk payload
     of everything held in its Alpine state right before this call
-    (JSON body: {"answers": {question_id: {selected_option, status,
-    time_taken_sec}, ...}}) — this gets upserted first as a safety
-    net (covers a save that was still in flight or never fired), then
-    every attempt_answers row for this attempt is read back as the
-    source of truth for scoring. submit_test_attempt never trusts a
-    client-supplied score — it looks up correct_option itself.
-
-    No cookie session is read or written anywhere in this flow.
+    (JSON body). This guarantees no missed clicks if the network dropped.
     """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id:
@@ -382,10 +370,7 @@ def test_result(slug, test_id, attempt_id):
 def test_attempt_review(slug, test_id, attempt_id):
     """
     Read-only review mode: reuses test_attempt.html with
-    is_review_mode=True. Only reachable once the attempt is
-    submitted — get_mock_questions_for_test_review() includes
-    correct_option in what it returns, which would leak the answer
-    key if this were servable before scoring happened.
+    is_review_mode=True. Only reachable once the attempt is submitted.
     """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id:
