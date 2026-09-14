@@ -32,56 +32,56 @@
 {% endblock %}
 
 {% block content %}
-<div id="nta-runner" x-data="testAttempt()" x-init="init()" class="min-h-screen bg-[#0a0a0a] text-gray-100 flex flex-col">
+<div id="nta-runner" x-data="testAttempt()" x-init="init()" class="min-h-screen bg-[#0a0a0a] text-gray-100 flex flex-col font-body">
 
   <!-- Top bar: timer (left) / subject tabs (center) / submit (right) -->
-  <div class="bg-[#111111] border-b border-white/10 px-3 md:px-6 py-2.5 flex items-center gap-3 sticky top-0 z-20">
+  <div class="bg-[#111111] border-b border-white/10 px-3 md:px-6 py-2.5 flex items-center gap-3 sticky top-0 z-20 shadow-sm">
     <template x-if="!isReviewMode">
       <div class="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-md shrink-0">
-        <span class="text-[11px] text-gray-400 hidden sm:inline">Time Left</span>
+        <span class="text-[11px] text-gray-400 hidden sm:inline uppercase tracking-wider">Time Left</span>
         <span class="font-display text-base md:text-lg font-semibold tabular-nums text-gold-light" x-text="formattedTime"></span>
       </div>
     </template>
     
     <template x-if="isReviewMode">
-      <div class="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-md shrink-0">
-        <span class="text-xs font-semibold text-gray-300">Review Mode</span>
+      <div class="flex items-center gap-2 bg-gold/10 border border-gold/20 px-3 py-1.5 rounded-md shrink-0">
+        <span class="text-xs font-semibold text-gold-light uppercase tracking-wider">Review Mode</span>
       </div>
     </template>
 
-    <div class="flex-1 flex justify-center gap-1 overflow-x-auto no-scrollbar">
+    <div class="flex-1 flex justify-center gap-1.5 overflow-x-auto no-scrollbar">
       <template x-for="subject in subjects" :key="subject">
         <button
           @click="switchSubject(subject)"
-          class="subject-tab px-3 md:px-4 py-1.5 text-xs md:text-sm font-semibold border rounded-md whitespace-nowrap transition-colors"
-          :class="{ 'active': currentSubject === subject }"
+          class="subject-tab px-3 md:px-5 py-1.5 text-xs md:text-sm font-semibold border rounded-md whitespace-nowrap transition-all duration-200"
+          :class="{ 'active': currentSubject === subject, 'hover:bg-white/5': currentSubject !== subject }"
           x-text="subject"></button>
       </template>
     </div>
 
     <template x-if="!isReviewMode">
       <button @click="openSubmitConfirm()"
-        class="shrink-0 py-1.5 px-3 md:px-4 rounded-md text-xs md:text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
-        Submit
+        class="shrink-0 py-1.5 px-4 md:px-6 rounded-md text-xs md:text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-sm">
+        Submit Test
       </button>
     </template>
     
     <template x-if="isReviewMode">
       <a :href="resultUrl"
-        class="shrink-0 py-1.5 px-3 md:px-4 rounded-md text-xs md:text-sm font-semibold bg-white/10 text-white hover:bg-white/20 transition-colors">
+        class="shrink-0 py-1.5 px-4 md:px-6 rounded-md text-xs md:text-sm font-semibold bg-white/10 text-white hover:bg-white/20 transition-colors">
         Back to Result
       </a>
     </template>
   </div>
 
   <!-- Horizontal question palette strip -->
-  <div class="bg-[#0f0f0f] border-b border-white/10 px-3 md:px-6 py-2.5 flex items-center gap-2 sticky top-[49px] md:top-[53px] z-10">
-    <div class="flex-1 flex gap-1.5 overflow-x-auto no-scrollbar">
+  <div class="bg-[#0f0f0f] border-b border-white/5 px-3 md:px-6 py-2.5 flex items-center gap-2 sticky top-[49px] md:top-[53px] z-10 shadow-sm">
+    <div class="flex-1 flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
       <template x-for="(q, idx) in currentSubjectQuestions" :key="'strip-' + q.id">
         <button
           @click="jumpTo(currentSubject, idx)"
-          class="w-8 h-8 shrink-0 rounded text-xs font-semibold flex items-center justify-center transition-transform hover:scale-105"
-          :class="[paletteClass(q), currentIndexInSubject === idx ? 'ring-2 ring-gold' : '']"
+          class="w-8 h-8 shrink-0 rounded text-xs font-semibold flex items-center justify-center transition-transform hover:scale-105 shadow-sm"
+          :class="[paletteClass(q), currentIndexInSubject === idx ? 'ring-2 ring-gold ring-offset-1 ring-offset-[#0f0f0f]' : '']"
           x-text="idx + 1"></button>
       </template>
     </div>
@@ -98,87 +98,85 @@
   </div>
 
   <!-- Main question area -->
-  <div class="flex-1 w-full max-w-3xl mx-auto p-4 md:p-6">
+  <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
     <template x-if="currentQuestion">
-      <div>
-        <div class="flex items-center justify-between mb-4">
-          <div class="flex items-center gap-2.5">
+      <div class="animate-fade-in">
+        <div class="flex items-center justify-between mb-5">
+          <div class="flex items-center gap-3">
             <p class="text-sm font-semibold text-gray-300">
               Question <span x-text="currentIndexInSubject + 1"></span> of <span x-text="currentSubjectQuestions.length"></span>
-              <span class="text-gray-500">· <span x-text="currentSubject"></span></span>
+              <span class="text-gray-500 font-normal ml-1">· <span x-text="currentSubject"></span></span>
             </p>
-            <!-- Mark for review — premium bookmark icon next to the question label -->
+            <!-- Premium Bookmark Icon (Replaces clunky Mark for Review button) -->
             <button x-show="!isReviewMode" type="button" @click="toggleMark(currentQuestion.id)"
-              class="w-6 h-6 rounded flex items-center justify-center transition-colors"
+              class="w-7 h-7 rounded flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gold/50"
               :class="isMarked(currentQuestion.id) ? 'text-gold bg-gold/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'"
               :aria-pressed="isMarked(currentQuestion.id)"
               title="Mark for review">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"
                 :fill="isMarked(currentQuestion.id) ? 'currentColor' : 'none'"
-                stroke="currentColor" stroke-width="2">
-                <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/>
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
               </svg>
             </button>
           </div>
 
           <template x-if="!isReviewMode">
-            <p class="flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-white/5 px-2.5 py-1 rounded-full">
+            <p class="flex items-center gap-2 text-xs font-semibold text-gray-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
               <span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span>
-              <span x-text="formattedQuestionTime"></span> on this question
+              <span class="tabular-nums" x-text="formattedQuestionTime"></span>
             </p>
           </template>
           
           <template x-if="isReviewMode">
-            <p class="text-xs font-semibold text-gray-400 bg-white/5 px-2.5 py-1 rounded-full">
-              <span x-text="formatSeconds(currentQuestion.time_taken_sec)"></span> spent
+            <p class="text-xs font-semibold text-gray-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
+              Time Spent: <span class="tabular-nums text-white ml-1" x-text="formatSeconds(currentQuestion.time_taken_sec)"></span>
             </p>
           </template>
         </div>
 
-        <div class="bg-[#161616] border border-white/10 rounded-lg p-5 mb-4">
-          <p class="text-base leading-relaxed mb-4 text-gray-100" x-html="currentQuestion.question_text"></p>
+        <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg">
+          <div class="text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion.question_text"></div>
 
-          <!-- Reactive media: SVG preferred, falls back to image -->
-          <div x-show="currentQuestion.svg_markup" x-html="currentQuestion.svg_markup"
-               class="max-h-[250px] w-auto max-w-full mx-auto my-4 flex justify-center [&_svg]:max-h-[250px] [&_svg]:w-auto"></div>
+          <!-- Question Image rendering if exists -->
           <img :src="currentQuestion.image_url"
-               x-show="!currentQuestion.svg_markup && currentQuestion.image_url"
-               class="max-h-[250px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-4 shadow-sm" alt="Diagram">
+               x-show="currentQuestion.image_url"
+               class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-6 shadow-sm" alt="Diagram">
 
-          <div class="space-y-3">
+          <div class="space-y-3.5">
             <template x-for="opt in ['A','B','C','D']" :key="opt">
               <button
                 type="button"
                 :disabled="isReviewMode"
                 @click="selectOption(currentQuestion.id, opt)"
-                class="w-full flex items-start gap-3 p-4 rounded-lg border text-left transition-colors"
+                class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-200 group focus:outline-none"
                 :class="optionClass(opt)">
-                <span class="mt-0.5 w-5 h-5 shrink-0 rounded-full border flex items-center justify-center text-[10px] font-bold"
+                <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
                   :class="optionBadgeClass(opt)"
                   x-text="opt"></span>
-                <span class="text-sm leading-relaxed" x-text="currentQuestion['option_' + opt.toLowerCase()]"></span>
+                <span class="text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion['option_' + opt.toLowerCase()]"></span>
               </button>
             </template>
           </div>
         </div>
 
-        <!-- Navigation actions only: Previous, and Save & Next -->
-        <div class="grid grid-cols-2 gap-3 mt-4">
+        <!-- Navigation Actions (Only 2 buttons, highly intuitive) -->
+        <div class="grid grid-cols-2 gap-4">
           <button @click="goPrev()" :disabled="currentIndexInSubject === 0"
-            class="py-3 rounded-md text-sm font-semibold border border-white/15 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
             ← Previous
           </button>
           
           <template x-if="!isReviewMode">
             <button @click="saveAndNext(currentQuestion.id)" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
-              class="py-3 rounded-md text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+              class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-md focus:outline-none focus:ring-2 focus:ring-gold/50">
               Save &amp; Next →
             </button>
           </template>
           
           <template x-if="isReviewMode">
             <button @click="goNext()" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
-              class="py-3 rounded-md text-sm font-semibold bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+              class="py-3.5 rounded-xl text-sm font-semibold bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
               Next →
             </button>
           </template>
@@ -187,22 +185,24 @@
     </template>
   </div>
 
-  <!-- Full question grid modal -->
-  <div x-show="showGridModal" x-cloak class="fixed inset-0 bg-black/70 flex items-center justify-center z-40 p-4" @click.self="showGridModal = false">
-    <div class="bg-[#161616] border border-white/10 rounded-lg p-5 max-w-lg w-full max-h-[80vh] overflow-y-auto">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-display text-lg font-semibold text-white">Question Palette</h3>
-        <button @click="showGridModal = false" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+  <!-- Full Question Grid Modal (For Palette Navigation) -->
+  <div x-show="showGridModal" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" @click.self="showGridModal = false">
+    <div class="bg-[#161616] border border-white/10 rounded-xl p-6 max-w-xl w-full max-h-[85vh] overflow-y-auto shadow-2xl">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="font-display text-xl font-semibold text-white">Question Palette</h3>
+        <button @click="showGridModal = false" class="text-gray-400 hover:text-white transition-colors p-1 focus:outline-none">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
       </div>
 
       <template x-for="subject in subjects" :key="'grid-' + subject">
-        <div class="mb-4">
-          <p class="text-xs font-semibold text-gray-400 mb-2" x-text="subject"></p>
-          <div class="grid grid-cols-6 gap-1.5">
+        <div class="mb-6">
+          <p class="text-sm font-semibold text-gold mb-3" x-text="subject"></p>
+          <div class="grid grid-cols-7 sm:grid-cols-10 gap-2">
             <template x-for="(q, idx) in questionsBySubject[subject]" :key="q.id">
               <button
                 @click="jumpTo(subject, idx); showGridModal = false"
-                class="w-9 h-9 rounded text-xs font-semibold flex items-center justify-center transition-transform hover:scale-105"
+                class="w-9 h-9 rounded text-xs font-bold flex items-center justify-center transition-transform hover:scale-110 shadow-sm"
                 :class="paletteClass(q)"
                 x-text="idx + 1"></button>
             </template>
@@ -210,38 +210,71 @@
         </div>
       </template>
 
-      <div class="text-xs space-y-1.5 mt-5 pt-4 border-t border-white/10 text-gray-300">
-        <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-not-visited inline-block"></span> Not Visited</p>
-        <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-not-answered inline-block"></span> Not Answered</p>
-        <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-answered inline-block"></span> Answered</p>
-        <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-marked inline-block"></span> Marked for Review</p>
-        <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-answered-marked inline-block"></span> Answered &amp; Marked</p>
+      <div class="text-xs space-y-2 mt-6 pt-5 border-t border-white/10 text-gray-300 bg-white/5 rounded-lg p-4">
+        <div class="grid grid-cols-2 gap-3">
+          <p class="flex items-center gap-2"><span class="w-4 h-4 rounded status-not-visited inline-block border border-white/10"></span> Not Visited</p>
+          <p class="flex items-center gap-2"><span class="w-4 h-4 rounded status-not-answered inline-block border border-black/20"></span> Not Answered</p>
+          <p class="flex items-center gap-2"><span class="w-4 h-4 rounded status-answered inline-block border border-black/20"></span> Answered</p>
+          <p class="flex items-center gap-2"><span class="w-4 h-4 rounded status-marked inline-block border border-black/20"></span> Marked for Review</p>
+          <p class="flex items-center gap-2 col-span-2"><span class="w-4 h-4 rounded status-answered-marked inline-block"></span> Answered &amp; Marked for Review</p>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Submit confirmation modal -->
-  <div x-show="showSubmitConfirm" x-cloak class="fixed inset-0 bg-black/70 flex items-center justify-center z-30 p-4">
-    <div class="bg-[#161616] border border-white/10 rounded-lg p-6 max-w-sm w-full">
-      <h3 class="font-display text-lg font-semibold mb-3 text-white">Submit test?</h3>
-      <div class="text-sm text-gray-300 space-y-1 mb-5">
-        <p>Answered: <span class="font-semibold text-white" x-text="counts.answered"></span></p>
-        <p>Not Answered: <span class="font-semibold text-white" x-text="counts.notAnswered"></span></p>
-        <p>Marked for Review: <span class="font-semibold text-white" x-text="counts.marked"></span></p>
-        <p>Not Visited: <span class="font-semibold text-white" x-text="counts.notVisited"></span></p>
+  <!-- Submit Confirmation Modal -->
+  <div x-show="showSubmitConfirm" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+    <div class="bg-[#161616] border border-white/10 rounded-xl p-6 md:p-8 max-w-sm w-full shadow-2xl">
+      <h3 class="font-display text-xl font-semibold mb-4 text-white text-center">Ready to Submit?</h3>
+      
+      <div class="bg-white/5 rounded-lg p-4 text-sm text-gray-300 space-y-2.5 mb-6 border border-white/5">
+        <div class="flex justify-between items-center">
+          <span>Answered:</span>
+          <span class="font-bold text-green-500 text-base" x-text="counts.answered"></span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span>Not Answered:</span>
+          <span class="font-bold text-red-500 text-base" x-text="counts.notAnswered"></span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span>Marked for Review:</span>
+          <span class="font-bold text-gold text-base" x-text="counts.marked"></span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span>Not Visited:</span>
+          <span class="font-bold text-gray-400 text-base" x-text="counts.notVisited"></span>
+        </div>
       </div>
-      <p x-show="submitError" x-cloak class="text-xs text-red-400 mb-3" x-text="submitError"></p>
-      <div class="flex gap-2">
+
+      <p x-show="submitError" x-cloak class="text-xs text-red-400 mb-4 text-center bg-red-400/10 py-2 rounded-md" x-text="submitError"></p>
+      
+      <div class="flex gap-3">
         <button @click="showSubmitConfirm = false" :disabled="submitting"
-          class="flex-1 py-2.5 rounded-md text-sm font-semibold border border-white/20 text-gray-200 disabled:opacity-50">Cancel</button>
+          class="flex-1 py-3 rounded-lg text-sm font-semibold border border-white/20 text-gray-200 hover:bg-white/5 disabled:opacity-50 transition-colors">
+          Cancel
+        </button>
         <button @click="submitTest()" :disabled="submitting"
-          class="flex-1 py-2.5 rounded-md text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-60">
-          <span x-text="submitting ? 'Submitting…' : 'Yes, Submit'"></span>
+          class="flex-1 py-3 rounded-lg text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-60 transition-colors flex justify-center items-center">
+          <template x-if="submitting">
+            <svg class="animate-spin h-4 w-4 text-ink" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+          </template>
+          <span x-show="!submitting">Yes, Submit</span>
         </button>
       </div>
     </div>
   </div>
 </div>
+
+<!-- Add Custom CSS for fade-in animation -->
+<style>
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-in-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(2px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
 
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 <script>
@@ -276,7 +309,7 @@ function testAttempt() {
         return;
       }
 
-      // Hydrate from DB
+      // Hydrate from DB payload provided by routes.py
       const saved = {{ saved_progress | tojson if saved_progress else '{}' }};
       for (const qid in saved) {
         const entry = saved[qid];
@@ -406,7 +439,7 @@ function testAttempt() {
       return status === 'marked' || status === 'answered_marked';
     },
 
-    // Clicking an already-selected option unchecks it
+    // Clicking an already-selected option unchecks it (Clear Response fix)
     selectOption(questionId, opt) {
       if (this.isReviewMode) return;
       const entry = this.progress[questionId] || {};
@@ -465,7 +498,7 @@ function testAttempt() {
           status: entry.status,
           time_taken_sec: this.timeSpent[questionId] || 0,
         }),
-      }).catch(() => { /* handled by bulk sync later */ });
+      }).catch(() => { /* handled by foolproof bulk sync on submit */ });
     },
 
     goNext() {
@@ -499,18 +532,19 @@ function testAttempt() {
       return 'status-not-answered';
     },
 
+    // Premium Aesthetics applied: Dark grey box for neutral, Red/Green for review mode
     optionClass(opt) {
       const q = this.currentQuestion;
       if (this.isReviewMode) {
         const isCorrectOpt = opt === q.correct_option;
         const isUserWrongPick = opt === q.selected_option && q.selected_option !== q.correct_option;
-        if (isCorrectOpt) return 'border-green-500 bg-green-500/10 text-white cursor-default';
-        if (isUserWrongPick) return 'border-red-500 bg-red-500/10 text-white cursor-default';
-        return 'border-white/10 bg-[#1a1a1a] text-gray-300 cursor-default';
+        if (isCorrectOpt) return 'border-green-500/50 bg-green-500/10 text-white cursor-default ring-1 ring-green-500/50';
+        if (isUserWrongPick) return 'border-red-500/50 bg-red-500/10 text-white cursor-default ring-1 ring-red-500/50';
+        return 'border-white/5 bg-[#1a1a1a] text-gray-400 cursor-default opacity-50';
       }
       return this.selectedOption(q.id) === opt
-        ? 'border-gold bg-gold/10 text-white cursor-pointer'
-        : 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 cursor-pointer';
+        ? 'border-gold bg-gold/10 text-white cursor-pointer ring-1 ring-gold'
+        : 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 hover:bg-[#222] cursor-pointer';
     },
 
     optionBadgeClass(opt) {
@@ -518,11 +552,11 @@ function testAttempt() {
       if (this.isReviewMode) {
         if (opt === q.correct_option) return 'border-green-500 bg-green-500 text-ink';
         if (opt === q.selected_option && q.selected_option !== q.correct_option) return 'border-red-500 bg-red-500 text-white';
-        return 'border-white/30 text-gray-400';
+        return 'border-white/20 text-gray-500';
       }
       return this.selectedOption(q.id) === opt
         ? 'border-gold bg-gold text-ink'
-        : 'border-white/30 text-gray-400';
+        : 'border-white/30 text-gray-400 group-hover:border-white/50 group-hover:text-gray-200';
     },
 
     openSubmitConfirm() {
@@ -532,7 +566,7 @@ function testAttempt() {
       this.showSubmitConfirm = true;
     },
 
-    // BULK JSON SUBMIT - Fixes BUG 1 permanently
+    // BULK JSON SUBMIT - Fixes BUG 1 permanently by capturing the exact truth of Alpine state
     submitTest() {
       if (this.submitting) return;
       this.submitting = true;
