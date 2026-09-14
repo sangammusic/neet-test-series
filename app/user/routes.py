@@ -10,6 +10,8 @@ from app.shared.models import (
     user_has_access_to_test, get_mock_questions_for_test,
     get_mock_question_ids_for_test, create_test_attempt, get_attempt_by_id,
     submit_test_attempt, get_attempts_for_user, get_attempt_time_breakdown,
+    save_attempt_progress, bulk_save_attempt_progress, get_attempt_answers_map,
+    get_mock_questions_for_test_review,
 )
 from app.shared.utils import GUEST_COOKIE_NAME, get_or_create_guest_id, set_guest_cookie, is_logged_in, current_user_id
 
@@ -235,7 +237,8 @@ def test_attempt(slug, test_id, attempt_id):
     tab-switching, with a client-side timer and a question-status
     palette. All answer-saving happens via AJAX to
     test_attempt_save_answer() below — this route just renders the
-    initial state.
+    initial state, hydrated from any progress already saved in the
+    DB (so a refreshed/resumed attempt isn't blank).
     """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id:
@@ -246,6 +249,7 @@ def test_attempt(slug, test_id, attempt_id):
     stream = get_stream_by_slug(slug)
     test = get_test_by_id(test_id)
     questions_by_subject = get_mock_questions_for_test(test_id)
+    saved_progress = get_attempt_answers_map(attempt_id)
 
     return render_template(
         "test_attempt.html",
@@ -253,6 +257,7 @@ def test_attempt(slug, test_id, attempt_id):
         test=test,
         attempt=attempt,
         questions_by_subject=questions_by_subject,
+        saved_progress=saved_progress,
     )
 
 
@@ -261,11 +266,13 @@ def test_attempt_save_answer(slug, test_id, attempt_id):
     """
     AJAX endpoint the attempt screen calls every time the student
     picks/changes/clears an option, so progress survives a refresh
-    or a dropped connection. Stores progress in the Flask session
-    (keyed by attempt_id) rather than writing a DB row per click —
-    the DB rows are only written once, at submit time, by
-    submit_test_attempt(). This keeps "Clear Response" trivial (just
-    delete the session key) and avoids a write on every single click.
+    or a dropped connection. Upserts directly into attempt_answers
+    (see save_attempt_progress) instead of writing into the
+    cookie-backed Flask session — a session cookie is capped at
+    ~4KB by browsers and silently drops updates once a ~30-question
+    attempt's progress dict grows past that, which is what
+    previously caused the result page to show garbage wrong/skipped
+    counts and time_taken_sec: 0 for everything.
     """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id or attempt.get("submitted_at"):
@@ -281,19 +288,11 @@ def test_attempt_save_answer(slug, test_id, attempt_id):
         return jsonify({"ok": False, "error": "question_id required"}), 400
 
     try:
-        time_taken_sec = int(time_taken_sec) if time_taken_sec is not None else None
+        time_taken_sec = int(time_taken_sec) if time_taken_sec is not None else 0
     except (TypeError, ValueError):
-        time_taken_sec = None
+        time_taken_sec = 0
 
-    session_key = f"attempt_progress:{attempt_id}"
-    progress = session.get(session_key, {})
-    progress[question_id] = {
-        "selected_option": selected_option,
-        "status": status,
-        "time_taken_sec": time_taken_sec,
-    }
-    session[session_key] = progress
-    session.modified = True
+    save_attempt_progress(attempt_id, question_id, selected_option, status, time_taken_sec)
 
     return jsonify({"ok": True})
 
@@ -301,39 +300,63 @@ def test_attempt_save_answer(slug, test_id, attempt_id):
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>/submit", methods=["POST"])
 def test_attempt_submit(slug, test_id, attempt_id):
     """
-    Finalizes the attempt: pulls saved progress out of the session,
-    scores it server-side (submit_test_attempt never trusts a
-    client-supplied score), then clears the session progress key so
-    a stale copy can't leak into a future attempt.
+    Finalizes the attempt. The client sends one final bulk payload
+    of everything held in its Alpine state right before this call
+    (JSON body: {"answers": {question_id: {selected_option, status,
+    time_taken_sec}, ...}}) — this gets upserted first as a safety
+    net (covers a save that was still in flight or never fired), then
+    every attempt_answers row for this attempt is read back as the
+    source of truth for scoring. submit_test_attempt never trusts a
+    client-supplied score — it looks up correct_option itself.
+
+    No cookie session is read or written anywhere in this flow.
     """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id:
         abort(404)
     if attempt.get("submitted_at"):
-        return redirect(url_for("user.test_result", slug=slug, test_id=test_id, attempt_id=attempt_id))
+        return jsonify({
+            "ok": True,
+            "redirect": url_for("user.test_result", slug=slug, test_id=test_id, attempt_id=attempt_id)
+        })
 
-    session_key = f"attempt_progress:{attempt_id}"
-    progress = session.get(session_key, {})
+    valid_ids = set(get_mock_question_ids_for_test(test_id))
+
+    payload = request.get_json(silent=True) or {}
+    final_answers = payload.get("answers") or {}
+    
+    # 1. Bulk sync whatever frontend sent us right before submitting
+    bulk_entries = [
+        {
+            "mock_question_id": qid,
+            "selected_option": entry.get("selected_option"),
+            "status": entry.get("status"),
+            "time_taken_sec": entry.get("time_taken_sec"),
+        }
+        for qid, entry in final_answers.items()
+        if qid in valid_ids
+    ]
+    bulk_save_attempt_progress(attempt_id, bulk_entries)
+
+    # 2. Read the guaranteed truth from DB and proceed with scoring
+    progress = get_attempt_answers_map(attempt_id)
     answers = {
         qid: entry["selected_option"]
         for qid, entry in progress.items()
-        if entry.get("selected_option")
+        if entry.get("selected_option") and qid in valid_ids
     }
     time_by_question = {
         qid: entry.get("time_taken_sec") or 0
         for qid, entry in progress.items()
+        if qid in valid_ids
     }
-
-    valid_ids = set(get_mock_question_ids_for_test(test_id))
-    answers = {qid: opt for qid, opt in answers.items() if qid in valid_ids}
-    time_by_question = {qid: t for qid, t in time_by_question.items() if qid in valid_ids}
 
     submit_test_attempt(attempt_id, test_id, answers, time_by_question=time_by_question)
 
-    session.pop(session_key, None)
-    session.modified = True
-
-    return redirect(url_for("user.test_result", slug=slug, test_id=test_id, attempt_id=attempt_id))
+    return jsonify({
+        "ok": True,
+        "redirect": url_for("user.test_result", slug=slug, test_id=test_id, attempt_id=attempt_id),
+    })
 
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>/result")
@@ -352,6 +375,36 @@ def test_result(slug, test_id, attempt_id):
         stream=stream, test=test, attempt=attempt,
         time_by_subject=time_breakdown["by_subject"],
         time_by_question=time_breakdown["by_question"],
+    )
+
+
+@user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>/review")
+def test_attempt_review(slug, test_id, attempt_id):
+    """
+    Read-only review mode: reuses test_attempt.html with
+    is_review_mode=True. Only reachable once the attempt is
+    submitted — get_mock_questions_for_test_review() includes
+    correct_option in what it returns, which would leak the answer
+    key if this were servable before scoring happened.
+    """
+    attempt = get_attempt_by_id(attempt_id)
+    if not attempt or attempt["test_id"] != test_id:
+        abort(404)
+    if not attempt.get("submitted_at"):
+        return redirect(url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=attempt_id))
+
+    stream = get_stream_by_slug(slug)
+    test = get_test_by_id(test_id)
+    questions_by_subject = get_mock_questions_for_test_review(test_id, attempt_id)
+
+    return render_template(
+        "test_attempt.html",
+        stream=stream,
+        test=test,
+        attempt=attempt,
+        questions_by_subject=questions_by_subject,
+        saved_progress={},
+        is_review_mode=True,
     )
 
 
