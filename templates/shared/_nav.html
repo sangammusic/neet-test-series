@@ -5,6 +5,7 @@
         </a>
         <div class="flex items-center gap-6 text-sm font-medium">
             {% if session.get('user_id') %}
+                <a href="{{ url_for('user.profile') }}" class="hover:text-gold transition-colors">My Dashboard</a>
                 <a href="{{ url_for('user.switch_stream') }}" class="hover:text-gold transition-colors">Switch stream</a>
                 <a href="{{ url_for('auth.logout') }}" class="hover:text-gold transition-colors">Log out</a>
             {% else %}
