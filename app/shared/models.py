@@ -274,8 +274,20 @@ def create_test_attempt(test_id, user_id=None, guest_id=None):
 
 
 def get_attempt_by_id(attempt_id):
-    res = supabase_public.table("test_attempts").select("*").eq("id", attempt_id).single().execute()
-    return res.data
+    """
+    Reads with the admin client, not supabase_public. test_attempts
+    has RLS enabled but no SELECT policy defined (see schema.sql —
+    the RLS section was left incomplete), so the public/anon client
+    can insert nothing and read nothing on this table by default.
+    Ownership is already enforced at the route level (test_id match +
+    session user_id/guest_id), so reading here via the admin client is
+    safe and is what makes the freshly-created attempt visible at all.
+    """
+    from app.extensions import supabase_admin
+    res = supabase_admin.table("test_attempts").select("*").eq("id", attempt_id).execute()
+    if not res.data:
+        return None
+    return res.data[0]
 
 
 def submit_test_attempt(attempt_id, test_id, answers, time_by_question=None):
