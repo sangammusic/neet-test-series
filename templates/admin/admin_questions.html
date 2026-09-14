@@ -114,9 +114,12 @@
           <select id="row_correct_option" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm">
             <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
           </select></div>
-        <div class="flex items-end">
+        <div class="flex items-end gap-4">
           <label class="flex items-center gap-2 text-sm text-ink">
             <input type="checkbox" id="row_is_premium" class="rounded border-ink/30"> Premium
+          </label>
+          <label class="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" id="row_has_image" class="rounded border-ink/30"> Has diagram/image
           </label>
         </div>
       </div>
@@ -143,20 +146,24 @@
     "option_a": "F = ma", "option_b": "E = mc^2", "option_c": "V = IR", "option_d": "P = mv",
     "correct_option": "A",
     "difficulty_id": 2,
-    "is_premium": false
+    "is_premium": false,
+    "has_image": false
   },
   {
     "question_type": "pyq",
     "pyq_year": 2022,
-    "question_text": "No topic_name here, so it's Random / General.",
+    "question_text": "The diagram shows a pulley system. Find the tension.",
     "option_a": "...", "option_b": "...", "option_c": "...", "option_d": "...",
     "correct_option": "B",
-    "difficulty_id": 3
+    "difficulty_id": 3,
+    "has_image": true
   }
 ]</pre>
     <p class="text-xs text-ink/50 -mt-2">
       Required per question: question_text, option_a–d, correct_option (A/B/C/D), difficulty_id.
       question_type defaults to "mcq" if omitted; "pyq" requires pyq_year. topic_name defaults to "General" if omitted.
+      Set <code class="bg-ink/5 px-1 rounded">has_image: true</code> for any question with a diagram — an
+      "Upload Image" box will appear for it in the list below once this batch is uploaded.
     </p>
 
     <div>
@@ -194,6 +201,7 @@
         correct_option: document.getElementById('row_correct_option').value,
         difficulty_id: parseInt(document.getElementById('row_difficulty_id').value, 10),
         is_premium: document.getElementById('row_is_premium').checked,
+        has_image: document.getElementById('row_has_image').checked,
       };
 
       if (qtype === 'pyq') {
@@ -227,27 +235,123 @@
 
   {% if chapter %}
   <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
-    <div class="px-5 py-3 bg-ink/5">
+    <div class="px-5 py-3 bg-ink/5 flex items-center justify-between">
       <p class="text-sm font-medium text-ink">Questions in {{ chapter.name }}</p>
+      {% set pending = questions|selectattr('has_image')|rejectattr('image_url')|list %}
+      {% if pending %}
+      <span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5">{{ pending|length }} image(s) pending upload</span>
+      {% endif %}
     </div>
     {% for q in questions %}
-    <div class="flex items-center justify-between px-5 py-3 gap-4">
-      <div class="min-w-0">
-        <p class="text-ink truncate">{{ q.question_text }}</p>
-        <p class="text-xs text-ink/50 mt-0.5">
-          {{ 'PYQ ' ~ q.pyq_year if q.is_pyq else 'MCQ' }} · Topic: {{ q.topic_name }}
-          {% if q.is_premium %}<span class="text-gold font-medium">· Premium 🔒</span>{% endif %}
-        </p>
+    <div class="px-5 py-3 gap-4" data-question-row data-table="questions" data-question-id="{{ q.id }}">
+      <div class="flex items-center justify-between gap-4">
+        <div class="min-w-0">
+          <p class="text-ink truncate">{{ q.question_text }}</p>
+          <p class="text-xs text-ink/50 mt-0.5">
+            {{ 'PYQ ' ~ q.pyq_year if q.is_pyq else 'MCQ' }} · Topic: {{ q.topic_name }}
+            {% if q.is_premium %}<span class="text-gold font-medium">· Premium 🔒</span>{% endif %}
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}"
+              onsubmit="return confirm('Delete this question?');">
+          <button class="text-sm text-red-600 hover:underline whitespace-nowrap">Delete</button>
+        </form>
       </div>
-      <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}"
-            onsubmit="return confirm('Delete this question?');">
-        <button class="text-sm text-red-600 hover:underline whitespace-nowrap">Delete</button>
-      </form>
+
+      <!-- Per-question image slot: shown whenever has_image is true.
+           Three states: uploaded (thumbnail + Replace/Remove),
+           pending (upload box), or — has_image false — nothing shown. -->
+      {% if q.has_image %}
+      <div class="mt-2 pl-0">
+        {% if q.image_url %}
+        <div class="flex items-center gap-3" data-image-uploaded>
+          <img src="{{ q.image_url }}" alt="" class="h-16 w-16 object-cover rounded border border-ink/10">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-ink/60 hover:text-ink underline cursor-pointer w-fit">
+              Replace image
+              <input type="file" accept="image/*" class="hidden" data-image-input>
+            </label>
+            <button type="button" class="text-xs text-red-600 hover:underline text-left" data-remove-image>Remove image</button>
+          </div>
+        </div>
+        {% else %}
+        <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3" data-image-pending>
+          <p class="text-xs text-ink/70">📷 This question needs a diagram — <span data-upload-status>no image uploaded yet</span></p>
+          <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
+            Upload Image
+            <input type="file" accept="image/*" class="hidden" data-image-input>
+          </label>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
     {% else %}
     <p class="px-5 py-6 text-ink/50 text-sm">No questions in this chapter yet.</p>
     {% endfor %}
   </div>
+
+  <script>
+    // Handles every per-question image upload box on this page via
+    // event delegation (one listener, works for however many question
+    // rows are rendered — a big chapter can have hundreds).
+    document.addEventListener('change', async (e) => {
+      const input = e.target.closest('[data-image-input]');
+      if (!input || !input.files[0]) return;
+
+      const row = input.closest('[data-question-row]');
+      const tableName = row.dataset.table;
+      const questionId = row.dataset.questionId;
+      const statusEl = row.querySelector('[data-upload-status]');
+      if (statusEl) statusEl.textContent = 'Uploading…';
+
+      const formData = new FormData();
+      formData.append('image', input.files[0]);
+
+      try {
+        const res = await fetch(`/admin/questions/${tableName}/${questionId}/upload-image`, {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (data.ok) {
+          // Swap the pending box for the uploaded thumbnail without a
+          // full page reload — simplest way to do that here is a
+          // targeted reload of just this page (keeps filters intact
+          // via the current URL) since there can be many rows open.
+          window.location.reload();
+        } else {
+          alert('Upload failed: ' + data.error);
+          if (statusEl) statusEl.textContent = 'no image uploaded yet';
+        }
+      } catch (err) {
+        alert('Upload failed: ' + err);
+        if (statusEl) statusEl.textContent = 'no image uploaded yet';
+      }
+    });
+
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-remove-image]');
+      if (!btn) return;
+      if (!confirm('Remove this image? The question will show the upload box again.')) return;
+
+      const row = btn.closest('[data-question-row]');
+      const tableName = row.dataset.table;
+      const questionId = row.dataset.questionId;
+
+      try {
+        const res = await fetch(`/admin/questions/${tableName}/${questionId}/remove-image`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+          window.location.reload();
+        } else {
+          alert('Could not remove image: ' + data.error);
+        }
+      } catch (err) {
+        alert('Could not remove image: ' + err);
+      }
+    });
+  </script>
   {% endif %}
 </div>
 {% endblock %}
