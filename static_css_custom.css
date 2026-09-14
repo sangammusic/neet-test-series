@@ -1,0 +1,21 @@
+/* BUGFIX: base.html links to /static/css/custom.css but the static/
+   folder didn't exist anywhere in the project. Tailwind is loaded via
+   CDN in base.html and handles almost all styling, so this file is
+   intentionally small — it's here so the <link> in base.html resolves
+   instead of 404ing, and as a home for any small overrides that don't
+   fit as Tailwind utility classes. */
+
+/* Smooth scroll for anchor links */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Consistent focus ring across browsers for keyboard nav (accessibility) */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #D4A017;
+  outline-offset: 2px;
+}
