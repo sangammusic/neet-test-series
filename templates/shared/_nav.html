@@ -5,7 +5,14 @@
         </a>
         <div class="flex items-center gap-6 text-sm font-medium">
             {% if session.get('user_id') %}
-                <a href="{{ url_for('user.profile') }}" class="hover:text-gold transition-colors">My Dashboard</a>
+                <!-- BUGFIX: this used to point at user.profile (attempts-history
+                     only page, often empty for new users, no way back to the
+                     real dashboard). Now points at user.my_dashboard, which
+                     redirects to the actual stream dashboard with the two
+                     practice/test cards. Attempt history is still reachable
+                     via the "My Attempts" link below. -->
+                <a href="{{ url_for('user.my_dashboard') }}" class="hover:text-gold transition-colors">My Dashboard</a>
+                <a href="{{ url_for('user.profile') }}" class="hover:text-gold transition-colors">My Attempts</a>
                 <a href="{{ url_for('user.switch_stream') }}" class="hover:text-gold transition-colors">Switch stream</a>
                 <a href="{{ url_for('auth.logout') }}" class="hover:text-gold transition-colors">Log out</a>
             {% else %}
