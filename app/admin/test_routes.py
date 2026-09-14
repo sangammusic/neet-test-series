@@ -40,6 +40,18 @@ def tests_list():
 @admin_bp.route("/tests/create", methods=["POST"])
 @admin_required
 def tests_create():
+    negative_marking_raw = float(request.form.get("negative_marking") or 0)
+    # BUGFIX: nothing stopped a negative value (e.g. -1) here. Since
+    # scoring does correct_count - (wrong_count * negative_marking),
+    # a negative negative_marking flips the sign and ADDS wrong-answer
+    # count to the score instead of subtracting it — this is exactly
+    # what produced a score of 25 from 3 correct / 22 wrong on the
+    # "Test pdf" test (someone typed -1 instead of 1). Clamp to >= 0;
+    # the "per wrong answer" penalty should never itself be negative.
+    if negative_marking_raw < 0:
+        flash("Negative Marking can't be a negative number — it was saved as its positive value instead.", "error")
+    negative_marking = abs(negative_marking_raw)
+
     payload = {
         "stream_id": request.form.get("stream_id"),
         "category_id": request.form.get("category_id"),
@@ -47,7 +59,7 @@ def tests_create():
         "description": request.form.get("description", "").strip() or None,  # holds the Syllabus text
         "duration_minutes": int(request.form.get("duration_minutes") or 60),
         "total_marks": int(request.form.get("total_marks")) if request.form.get("total_marks") else None,
-        "negative_marking": float(request.form.get("negative_marking") or 0),
+        "negative_marking": negative_marking,
         "is_premium": request.form.get("is_premium") == "on",
         "price_inr": float(request.form.get("price_inr") or 0),
     }
@@ -74,7 +86,7 @@ def tests_manage(test_id):
 
     mapped = (
         supabase_admin.table("mock_test_questions")
-        .select("mock_question_id, mock_questions(question_text, topic_name, is_pyq, pyq_year, subjects(name))")
+        .select("mock_question_id, mock_questions(question_text, topic_name, is_pyq, pyq_year, has_image, image_url, subjects(name))")
         .eq("test_id", test_id)
         .execute()
         .data
