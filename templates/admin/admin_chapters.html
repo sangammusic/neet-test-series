@@ -3,58 +3,88 @@
 {% block content %}
 {% include "admin/_admin_nav.html" %}
 <div class="max-w-4xl mx-auto px-6 py-10">
-  <h1 class="font-display text-3xl text-ink mb-6">Chapters</h1>
+  <h1 class="font-display text-3xl text-ink mb-6">Manage Chapters</h1>
 
-  <form method="POST" action="{{ url_for('admin.chapters_create') }}"
-        class="bg-white border border-ink/10 rounded-lg p-6 mb-8 grid grid-cols-2 gap-4">
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Subject</label>
-      <select name="subject_id" required class="w-full rounded-md border border-ink/15 px-3 py-2">
-        {% for s in subjects %}<option value="{{ s.id }}">{{ s.streams.name if s.streams }} — {{ s.name }}</option>{% endfor %}
-      </select>
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Display Order</label>
-      <input type="number" name="display_order" value="0" class="w-full rounded-md border border-ink/15 px-3 py-2">
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Name</label>
-      <input type="text" name="name" required placeholder="e.g. Laws of Motion"
-             class="w-full rounded-md border border-ink/15 px-3 py-2">
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Slug (optional)</label>
-      <input type="text" name="slug" placeholder="auto-generated if blank"
-             class="w-full rounded-md border border-ink/15 px-3 py-2">
-    </div>
-    <button type="submit" class="col-span-2 bg-ink text-paper font-medium py-2.5 rounded-md hover:bg-ink-light">
-      + Add Chapter
-    </button>
-  </form>
-
-  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
-    {% for ch in chapters %}
-    <div class="flex items-center justify-between px-5 py-3">
+  <!-- ==========================================
+       CREATE CHAPTER FORM (Strict Hierarchy)
+       ========================================== -->
+  <div class="bg-white border border-ink/10 rounded-lg p-6 mb-8 shadow-sm">
+    <h2 class="font-medium text-ink text-lg mb-4">Create New Chapter</h2>
+    <form method="POST" action="{{ url_for('admin.chapters_create') }}" class="grid grid-cols-1 md:grid-cols-2 gap-5">
       <div>
-        <span class="font-medium text-ink">{{ ch.name }}</span>
-        <span class="text-ink/50 text-sm ml-2">
+        <label class="block text-sm font-bold text-ink mb-1">Subject <span class="text-red-500">*</span></label>
+        <select name="subject_id" required class="w-full rounded-md border border-ink/15 px-3 py-2.5 focus:ring-2 focus:ring-gold focus:outline-none transition-shadow text-sm">
+          <option value="">— Select a Subject First —</option>
+          {% for s in subjects %}
+          <option value="{{ s.id }}">{{ s.streams.name if s.streams }} — {{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-bold text-ink mb-1">Chapter Name <span class="text-red-500">*</span></label>
+        <input type="text" name="name" required placeholder="e.g. Laws of Motion"
+               class="w-full rounded-md border border-ink/15 px-3 py-2.5 text-sm focus:ring-2 focus:ring-gold focus:outline-none transition-shadow">
+      </div>
+      <div>
+        <label class="block text-sm font-bold text-ink mb-1">Slug <span class="text-ink/40 font-normal">(optional)</span></label>
+        <input type="text" name="slug" placeholder="Auto-generated if left blank"
+               class="w-full rounded-md border border-ink/15 px-3 py-2.5 text-sm focus:ring-2 focus:ring-gold focus:outline-none transition-shadow">
+      </div>
+      <div>
+        <label class="block text-sm font-bold text-ink mb-1">Display Order</label>
+        <input type="number" name="display_order" value="0"
+               class="w-full rounded-md border border-ink/15 px-3 py-2.5 text-sm focus:ring-2 focus:ring-gold focus:outline-none transition-shadow">
+      </div>
+      <div class="md:col-span-2 pt-2">
+        <button type="submit" class="w-full bg-ink text-paper font-bold py-3 rounded-md hover:bg-ink-light transition-colors shadow-sm text-sm uppercase tracking-wide">
+          + Add Chapter
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ==========================================
+       EXISTING CHAPTERS LIST
+       ========================================== -->
+  <h2 class="font-display text-xl text-ink mb-3">Existing Chapters ({{ chapters|length }})</h2>
+  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10 shadow-sm">
+    {% for ch in chapters %}
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between px-5 py-4 transition-colors hover:bg-ink/5 gap-3">
+      <div>
+        <span class="font-bold text-ink">{{ ch.name }}</span>
+        <span class="text-ink/50 text-sm ml-2 font-medium">
           {{ ch.subjects.streams.name if ch.subjects and ch.subjects.streams }} ›
           {{ ch.subjects.name if ch.subjects }} · /{{ ch.slug }}
         </span>
-        {% if not ch.is_active %}<span class="text-xs bg-red-100 text-red-700 rounded px-2 py-0.5 ml-2">inactive</span>{% endif %}
+        {% if not ch.is_active %}
+        <span class="text-[10px] bg-red-100 text-red-700 font-bold rounded px-2 py-0.5 ml-2 uppercase tracking-wide">Inactive</span>
+        {% endif %}
       </div>
-      <div class="flex gap-2">
+      
+      <div class="flex items-center gap-4 shrink-0">
         <form method="POST" action="{{ url_for('admin.chapters_toggle', chapter_id=ch.id) }}">
-          <button class="text-sm text-gold hover:underline">{{ 'Deactivate' if ch.is_active else 'Activate' }}</button>
+          <button class="text-sm font-semibold text-gold hover:underline focus:outline-none">
+            {{ 'Deactivate' if ch.is_active else 'Activate' }}
+          </button>
         </form>
+        
+        <!-- HEAVY MATERIAL WARNING: Implemented directly as per your logic -->
         <form method="POST" action="{{ url_for('admin.chapters_delete', chapter_id=ch.id) }}"
-              onsubmit="return confirm('Delete this chapter? This fails if questions exist under it.');">
-          <button class="text-sm text-red-600 hover:underline">Delete</button>
+              onsubmit="return confirm('⚠️ WARNING: Too much question and material are uploaded in this chapter. Are you sure you want to delete? This action cannot be undone and will cause data loss.');">
+          <button class="text-sm font-bold text-red-600 hover:text-red-800 hover:underline focus:outline-none">
+            Delete
+          </button>
         </form>
       </div>
     </div>
     {% else %}
-    <p class="px-5 py-6 text-ink/50 text-sm">No chapters yet — add a subject first, then a chapter.</p>
+    <div class="px-5 py-10 text-center">
+      <div class="w-12 h-12 bg-ink/5 rounded-full flex items-center justify-center mx-auto mb-3">
+        <svg class="w-6 h-6 text-ink/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+      </div>
+      <p class="text-ink/60 text-sm font-medium">No chapters exist yet.</p>
+      <p class="text-ink/40 text-xs mt-1">Make sure you have created a Subject first, then add a chapter above.</p>
+    </div>
     {% endfor %}
   </div>
 </div>
