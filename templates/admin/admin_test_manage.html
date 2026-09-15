@@ -21,7 +21,59 @@
      data-question-id="{{ m.mock_question_id }}"
      x-data="{ 
         pencilOpen: false, 
-        imgRequired: {{ 'true' if m.mock_questions and m.mock_questions.has_image else 'false' }} 
+        imgRequired: {{ 'true' if m.mock_questions and m.mock_questions.has_image else 'false' }},
+        isToggling: false,
+        
+        async toggleImageInDB(qid) {
+            this.isToggling = true;
+            showSangamToast('Saving image state to database...');
+            try {
+                // Call the dedicated endpoint (We will build this in test_routes.py next)
+                const res = await fetch(`/admin/questions/mock_questions/${qid}/toggle-image`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ has_image: this.imgRequired })
+                });
+                const data = await res.json();
+                
+                if (data.ok) {
+                    showSangamToast('✅ Image requirement permanently saved!');
+                } else {
+                    // Revert the UI switch if the backend fails or route is missing
+                    this.imgRequired = !this.imgRequired;
+                    showSangamToast('❌ Failed to save: ' + (data.error || 'Backend endpoint pending (Next Step).'));
+                }
+            } catch(e) {
+                this.imgRequired = !this.imgRequired;
+                showSangamToast('❌ Network error. State reverted.');
+            }
+            this.isToggling = false;
+        },
+        
+        async changeAnswerInDB(qid, event) {
+            const newAnswer = event.target.value;
+            if(!newAnswer) return;
+            
+            showSangamToast('Saving new answer to database...');
+            try {
+                const res = await fetch(`/admin/questions/mock_questions/${qid}/change-answer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ correct_option: newAnswer })
+                });
+                const data = await res.json();
+                
+                if (data.ok) {
+                    showSangamToast(`✅ Answer permanently changed to ${newAnswer}!`);
+                } else {
+                    event.target.value = '';
+                    showSangamToast('❌ Failed: ' + (data.error || 'Backend endpoint pending (Next Step).'));
+                }
+            } catch(e) {
+                event.target.value = '';
+                showSangamToast('❌ Network error. Could not save.');
+            }
+        }
      }"
      @update-img-req="imgRequired = $event.detail.req">
     
@@ -86,17 +138,17 @@
             </svg>
         </button>
 
-        <!-- Slide Down Menu (Fixed Event Bubbling Bug) -->
+        <!-- Slide Down Menu -->
         <div x-show="pencilOpen" @click.stop x-transition.opacity.duration.200ms x-cloak class="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
             <div class="bg-indigo-50 px-5 py-3 border-b border-indigo-100">
                 <span class="text-xs font-black text-indigo-800 uppercase tracking-widest">SANGAM STUDY HUB Actions</span>
             </div>
             
             <div class="p-5 space-y-5">
-                <!-- Dropdown Answer -->
+                <!-- Dropdown Answer (Now fully connected to DB via AJAX) -->
                 <div>
                     <label class="block text-sm font-bold text-ink mb-2">Change Correct Option</label>
-                    <select @change="showSangamToast('To ensure data integrity and avoid mismatches, please click \'Edit JSON (Raw Power)\' below to apply this update permanently.')" class="w-full text-sm rounded-lg border-2 border-gray-200 focus:ring-0 focus:border-indigo-600 bg-gray-50 cursor-pointer p-2.5 font-bold text-gray-700 outline-none">
+                    <select @change="changeAnswerInDB('{{ m.mock_question_id }}', $event)" class="w-full text-sm rounded-lg border-2 border-gray-200 focus:ring-0 focus:border-indigo-600 bg-gray-50 cursor-pointer p-2.5 font-bold text-gray-700 outline-none">
                         <option value="">-- Change Answer --</option>
                         <option value="A">Option A</option>
                         <option value="B">Option B</option>
@@ -105,12 +157,12 @@
                     </select>
                 </div>
 
-                <!-- Image Switch (Actually Functional locally) -->
+                <!-- Image Switch (Now fully connected to DB via AJAX) -->
                 <div class="flex items-center justify-between bg-blue-50/50 p-3 rounded-lg border border-blue-100">
                     <label class="text-sm font-bold text-indigo-900 cursor-pointer">Image Required?</label>
                     <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" x-model="imgRequired" @change="showSangamToast('Image Box visibility toggled! You can now upload/replace the image directly in the question row.')">
-                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        <input type="checkbox" class="sr-only peer" x-model="imgRequired" @change="toggleImageInDB('{{ m.mock_question_id }}')" :disabled="isToggling">
+                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600" :class="isToggling ? 'opacity-50 cursor-not-allowed' : ''"></div>
                     </label>
                 </div>
 
