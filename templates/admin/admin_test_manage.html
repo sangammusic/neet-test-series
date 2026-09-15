@@ -22,7 +22,8 @@
      x-data="{ 
         pencilOpen: false, 
         imgRequired: {{ 'true' if m.mock_questions and m.mock_questions.has_image else 'false' }} 
-     }">
+     }"
+     @update-img-req="imgRequired = $event.detail.req">
     
     <!-- Strict Numbering (SANGAM STUDY HUB Pattern) -->
     <div class="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-800 shrink-0 border border-indigo-200 shadow-sm text-lg">
@@ -352,8 +353,21 @@
           const data = await res.json();
           
           if (data.ok) {
-            // Hard reload is perfectly fine here now because x-cloak prevents the FOUC modal flash!
-            window.location.reload(); 
+            // SANGAM FIX: Smooth DOM Update instead of hard reload
+            const row = document.querySelector(`[data-question-id="${this.qId}"]`);
+            if (row) {
+                // Instantly update text on screen
+                const textEl = row.querySelector('p.text-lg.text-ink');
+                if (textEl && parsedData.question_text) textEl.textContent = parsedData.question_text;
+                
+                const topicEl = row.querySelector('span.bg-gray-200.text-gray-800');
+                if (topicEl && parsedData.topic_name) topicEl.textContent = parsedData.topic_name;
+                
+                // Trigger Alpine Event to hide/show image box seamlessly
+                row.dispatchEvent(new CustomEvent('update-img-req', { detail: { req: !!parsedData.has_image } }));
+            }
+            this.closeModal();
+            showSangamToast('✅ Question JSON successfully overwritten in DB!');
           } else {
             this.editError = "DB Error: " + data.error;
           }
@@ -371,11 +385,15 @@
     const input = e.target.closest('[data-image-input]');
     if (!input || !input.files[0]) return;
 
+    // PREVENT EVENT BUBBLING
+    e.stopPropagation();
+
     const row = input.closest('[data-question-row]');
     const tableName = row.dataset.table;
     const questionId = row.dataset.questionId;
     const statusEl = row.querySelector('[data-upload-status]');
     if (statusEl) statusEl.textContent = 'Uploading to Storage Bucket…';
+    showSangamToast('Uploading image... Please wait.');
 
     const formData = new FormData();
     formData.append('image', input.files[0]);
@@ -388,10 +406,14 @@
       const data = await res.json();
       if (data.ok) {
         // ULTRA SMOOTH FIX: Inject the new image into the DOM directly without reloading the page!
+        // Cache buster guarantees the browser shows the newly replaced image instantly
+        const cacheBuster = new Date().getTime();
+        const newImgUrl = data.image_url.includes('?') ? `${data.image_url}&t=${cacheBuster}` : `${data.image_url}?t=${cacheBuster}`;
+
         const imgZone = row.querySelector('[data-image-zone]');
         imgZone.innerHTML = `
             <div class="flex items-center gap-4" data-image-uploaded>
-                <img src="${data.image_url}" alt="Question Image" class="h-24 w-24 object-contain rounded-lg border border-gray-200 bg-white shadow-sm p-1">
+                <img src="${newImgUrl}" alt="Question Image" class="h-24 w-24 object-contain rounded-lg border border-gray-200 bg-white shadow-sm p-1">
                 <div class="flex flex-col gap-2">
                     <p class="text-sm font-bold text-green-700 flex items-center gap-1">✅ Image Uploaded</p>
                     <label class="text-xs font-bold bg-white border border-gray-300 px-4 py-2 rounded shadow-sm text-gray-700 hover:bg-gray-100 cursor-pointer w-fit transition-colors">
@@ -402,25 +424,34 @@
                 </div>
             </div>
         `;
-        showSangamToast('Image uploaded successfully! No page reload needed.');
+        showSangamToast('✅ Image successfully uploaded and synced!');
       } else {
-        showSangamToast('Upload failed: ' + data.error);
+        showSangamToast('❌ Upload failed: ' + data.error);
         if (statusEl) statusEl.textContent = 'No image uploaded yet.';
       }
     } catch (err) {
-      showSangamToast('Upload connection failed.');
+      showSangamToast('❌ Upload connection failed.');
       if (statusEl) statusEl.textContent = 'No image uploaded yet.';
     }
+    
+    // Clear input so selecting the same file again still fires 'change' event
+    input.value = '';
   });
 
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-remove-image]');
     if (!btn) return;
+    
+    // PREVENT EVENT BUBBLING
+    e.stopPropagation();
+    
     if (!confirm('Are you sure you want to permanently wipe this image from the Storage Bucket?')) return;
 
     const row = btn.closest('[data-question-row]');
     const tableName = row.dataset.table;
     const questionId = row.dataset.questionId;
+    
+    showSangamToast('Deleting image from bucket... Please wait.');
 
     try {
       const res = await fetch(`/admin/questions/${tableName}/${questionId}/remove-image`, { method: 'POST' });
@@ -440,12 +471,12 @@
                 </label>
             </div>
         `;
-        showSangamToast('Image permanently deleted. Ready for new upload.');
+        showSangamToast('✅ Image permanently deleted. Ready for new upload.');
       } else {
-        showSangamToast('Could not remove image: ' + data.error);
+        showSangamToast('❌ Could not remove image: ' + data.error);
       }
     } catch (err) {
-      showSangamToast('Network Error: Could not remove image.');
+      showSangamToast('❌ Network Error: Could not remove image.');
     }
   });
 </script>
