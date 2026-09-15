@@ -44,8 +44,9 @@
                 <input type="number" x-model.number="targets.biology" class="w-full rounded-lg border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none transition-colors font-bold text-lg bg-gray-50">
             </div>
         </div>
-        <button @click="lockTargets()" class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-md text-lg tracking-wide">
-            Lock Targets & Start Uploading
+        <button @click="lockTargets()" :disabled="isLocking" class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md text-lg tracking-wide flex items-center justify-center gap-3">
+            <svg x-show="isLocking" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <span x-text="isLocking ? 'Calculating & Saving Marks...' : 'Lock Targets & Start Uploading'"></span>
         </button>
     </div>
 
@@ -159,7 +160,9 @@
     function uploadEngine() {
         return {
             testId: "{{ test.id }}",
+            mpq: Number("{{ mpq|default(4) }}"), // Dynamic Marks Per Question captured from Jinja
             targetsLocked: false,
+            isLocking: false,
             activeTab: 'physics',
             isProcessing: false,
             
@@ -189,12 +192,36 @@
                 }
             },
 
-            lockTargets() {
-                if (this.targets.physics + this.targets.chemistry + this.targets.biology === 0) {
+            // SANGAM FIX: Lock Targets & Auto Calculate DB Marks
+            async lockTargets() {
+                const totalQs = this.targets.physics + this.targets.chemistry + this.targets.biology;
+                if (totalQs === 0) {
                     alert("SANGAM STUDY HUB: Please set at least one target above zero.");
                     return;
                 }
-                this.targetsLocked = true;
+
+                this.isLocking = true;
+                const calculatedTotalMarks = totalQs * this.mpq;
+
+                try {
+                    const response = await fetch(`/admin/tests/${this.testId}/lock-targets`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ total_marks: calculatedTotalMarks })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.ok) {
+                        this.targetsLocked = true;
+                    } else {
+                        alert("SANGAM Database Error: Failed to save total marks. " + (data.error || ""));
+                    }
+                } catch (e) {
+                    alert("Network Error: Could not lock targets. Please check your internet.");
+                } finally {
+                    this.isLocking = false;
+                }
             },
 
             unlockTargets() {
