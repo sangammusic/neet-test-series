@@ -2,14 +2,16 @@
 {% block title %}Map Questions — {{ test.title }}{% endblock %}
 {% block content %}
 {% include "admin/_admin_nav.html" %}
-<div class="max-w-4xl mx-auto px-6 py-10">
+
+<!-- Alpine.js for State Management (Tabs, Chunking, Modals) -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+<div class="max-w-5xl mx-auto px-6 py-10">
   <div class="flex items-start justify-between gap-4 mb-1">
     <h1 class="font-display text-3xl text-ink">{{ test.title }}</h1>
-    <!-- FEATURE (was missing): delete this test from its own manage page too,
-         not just the list page — same route, same cascade-delete warning. -->
     <form method="POST" action="{{ url_for('admin.tests_delete', test_id=test.id) }}"
-          onsubmit="return confirm('Delete &quot;{{ test.title }}&quot;? This also removes its question mapping and any student attempts against it. This cannot be undone.');">
-      <button type="submit" class="text-sm text-red-600 hover:underline whitespace-nowrap">Delete this test</button>
+          onsubmit="return confirm('⚠️ DANGER: Delete &quot;{{ test.title }}&quot;? This permanently removes its question mapping, student attempts, AND completely wipes all associated images from the Storage Bucket. This cannot be undone.');">
+      <button type="submit" class="text-sm text-red-600 hover:underline whitespace-nowrap font-semibold">Delete this test (Zero Kachra)</button>
     </form>
   </div>
   {% if test.description %}
@@ -18,26 +20,22 @@
   <p class="text-ink/40 text-sm mb-8">No syllabus set for this test.</p>
   {% endif %}
 
-  <!-- No Stream/Subject/Chapter picker. A mock test spans the whole -->
-  <!-- syllabus, so mapping is one paste: each row carries its own -->
-  <!-- subject_name and is resolved against this test's stream. -->
-  <form method="POST" action="{{ url_for('admin.tests_bulk_map_questions', test_id=test.id) }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 space-y-4">
-    <div class="flex items-center justify-between">
+  <!-- ==========================================
+       PILLAR 1: TABS & 25-CHUNK AJAX UPLOADER
+       ========================================== -->
+  <div x-data="bulkUploader()" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 shadow-sm">
+    <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="font-medium text-ink">Paste Questions to Map</h2>
-        <p class="text-sm text-ink/60 mt-0.5">
-          Paste a JSON array of mixed-subject questions — each object must include its own
-          <code class="bg-ink/5 px-1 rounded">subject_name</code>. Every valid row is inserted into
-          the question pool and linked to this test in the same step.
-        </p>
+        <h2 class="font-medium text-ink text-lg">Upload Questions (Chunk System)</h2>
+        <p class="text-sm text-ink/60 mt-0.5">Paste JSON arrays batch by batch. Max 25 questions per save.</p>
       </div>
-      <button type="button" onclick="document.getElementById('test_map_json_example').classList.toggle('hidden')"
-              class="text-sm text-ink/50 hover:text-ink underline whitespace-nowrap">
-        Show expected format
+      <button type="button" @click="showFormat = !showFormat" class="text-sm text-gold hover:underline whitespace-nowrap font-medium">
+        Toggle Format Guide
       </button>
     </div>
 
-    <pre id="test_map_json_example" class="hidden bg-ink/5 border border-ink/10 rounded-md p-4 text-xs text-ink/70 overflow-x-auto">[
+    <!-- Format Guide -->
+    <pre x-show="showFormat" x-cloak class="bg-ink/5 border border-ink/10 rounded-md p-4 text-xs text-ink/70 overflow-x-auto mb-6">[
   {
     "subject_name": "Physics",
     "topic_name": "Vectors",
@@ -48,41 +46,62 @@
     "option_d": "A scalar quantity",
     "correct_option": "A",
     "difficulty_id": 2,
+    "has_image": true,
     "is_premium": false
-  },
-  {
-    "subject_name": "Chemistry",
-    "topic_name": "Mole Concept",
-    "question_text": "1 mole of any gas at STP occupies how much volume?",
-    "option_a": "22.4 L", "option_b": "11.2 L", "option_c": "44.8 L", "option_d": "1 L",
-    "correct_option": "A",
-    "difficulty_id": 1
-  },
-  {
-    "subject_name": "Biology",
-    "topic_name": "Cell Biology",
-    "question_text": "Which organelle is the powerhouse of the cell?",
-    "option_a": "Nucleus", "option_b": "Mitochondria", "option_c": "Ribosome", "option_d": "Golgi body",
-    "correct_option": "B",
-    "difficulty_id": 1
   }
 ]</pre>
-    <p class="text-xs text-ink/50 -mt-2">
-      Required per question: subject_name (must match a subject for this test's stream), topic_name,
-      question_text, option_a–d, correct_option (A/B/C/D). Optional: difficulty_id, is_premium, is_pyq, pyq_year, explanation, image_url.
-    </p>
 
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Paste JSON array</label>
-      <textarea name="bulk_json" rows="18" placeholder='[{"subject_name": "Physics", "topic_name": "...", "question_text": "...", ...}]'
-                class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm"></textarea>
+    <!-- Dynamic Tabs -->
+    <div class="flex gap-2 border-b border-ink/10 mb-5">
+      <template x-for="tab in ['Physics', 'Chemistry', 'Biology', 'Mathematics']" :key="tab">
+        <button type="button" @click="activeTab = tab"
+                class="px-4 py-2 text-sm font-semibold border-b-2 transition-colors"
+                :class="activeTab === tab ? 'border-gold text-gold' : 'border-transparent text-ink/50 hover:text-ink'">
+          <span x-text="tab"></span>
+        </button>
+      </template>
     </div>
 
-    <button type="submit" class="bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light">
-      Upload &amp; Map to This Test
-    </button>
-  </form>
+    <!-- Upload Box -->
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-ink mb-1">
+          Paste JSON for <span x-text="activeTab" class="text-gold"></span>
+        </label>
+        <textarea x-model="jsonText" @input="validateInput" rows="10" placeholder='[{"subject_name": "Physics", "question_text": "...", ...}]'
+                  class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-gold focus:outline-none"></textarea>
+        
+        <!-- Validation / Status Messages -->
+        <div class="mt-2 text-sm flex justify-between items-center">
+          <p :class="qCount > 25 ? 'text-red-600 font-semibold' : 'text-ink/50'" x-show="jsonText.length > 0">
+            Detected: <span x-text="qCount"></span> questions (Max 25)
+          </p>
+          <p x-show="errorMsg" class="text-red-600 font-medium" x-text="errorMsg"></p>
+          <p x-show="successMsg" class="text-green-600 font-semibold animate-pulse" x-text="successMsg"></p>
+        </div>
+      </div>
 
+      <div class="flex items-center justify-between pt-4 border-t border-ink/10">
+        <p class="text-sm font-bold text-ink">
+          Total Uploaded this session: <span x-text="totalSaved" class="text-gold text-lg"></span>
+        </p>
+        <div class="flex gap-3">
+          <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25"
+                  class="bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light disabled:opacity-50 transition-colors">
+            <span x-text="isSaving ? 'Saving...' : 'Save & Add More'"></span>
+          </button>
+          <button type="button" @click="window.location.reload()"
+                  class="border-2 border-ink text-ink font-medium py-2.5 px-6 rounded-md hover:bg-ink/5 transition-colors">
+            Final Upload / Refresh
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       LIST OF MAPPED QUESTIONS & LIVE EDIT
+       ========================================== -->
   <h2 class="font-display text-xl text-ink mb-3">Questions in this test ({{ mapped|length }})</h2>
   <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
     {% set ns = namespace(pending=0) %}
@@ -91,64 +110,245 @@
         {% set ns.pending = ns.pending + 1 %}
       {% endif %}
     {% endfor %}
+    
     {% if ns.pending > 0 %}
     <div class="px-5 py-3 bg-gold/10">
       <span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5">{{ ns.pending }} image(s) pending upload</span>
     </div>
     {% endif %}
+    
     {% for m in mapped %}
-    <div class="px-5 py-3 gap-4" data-question-row data-table="mock_questions" data-question-id="{{ m.mock_question_id }}">
-      <div class="flex items-center justify-between gap-4">
-        <div class="min-w-0">
-          <p class="text-sm text-ink truncate">{{ m.mock_questions.question_text if m.mock_questions }}</p>
-          <p class="text-xs text-ink/50 mt-0.5">
-            {{ m.mock_questions.subjects.name if m.mock_questions and m.mock_questions.subjects else '—' }}
+    <div class="px-5 py-4 gap-4 transition-colors hover:bg-ink/5" data-question-row data-table="mock_questions" data-question-id="{{ m.mock_question_id }}">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium text-ink">{{ m.mock_questions.question_text if m.mock_questions }}</p>
+          <p class="text-xs text-ink/50 mt-1">
+            <span class="font-semibold text-ink/70">{{ m.mock_questions.subjects.name if m.mock_questions and m.mock_questions.subjects else '—' }}</span>
             · Topic: {{ m.mock_questions.topic_name if m.mock_questions }}
             {% if m.mock_questions and m.mock_questions.is_pyq %}· PYQ {{ m.mock_questions.pyq_year }}{% endif %}
           </p>
         </div>
-        <form method="POST" action="{{ url_for('admin.tests_remove_question', test_id=test.id, question_id=m.mock_question_id) }}"
-              onsubmit="return confirm('Remove this question from the test?');">
-          <button class="text-sm text-red-600 hover:underline whitespace-nowrap">Remove</button>
-        </form>
+        
+        <!-- Action Buttons: Edit & Remove -->
+        <div class="flex flex-col items-end gap-2 shrink-0">
+          <button type="button" @click="$dispatch('open-edit-modal', { id: '{{ m.mock_question_id }}' })"
+                  class="text-xs font-semibold bg-gold/20 text-gold-light px-3 py-1 rounded hover:bg-gold hover:text-ink transition-colors">
+            Edit JSON
+          </button>
+          <form method="POST" action="{{ url_for('admin.tests_remove_question', test_id=test.id, question_id=m.mock_question_id) }}"
+                onsubmit="return confirm('Remove this question? Its image will be permanently deleted from storage.');">
+            <button class="text-xs text-red-600 hover:underline whitespace-nowrap">Remove</button>
+          </form>
+        </div>
       </div>
 
-      {% if m.mock_questions and m.mock_questions.has_image %}
-      <div class="mt-2">
-        {% if m.mock_questions.image_url %}
-        <div class="flex items-center gap-3" data-image-uploaded>
-          <img src="{{ m.mock_questions.image_url }}" alt="" class="h-16 w-16 object-cover rounded border border-ink/10">
-          <div class="flex flex-col gap-1">
-            <label class="text-xs text-ink/60 hover:text-ink underline cursor-pointer w-fit">
-              Replace image
+      <!-- Image Zone: Dynamically updated via JS when edited -->
+      <div class="mt-3" data-image-zone="true">
+        {% if m.mock_questions and m.mock_questions.has_image %}
+          {% if m.mock_questions.image_url %}
+          <div class="flex items-center gap-3" data-image-uploaded>
+            <img src="{{ m.mock_questions.image_url }}" alt="" class="h-16 w-16 object-cover rounded border border-ink/10">
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-ink/60 hover:text-ink underline cursor-pointer w-fit">
+                Replace image
+                <input type="file" accept="image/*" class="hidden" data-image-input>
+              </label>
+              <button type="button" class="text-xs text-red-600 hover:underline text-left" data-remove-image>Remove image</button>
+            </div>
+          </div>
+          {% else %}
+          <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3" data-image-pending>
+            <p class="text-xs text-ink/70">📷 This question needs a diagram — <span data-upload-status>no image uploaded yet</span></p>
+            <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
+              Upload Image
               <input type="file" accept="image/*" class="hidden" data-image-input>
             </label>
-            <button type="button" class="text-xs text-red-600 hover:underline text-left" data-remove-image>Remove image</button>
           </div>
-        </div>
-        {% else %}
-        <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3" data-image-pending>
-          <p class="text-xs text-ink/70">📷 This question needs a diagram — <span data-upload-status>no image uploaded yet</span></p>
-          <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
-            Upload Image
-            <input type="file" accept="image/*" class="hidden" data-image-input>
-          </label>
-        </div>
+          {% endif %}
         {% endif %}
       </div>
-      {% endif %}
     </div>
     {% else %}
-    <p class="px-5 py-6 text-ink/50 text-sm">No questions mapped yet — paste a batch above.</p>
+    <p class="px-5 py-8 text-ink/50 text-sm text-center">No questions mapped yet — start pasting JSON chunks above.</p>
     {% endfor %}
   </div>
 </div>
 
+<!-- ==========================================
+     LIVE JSON EDIT MODAL (Pop-up)
+     ========================================== -->
+<div x-data="editModalApp()" @open-edit-modal.window="openModal($event.detail)" x-show="isOpen" x-cloak class="fixed inset-0 bg-ink/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+  <div class="bg-paper border border-ink/10 rounded-xl p-6 w-full max-w-2xl shadow-2xl relative" @click.outside="closeModal()">
+    <button @click="closeModal()" class="absolute top-4 right-4 text-ink/40 hover:text-ink">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+    </button>
+    
+    <h3 class="font-display text-2xl font-semibold text-ink mb-2">Edit Question JSON</h3>
+    <p class="text-sm text-ink/60 mb-4">Paste the completely updated JSON object for this single question.</p>
+    
+    <textarea x-model="editJsonText" rows="12" placeholder='{\n  "subject_name": "Physics",\n  "question_text": "Updated text...",\n  "has_image": true\n}'
+              class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-gold focus:outline-none mb-4"></textarea>
+    
+    <p x-show="editError" class="text-red-600 text-sm mb-4 font-medium" x-text="editError"></p>
+    
+    <div class="flex justify-end gap-3">
+      <button @click="closeModal()" class="px-5 py-2 rounded-md text-ink font-medium border border-ink/20 hover:bg-ink/5">Cancel</button>
+      <button @click="submitEdit()" :disabled="isSaving" class="px-5 py-2 rounded-md bg-gold text-ink font-semibold hover:bg-gold-light disabled:opacity-50 flex items-center gap-2">
+        <span x-text="isSaving ? 'Updating...' : 'Update Question'"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================
+     SCRIPTS & ALPINE.JS LOGIC
+     ========================================== -->
 <script>
-  // Same delegated-upload handler as admin_mock_questions.html — duplicated
-  // rather than shared since there's no build step to import a shared JS
-  // file from here; both call the same backend route family under
-  // /admin/questions/<table_name>/...
+  // Chunk Uploader Component Logic
+  function bulkUploader() {
+    return {
+      activeTab: 'Physics',
+      showFormat: false,
+      jsonText: '',
+      qCount: 0,
+      totalSaved: 0,
+      isSaving: false,
+      errorMsg: '',
+      successMsg: '',
+      
+      validateInput() {
+        this.errorMsg = '';
+        this.successMsg = '';
+        try {
+          if (this.jsonText.trim() === '') {
+            this.qCount = 0;
+            return;
+          }
+          const parsed = JSON.parse(this.jsonText);
+          if (!Array.isArray(parsed)) {
+            this.errorMsg = 'Must be a valid JSON array []';
+            this.qCount = 0;
+            return;
+          }
+          this.qCount = parsed.length;
+        } catch (e) {
+          this.errorMsg = 'Invalid JSON format';
+          this.qCount = 0;
+        }
+      },
+
+      async saveChunk() {
+        if (this.qCount === 0 || this.qCount > 25) return;
+        this.isSaving = true;
+        this.errorMsg = '';
+        this.successMsg = '';
+        
+        try {
+          const parsedData = JSON.parse(this.jsonText);
+          
+          const res = await fetch("{{ url_for('admin.tests_bulk_map_questions', test_id=test.id) }}?ajax=1", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bulk_json: parsedData })
+          });
+          
+          const data = await res.json();
+          if (data.ok) {
+            this.totalSaved += data.inserted;
+            this.jsonText = '';
+            this.qCount = 0;
+            this.successMsg = `Success! ${data.inserted} questions saved. Ready for next chunk.`;
+            setTimeout(() => this.successMsg = '', 4000);
+          } else {
+            this.errorMsg = data.error || 'Server error occurred.';
+          }
+        } catch (err) {
+          this.errorMsg = 'Connection error. Check your network.';
+        } finally {
+          this.isSaving = false;
+        }
+      }
+    };
+  }
+
+  // Live JSON Edit Modal Component Logic
+  function editModalApp() {
+    return {
+      isOpen: false,
+      qId: null,
+      editJsonText: '',
+      isSaving: false,
+      editError: '',
+
+      openModal(detail) {
+        this.qId = detail.id;
+        this.editJsonText = '';
+        this.editError = '';
+        this.isOpen = true;
+      },
+      closeModal() {
+        this.isOpen = false;
+      },
+      async submitEdit() {
+        this.editError = '';
+        let parsedData;
+        
+        try {
+          parsedData = JSON.parse(this.editJsonText);
+        } catch(e) {
+          this.editError = 'Invalid JSON syntax.';
+          return;
+        }
+        
+        this.isSaving = true;
+        try {
+          const res = await fetch(`/admin/tests/{{ test.id }}/questions/${this.qId}/edit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parsedData)
+          });
+          const data = await res.json();
+          
+          if (data.ok) {
+            // MAGIC DOM INJECTION: Add or remove image upload box without refresh
+            const row = document.querySelector(`[data-question-id="${this.qId}"]`);
+            let imgZone = row.querySelector('[data-image-zone]');
+            
+            // Update question text visually so admin sees the change
+            if (parsedData.question_text) {
+               const textNode = row.querySelector('p.font-medium');
+               if (textNode) textNode.textContent = parsedData.question_text;
+            }
+
+            if (data.has_image) {
+              const existingImg = imgZone.querySelector('[data-image-uploaded], [data-image-pending]');
+              if (!existingImg) {
+                imgZone.innerHTML = `
+                  <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3 animate-pulse" data-image-pending>
+                    <p class="text-xs text-ink/70">📷 Image required — <span data-upload-status>no image uploaded yet</span></p>
+                    <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
+                      Upload Image
+                      <input type="file" accept="image/*" class="hidden" data-image-input>
+                    </label>
+                  </div>`;
+              }
+            } else {
+              imgZone.innerHTML = ''; // Clear image box if changed to false
+            }
+            this.closeModal();
+          } else {
+            this.editError = data.error;
+          }
+        } catch (err) {
+          this.editError = 'Failed to communicate with server.';
+        } finally {
+          this.isSaving = false;
+        }
+      }
+    };
+  }
+
+  // Preserve existing global image upload/remove handlers
   document.addEventListener('change', async (e) => {
     const input = e.target.closest('[data-image-input]');
     if (!input || !input.files[0]) return;
