@@ -170,9 +170,8 @@ def get_test_by_id(test_id):
 
 def get_test_syllabus(test_id):
     """
-    Mock tests are mapped via mock_test_questions -> mock_questions,
-    not the old chapter-wise test_questions -> questions path. Reads
-    topic_name (mock_questions has no chapter_id) grouped by subject.
+    Mock tests are mapped via mock_test_questions -> mock_questions.
+    Reads topic_name (mock_questions has no chapter_id) grouped by subject.
     """
     res = (
         supabase_public.table("mock_test_questions")
