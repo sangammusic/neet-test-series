@@ -4,31 +4,49 @@
 <section class="max-w-4xl mx-auto px-6 pt-12 pb-24">
   <div class="flex items-baseline justify-between mb-10 flex-wrap gap-3">
     <div>
-      <p class="text-gold font-semibold text-sm tracking-wide mb-2">{{ stream.name.upper() }}</p>
-      <h1 class="font-display text-3xl font-semibold text-ink">What do you want to do today?</h1>
+      <p class="text-indigo-600 font-bold text-sm tracking-widest uppercase mb-2">{{ stream.name }}</p>
+      <h1 class="font-display text-4xl font-bold text-ink">What do you want to do today?</h1>
     </div>
-    <a href="{{ url_for('user.switch_stream') }}" class="text-sm text-ink/50 hover:text-ink underline underline-offset-2">Switch stream</a>
+    <a href="{{ url_for('user.switch_stream') }}" class="text-sm font-bold text-gray-400 hover:text-indigo-600 transition-colors bg-gray-100 hover:bg-indigo-50 px-4 py-2 rounded-md">
+      Switch stream &rightleftharpoons;
+    </a>
   </div>
 
   <div class="grid sm:grid-cols-2 gap-6">
+    <!-- MCQ PRACTICE CARD -->
     <a href="{{ url_for('user.practice_subjects', slug=stream.slug) }}"
-       class="block p-8 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-md transition-all bg-white">
-      <p class="font-display text-xl font-semibold text-ink mb-2">Chapter-wise MCQ Practice</p>
-      <p class="text-sm text-ink/60">Pick a subject and chapter, then practice topic-wise or attempt Previous Year Questions.</p>
+       class="block p-8 border border-gray-200 rounded-xl hover:border-indigo-400 hover:shadow-lg transition-all bg-white group relative overflow-hidden">
+      <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16"><path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5v-1zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5v-1zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5v-1z"/></svg>
+      </div>
+      <p class="font-display text-2xl font-bold text-ink mb-3 group-hover:text-indigo-600 transition-colors">Chapter-wise MCQ Practice</p>
+      <p class="text-sm text-gray-500 font-medium leading-relaxed">Pick a subject and chapter, then practice topic-wise or attempt strictly verified Previous Year Questions (PYQs).</p>
     </a>
+    
+    <!-- MOCK TEST SERIES CARD (Upgraded for Phase 4) -->
     <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}"
-       class="block p-8 border-2 border-gold/30 rounded-lg hover:border-gold transition-all bg-ink text-paper">
-      <p class="font-display text-xl font-semibold mb-2">Mock Test Series</p>
-      <p class="text-sm text-paper/60">Full-length, NTA-pattern mocks. Free and Premium tests in one feed.</p>
+       class="block p-8 border-2 border-indigo-600 rounded-xl hover:bg-indigo-700 transition-all bg-indigo-600 text-white group shadow-xl relative overflow-hidden">
+      <div class="absolute top-0 right-0 p-4 opacity-20 group-hover:opacity-40 transition-opacity">
+        <!-- Folder Icon to represent the new architecture -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16"><path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3zm-8.322.12C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139z"/></svg>
+      </div>
+      <p class="font-display text-2xl font-bold mb-3 flex items-center gap-2">
+        Mock Test Series <span class="bg-yellow-400 text-indigo-900 text-[10px] uppercase font-black px-2 py-1 rounded-sm tracking-wider">New</span>
+      </p>
+      <p class="text-sm text-indigo-100 font-medium leading-relaxed">Access VIP Test Folders (e.g., Alien Series). Full-length, strict NTA-pattern mocks organized in dedicated folders.</p>
     </a>
+
+    <!-- TELEGRAM CARD -->
     <a href="https://t.me/neetjeesangam" target="_blank" rel="noopener noreferrer"
-       class="sm:col-span-2 flex items-center gap-4 p-6 border border-[#229ED9]/30 rounded-lg hover:border-[#229ED9] hover:shadow-md transition-all bg-[#229ED9]/5">
-      <svg class="w-9 h-9 shrink-0 text-[#229ED9]" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16c-.169 1.858-.896 6.728-.896 6.728-.041.24-.145.483-.361.62-.216.135-.481.129-.702.03l-3.128-1.516-1.51 1.454c-.155.153-.353.199-.548.126l.373-3.31 6.004-5.446c.263-.235-.058-.366-.4-.135l-7.435 4.687-3.2-1.02c-.696-.222-.71-.696.146-1.03l12.494-4.822c.58-.216 1.088.14.9 1.041z"/>
-      </svg>
+       class="sm:col-span-2 flex items-center gap-5 p-6 border-2 border-[#229ED9]/20 rounded-xl hover:border-[#229ED9] hover:shadow-md transition-all bg-[#229ED9]/5 group">
+      <div class="bg-white p-3 rounded-full shadow-sm group-hover:scale-110 transition-transform">
+        <svg class="w-8 h-8 shrink-0 text-[#229ED9]" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16c-.169 1.858-.896 6.728-.896 6.728-.041.24-.145.483-.361.62-.216.135-.481.129-.702.03l-3.128-1.516-1.51 1.454c-.155.153-.353.199-.548.126l.373-3.31 6.004-5.446c.263-.235-.058-.366-.4-.135l-7.435 4.687-3.2-1.02c-.696-.222-.71-.696.146-1.03l12.494-4.822c.58-.216 1.088.14.9 1.041z"/>
+        </svg>
+      </div>
       <div>
-        <p class="font-display text-lg font-semibold text-ink mb-0.5">Join our Telegram Channel</p>
-        <p class="text-sm text-ink/60">Daily updates, doubt-solving, and free practice material — @neetjeesangam</p>
+        <p class="font-display text-xl font-bold text-ink mb-1">Join our Telegram Channel</p>
+        <p class="text-sm text-gray-500 font-medium">Daily updates, instant doubt-solving, and premium practice material — <span class="text-[#229ED9] font-bold">@neetjeesangam</span></p>
       </div>
     </a>
   </div>
