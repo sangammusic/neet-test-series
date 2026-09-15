@@ -55,7 +55,6 @@
         <p class="text-sm text-gray-500 font-medium mt-1">All fields are mandatory. Double-click prevention is active.</p>
     </div>
     
-    <!-- SANGAM FIX: Added id to form and onsubmit logic to prevent ghost tests -->
     <form id="create-test-form" method="POST" action="{{ url_for('admin.series_tests', series_id=series.id) }}" class="grid grid-cols-1 md:grid-cols-2 gap-6" onsubmit="return handleFormSubmit(this);">
       
       <div>
@@ -110,7 +109,6 @@
         Mark as Premium Test? (Students must pay to access)
       </label>
       
-      <!-- SANGAM FIX: Added id to button for state management -->
       <button type="submit" id="submit-test-btn" class="md:col-span-2 bg-indigo-600 text-white font-bold text-lg py-4 mt-4 rounded-xl hover:bg-indigo-700 transition-all shadow-md flex items-center justify-center gap-2">
         <span>Create Test & Continue</span>
       </button>
@@ -125,9 +123,11 @@
     Existing Tests in "{{ series.name }}"
   </h3>
   
-  <div class="bg-white border-2 border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+  <!-- HERO HONDA FIX: Removed 'overflow-hidden' from this wrapper to let dropdowns escape -->
+  <div class="bg-white border-2 border-gray-100 rounded-2xl shadow-sm">
     {% for t in tests %}
-    <div class="flex items-center justify-between px-8 py-6 border-b border-gray-100 hover:bg-gray-50 transition-colors last:border-0 relative group">
+    <!-- SANGAM FIX: Added first:rounded-t-2xl and last:rounded-b-2xl to maintain rounded corners -->
+    <div class="flex items-center justify-between px-8 py-6 border-b border-gray-100 hover:bg-gray-50 transition-colors last:border-0 relative group first:rounded-t-2xl last:rounded-b-2xl">
       
       <!-- TEST INFO -->
       <div class="w-3/4">
@@ -163,7 +163,8 @@
         </button>
 
         <!-- The Hidden Dropdown Box -->
-        <div id="menu-{{ t.id }}" class="dropdown-box hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden transform transition-all origin-top-right">
+        <!-- SANGAM FIX: Kept z-50 to overlap everything properly -->
+        <div id="menu-{{ t.id }}" class="dropdown-box hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden transform transition-all origin-top-right">
             
             <!-- OPTION 1: EDIT TEST (MANAGEMENT) -->
             <a href="{{ url_for('admin.tests_manage', test_id=t.id) }}" class="flex items-center gap-3 px-5 py-4 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 border-b border-gray-100 transition-colors">
@@ -189,7 +190,7 @@
     </div>
     {% else %}
     <!-- EMPTY STATE -->
-    <div class="px-6 py-20 text-center bg-gray-50">
+    <div class="px-6 py-20 text-center bg-gray-50 rounded-2xl">
         <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-5 shadow-sm border border-gray-100">
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="text-gray-300" viewBox="0 0 16 16">
               <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 14A6 6 0 1 1 8 2a6 6 0 0 1 0 12z"/>
@@ -205,49 +206,48 @@
 
 <!-- JAVASCRIPT FOR UI CONTROLS -->
 <script>
-    // 1. Toggles the Create Form Visibility
     function toggleCreateForm() {
         const formBox = document.getElementById('create-test-box');
         formBox.classList.toggle('hidden');
     }
 
-    // 2. SANGAM STUDY HUB FIX: Double-Submit Prevention
     function handleFormSubmit(form) {
-        // Prevent form from submitting if valid checks fail
-        if (!form.checkValidity()) {
-            return false;
-        }
-        
+        if (!form.checkValidity()) return false;
         const btn = document.getElementById('submit-test-btn');
-        // If already disabled, prevent another submission
-        if (btn.disabled) {
-            return false;
-        }
+        if (btn.disabled) return false;
 
-        // Lock the button and change text to show it's processing
         btn.disabled = true;
         btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white mr-2 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Creating Test... Please wait`;
-        
-        return true; // Let the form submit exactly once
+        return true; 
     }
 
-    // 3. Toggles the specific Dropdown Menu for a Test
     function toggleDropdown(menuId) {
         const targetMenu = document.getElementById(menuId);
         const isCurrentlyHidden = targetMenu.classList.contains('hidden');
         
-        // Hide ALL open menus first
+        // Hide ALL open menus first and reset position classes
         document.querySelectorAll('.dropdown-box').forEach(el => {
             el.classList.add('hidden');
+            el.classList.remove('bottom-full', 'mb-2'); 
+            el.classList.add('mt-2'); 
         });
 
-        // If the clicked menu was hidden, show it
+        // SANGAM SMART POSITIONING LOGIC
         if (isCurrentlyHidden) {
             targetMenu.classList.remove('hidden');
+            
+            // Check if dropdown goes below the visible screen
+            const rect = targetMenu.getBoundingClientRect();
+            const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+            
+            if (rect.bottom > windowHeight) {
+                // Not enough space below! Pop it UPWARDS instead.
+                targetMenu.classList.remove('mt-2');
+                targetMenu.classList.add('bottom-full', 'mb-2');
+            }
         }
     }
 
-    // 4. Closes any open dropdown if Admin clicks anywhere else on the screen
     window.addEventListener('click', function(e) {
         if (!e.target.closest('.action-menu-container')) {
             document.querySelectorAll('.dropdown-box').forEach(el => {
