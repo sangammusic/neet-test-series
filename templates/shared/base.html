@@ -48,6 +48,40 @@
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
+    <!-- GLOBAL DOUBLE-SUBMIT GUARD:
+         Fixes a real bug where clicking "Create Test" / "Delete Test" / any
+         confirm()-guarded destructive form multiple times in quick succession
+         (impatience, slow network, accidental double-tap) fired the same POST
+         2-3 times, creating duplicate empty tests or redundant delete calls.
+         The confirm() dialog does not block a second click after the first is
+         dismissed, and none of these forms had a loading/disabled state — so
+         nothing stopped a second click from submitting again while the first
+         request was still in flight. This listens on every form submission
+         site-wide: once a form successfully submits (confirm() accepted, or
+         no confirm() at all), its submit button is disabled immediately so a
+         second click can't fire a second request. Safe to load on every page
+         since it wires up via event delegation, not per-form setup. -->
+    <script>
+        document.addEventListener('submit', function (e) {
+            const form = e.target;
+            if (!(form instanceof HTMLFormElement)) return;
+            // If the submission proceeded (browser default not prevented, i.e.
+            // any onsubmit confirm() returned true), disable the submit button(s)
+            // right away so a rapid second click can't fire the same POST again.
+            requestAnimationFrame(function () {
+                if (form.defaultPrevented) return;
+                const buttons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+                buttons.forEach(function (btn) {
+                    btn.disabled = true;
+                    btn.dataset.originalHtml = btn.innerHTML;
+                    if (btn.tagName === 'BUTTON') {
+                        btn.innerHTML = '⏳ Please wait…';
+                    }
+                });
+            });
+        }, true);
+    </script>
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
