@@ -46,8 +46,9 @@ MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15MB raw upload cap, before compression
 def _delete_image_from_storage(image_url):
     """
     Helper function for Pillar 4: Deep Storage Cleanup.
-    Extracts the file path safely from the public image_url and permanently 
-    deletes it from the Supabase Storage bucket to maintain zero-kachra.
+    SANGAM STUDY HUB FIX: Extracts the file path safely and strictly removes 
+    any trailing '?' from the public image_url to prevent silent Supabase failures, 
+    permanently deleting it from the Storage bucket to maintain zero-kachra.
     """
     if not image_url:
         return
@@ -55,7 +56,8 @@ def _delete_image_from_storage(image_url):
         # URL format: https://[project_ref].supabase.co/storage/v1/object/public/question-images/[table]/[id]/[uuid].jpg
         bucket_prefix = f"/{BUCKET_NAME}/"
         if bucket_prefix in image_url:
-            path = image_url.split(bucket_prefix)[1]
+            # Safe parsing: strip bucket prefix AND trailing query parameters
+            path = image_url.split(bucket_prefix)[1].split("?")[0]
             supabase_admin.storage.from_(BUCKET_NAME).remove([path])
     except Exception as e:
         print(f"Failed to delete image from storage {image_url}: {e}")
@@ -116,9 +118,10 @@ def question_upload_image(table_name, question_id):
     except Exception as exc:
         return jsonify({"ok": False, "error": f"Could not process image — is it a valid photo? ({exc})"}), 400
 
-    # ZERO-KACHRA: Check if an old image exists and safely delete it from storage before replacing
+    # ZERO-KACHRA: Check if an old image exists and safely delete it from storage before replacing.
+    # SANGAM FIX: using maybe_single() to prevent 500 error crashes if the question was deleted.
     try:
-        old_data = supabase_admin.table(table_name).select("image_url").eq("id", question_id).single().execute().data
+        old_data = supabase_admin.table(table_name).select("image_url").eq("id", question_id).maybe_single().execute().data
         if old_data and old_data.get("image_url"):
             _delete_image_from_storage(old_data["image_url"])
     except Exception:
@@ -139,7 +142,12 @@ def question_upload_image(table_name, question_id):
                      f"Make sure a public bucket named '{BUCKET_NAME}' exists.",
         }), 500
 
-    public_url = supabase_admin.storage.from_(BUCKET_NAME).get_public_url(storage_path)
+    # Fetch public URL from Supabase
+    public_url_raw = supabase_admin.storage.from_(BUCKET_NAME).get_public_url(storage_path)
+    
+    # SANGAM STUDY HUB FIX: Force strip the trailing '?' that Supabase API appends
+    # to ensure the database always holds a pristine, parsable URL string.
+    public_url = public_url_raw.split("?")[0]
 
     try:
         supabase_admin.table(table_name).update({
@@ -169,7 +177,8 @@ def question_remove_image(table_name, question_id):
 
     try:
         # Fetch the current image_url to permanently delete from storage
-        old_data = supabase_admin.table(table_name).select("image_url").eq("id", question_id).single().execute().data
+        # SANGAM FIX: using maybe_single() to prevent crash on non-existent records
+        old_data = supabase_admin.table(table_name).select("image_url").eq("id", question_id).maybe_single().execute().data
         if old_data and old_data.get("image_url"):
             _delete_image_from_storage(old_data["image_url"])
 
