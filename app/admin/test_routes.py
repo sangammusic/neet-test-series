@@ -7,9 +7,9 @@ Flow:
    - BUG FIXED: Duplicate categories filtered.
    - VALIDATION: Blank total_marks throws an error, no automatic default.
 3. Level 3: Admin manages questions for a test via:
-    A. 25-Chunk Upload (3-Tabs) with STRICT NTA LIMITS (45-45-90 for 720 marks).
-    B. Live JSON Edit: Seamless replacement of JSON + Image toggle.
-    C. NO DELETE FOR SINGLE QUESTIONS (Pattern protection).
+    A. 25-Chunk Upload (3-Tabs) with STRICT SANGAM STUDY HUB RULES (45-45-90 for 720 marks).
+    B. Live JSON Edit: Seamless replacement of JSON + Image toggle (No Duplicates).
+    C. Undo Chunk: Temporary history destruction with Deep Storage Cleanup.
     D. Deep Storage Cleanup on Full Test Delete.
 """
 import json
@@ -130,7 +130,7 @@ def test_series_delete(series_id):
             
             # 5. Delete all underlying questions from the question bank
             if question_ids:
-                # Deduplicate question_ids safely just in case multiple tests shared a question
+                # Deduplicate question_ids safely
                 unique_question_ids = list(set(question_ids))
                 supabase_admin.table("mock_questions").delete().in_("id", unique_question_ids).execute()
 
@@ -182,15 +182,16 @@ def series_tests(series_id):
         try:
             result = supabase_admin.table("tests").insert(payload).execute()
             test_id = result.data[0]["id"]
-            flash("Test created — you can now map questions in chunks.", "success")
-            return redirect(url_for("admin.tests_manage", test_id=test_id))
+            flash("Test created — you can now start uploading questions.", "success")
+            # Redirect to the new dedicated UPLOAD PAGE
+            return redirect(url_for("admin.tests_upload", test_id=test_id))
         except Exception as exc:
             flash(f"Could not create test: {exc}", "error")
             return redirect(url_for("admin.series_tests", series_id=series_id))
 
     streams = supabase_admin.table("streams").select("id, name").order("display_order").execute().data
     
-    # CATEGORY DEDUPLICATION: Ensures "Minor Test" prints only once
+    # CATEGORY DEDUPLICATION
     raw_categories = supabase_admin.table("test_categories").select("id, name, stream_id").order("display_order").execute().data
     seen_cats = set()
     categories = []
@@ -212,8 +213,23 @@ def series_tests(series_id):
 
 
 # ==========================================
-# LEVEL 3: MANAGE QUESTIONS (UPLOAD & EDIT)
+# LEVEL 3: THE 3-PAGE ISOLATED SYSTEM
 # ==========================================
+
+# PAGE A: UPLOAD SCREEN (Only for uploading 25-Chunks)
+@admin_bp.route("/tests/<test_id>/upload")
+@admin_required
+def tests_upload(test_id):
+    test = supabase_admin.table("tests").select("*, mock_test_series(id, name)").eq("id", test_id).single().execute().data
+    if not test:
+        flash("Test not found.", "error")
+        return redirect(url_for("admin.test_series_list"))
+
+    # Render dedicated upload UI. No question mapping is fetched here to keep it clean.
+    return render_template("admin_test_upload.html", test=test)
+
+
+# PAGE B: MANAGEMENT SCREEN (Only for viewing/managing uploaded questions)
 @admin_bp.route("/tests/<test_id>/manage")
 @admin_required
 def tests_manage(test_id):
@@ -233,6 +249,7 @@ def tests_manage(test_id):
     return render_template("admin_test_manage.html", test=test, mapped=mapped)
 
 
+# API ROUTE: BULK UPLOAD CHUNK (Used by Upload Screen)
 @admin_bp.route("/tests/<test_id>/questions/bulk-map", methods=["POST"])
 @admin_required
 def tests_bulk_map_questions(test_id):
@@ -281,7 +298,7 @@ def tests_bulk_map_questions(test_id):
             valid_payloads.append(payload)
 
     # ---------------------------------------------------------
-    # STRICT NTA LIMIT LOGIC (45-45-90) FOR 720 MARKS TESTS
+    # SANGAM STUDY HUB LIMIT LOGIC (45-45-90) FOR 720 MARKS TESTS
     # ---------------------------------------------------------
     if test.get("total_marks") == 720 and not errors:
         existing = supabase_admin.table("mock_test_questions").select("mock_questions(subjects(name))").eq("test_id", test_id).execute().data
@@ -305,11 +322,11 @@ def tests_bulk_map_questions(test_id):
             elif "bio" in s_name or "botan" in s_name or "zoolo" in s_name: bio_count += 1
             
         if phys_count > 45:
-            if is_ajax: return jsonify({"ok": False, "error": f"NTA LIMIT ERROR: Uploading exceeds the 45 Physics limit. (Total would be {phys_count})"}), 400
+            if is_ajax: return jsonify({"ok": False, "error": f"SANGAM STUDY HUB RULES: Uploading exceeds the 45 Physics limit. (Total would be {phys_count})"}), 400
         if chem_count > 45:
-            if is_ajax: return jsonify({"ok": False, "error": f"NTA LIMIT ERROR: Uploading exceeds the 45 Chemistry limit. (Total would be {chem_count})"}), 400
+            if is_ajax: return jsonify({"ok": False, "error": f"SANGAM STUDY HUB RULES: Uploading exceeds the 45 Chemistry limit. (Total would be {chem_count})"}), 400
         if bio_count > 90:
-            if is_ajax: return jsonify({"ok": False, "error": f"NTA LIMIT ERROR: Uploading exceeds the 90 Biology limit. (Total would be {bio_count})"}), 400
+            if is_ajax: return jsonify({"ok": False, "error": f"SANGAM STUDY HUB RULES: Uploading exceeds the 90 Biology limit. (Total would be {bio_count})"}), 400
     # ---------------------------------------------------------
 
     inserted_ids = []
@@ -334,14 +351,51 @@ def tests_bulk_map_questions(test_id):
         except Exception as exc:
             if is_ajax: return jsonify({"ok": False, "error": f"Mapping failed: {exc}"}), 500
 
-    return jsonify({"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "errors": errors})
+    # Return inserted_ids so the frontend Undo stack can store them
+    return jsonify({"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "inserted_ids": inserted_ids, "errors": errors})
 
 
+# API ROUTE: UNDO CHUNK (Used by Undo Button on Upload Screen)
+@admin_bp.route("/tests/<test_id>/questions/undo-chunk", methods=["POST"])
+@admin_required
+def tests_undo_chunk(test_id):
+    """
+    PERMANENT DELETION ROUTE. 
+    Accepts an array of question_ids and wipes them from mapping, question bank, 
+    and deletes any attached images from the Storage Bucket (Zero Kachra).
+    """
+    payload = request.json
+    if not payload or not payload.get("question_ids"):
+        return jsonify({"ok": False, "error": "No question IDs provided for undo."}), 400
+    
+    question_ids = payload["question_ids"]
+    
+    try:
+        # 1. Fetch images to delete from Storage
+        questions = supabase_admin.table("mock_questions").select("image_url").in_("id", question_ids).execute().data
+        for q in questions:
+            if q.get("image_url"):
+                _delete_image_from_storage(q["image_url"])
+        
+        # 2. Delete test mapping
+        supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).in_("mock_question_id", question_ids).execute()
+        
+        # 3. Delete from actual question bank
+        supabase_admin.table("mock_questions").delete().in_("id", question_ids).execute()
+        
+        return jsonify({"ok": True, "message": "Chunk successfully undone and wiped."})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+# API ROUTE: EDIT / REPLACE EXISTING QUESTION (No Duplicates)
 @admin_bp.route("/tests/<test_id>/questions/<question_id>/edit", methods=["POST"])
 @admin_required
 def tests_edit_question(test_id, question_id):
     """
-    Live JSON Edit: Fully replaces the question text, options directly.
+    Live JSON Edit: Fully Replaces/Updates the question text, options directly.
+    STRICT RULE: This uses .update() with .eq("id", question_id). 
+    It will NEVER create a duplicate question. It purely overwrites existing data.
     Handles manual True/False image toggle safely.
     """
     raw = request.json
@@ -363,10 +417,12 @@ def tests_edit_question(test_id, question_id):
 
     old_q = supabase_admin.table("mock_questions").select("image_url, has_image").eq("id", question_id).single().execute().data
     if old_q and old_q.get("image_url") and not payload.get("has_image"):
+        # If user updated has_image to false, wipe old image from bucket
         _delete_image_from_storage(old_q["image_url"])
         payload["image_url"] = None
 
     try:
+        # STRICT UPDATE: Overwrites the specific question ID. No duplicates.
         supabase_admin.table("mock_questions").update(payload).eq("id", question_id).execute()
         return jsonify({"ok": True, "has_image": payload.get("has_image")})
     except Exception as exc:
