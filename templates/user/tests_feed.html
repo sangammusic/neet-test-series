@@ -1,25 +1,58 @@
 {% extends "shared/base.html" %}
-{% block title %}Mock Test Series — {{ stream.name }}{% endblock %}
+{% block title %}Mock Test Series Folders — {{ stream.name }}{% endblock %}
 {% block content %}
-<section class="max-w-3xl mx-auto px-6 pt-12 pb-24">
-  <p class="text-gold font-semibold text-sm mb-2">{{ stream.name.upper() }}</p>
-  <h1 class="font-display text-2xl font-semibold text-ink mb-8">Mock Test Series</h1>
-  <div class="grid gap-4">
-    {% for t in tests %}
-    <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}"
-       class="block p-6 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-sm transition-all bg-white">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <p class="font-display text-lg font-semibold text-ink">{{ t.title }}</p>
-          <p class="text-sm text-ink/60 mt-1">{{ t.duration_minutes }} min · {{ t.total_marks or '—' }} marks</p>
+<section class="max-w-5xl mx-auto px-6 pt-12 pb-24">
+  
+  <div class="mb-10">
+    <p class="text-indigo-600 font-bold text-sm mb-2 tracking-widest uppercase">{{ stream.name }}</p>
+    <h1 class="font-display text-4xl font-bold text-ink mb-3">Mock Test Series</h1>
+    <p class="text-gray-500 font-medium text-lg">Select a test series folder below to access its strictly verified NTA-pattern mock tests.</p>
+  </div>
+  
+  <!-- FOLDER GRID (Strict Isolation Level 1) -->
+  <div class="grid md:grid-cols-2 gap-6">
+    
+    <!-- LOOP THROUGH SERIES (FOLDERS) NOT FLAT TESTS -->
+    {% for s in series_list %}
+    <a href="{{ url_for('user.series_tests', slug=stream.slug, series_id=s.id) }}"
+       class="block p-8 border-2 border-gray-100 rounded-2xl hover:border-indigo-500 hover:shadow-xl transition-all duration-300 bg-white group relative overflow-hidden">
+      
+      <!-- Background Graphic -->
+      <div class="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-10 transition-opacity duration-300 transform group-hover:scale-110">
+        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3zm-8.322.12C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139z"/>
+        </svg>
+      </div>
+
+      <div class="flex items-start gap-5 relative z-10">
+        <!-- Stylish Folder Icon -->
+        <div class="bg-indigo-50 text-indigo-600 p-4 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300 shadow-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/>
+          </svg>
         </div>
-        {% if t.is_premium %}<span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-1 whitespace-nowrap">Premium 🔒</span>
-        {% else %}<span class="text-xs bg-green-50 text-green-700 font-semibold rounded px-2 py-1 whitespace-nowrap">Free</span>{% endif %}
+        
+        <div>
+          <h2 class="font-display text-2xl font-bold text-ink mb-1 group-hover:text-indigo-600 transition-colors">{{ s.name }}</h2>
+          <p class="text-sm font-bold text-gray-400 group-hover:text-indigo-400 transition-colors">
+            Open folder to view tests &rarr;
+          </p>
+        </div>
       </div>
     </a>
+    
     {% else %}
-    <p class="text-ink/50 text-sm">No mock tests published yet for this stream.</p>
+    <!-- EMPTY STATE IF NO FOLDERS CREATED -->
+    <div class="md:col-span-2 text-center p-16 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="text-gray-300 mx-auto mb-4" viewBox="0 0 16 16">
+          <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 14A6 6 0 1 1 8 2a6 6 0 0 1 0 12z"/>
+          <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
+        </svg>
+        <p class="text-gray-500 font-bold text-xl mb-1">No Test Series Available Yet</p>
+        <p class="text-gray-400 text-sm font-medium">Check back later for new exclusive mock tests.</p>
+    </div>
     {% endfor %}
+    
   </div>
 </section>
 {% endblock %}
