@@ -5,6 +5,85 @@
 <!-- Alpine.js for State Management (Tabs, Chunking, Modals, Menus) -->
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
+<!-- ==========================================
+     MACRO: QUESTION ROW COMPONENT 
+     (FIXED: Moved to the top so Jinja2 defines it before calling it, preventing the 500 UndefinedError)
+     ========================================== -->
+{% macro render_question_row(m, index_num, subject_type) %}
+<div class="p-5 hover:bg-gray-50 transition-colors flex gap-4 relative group" data-question-id="{{ m.mock_question_id }}">
+    
+    <!-- Strict Numbering (NTA Pattern) -->
+    <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-800 shrink-0 border border-indigo-200 shadow-sm">
+        Q.{{ index_num }}
+    </div>
+    
+    <!-- Question Content (Student View) -->
+    <div class="flex-1 min-w-0">
+        <p class="font-medium text-lg text-ink line-clamp-3">{{ m.mock_questions.question_text if m.mock_questions else 'Question Text' }}</p>
+        <div class="mt-2 flex items-center gap-2">
+            <span class="text-xs bg-gray-200 text-gray-700 font-bold px-2 py-1 rounded">{{ m.mock_questions.topic_name if m.mock_questions else 'Topic' }}</span>
+            {% if m.mock_questions and m.mock_questions.is_pyq %}
+                <span class="text-xs bg-purple-100 text-purple-800 font-bold px-2 py-1 rounded">PYQ {{ m.mock_questions.pyq_year }}</span>
+            {% endif %}
+            {% if m.mock_questions and m.mock_questions.has_image %}
+                <span class="text-xs bg-blue-100 text-blue-800 font-bold px-2 py-1 rounded flex items-center gap-1">
+                    📸 Image Req.
+                </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- THE PENCIL BUTTON MENU -->
+    <div x-data="{ pencilOpen: false }" class="relative shrink-0">
+        <!-- Main Pencil Trigger -->
+        <button @click="pencilOpen = !pencilOpen" @click.outside="pencilOpen = false" class="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-500 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 flex items-center justify-center transition-all shadow-sm focus:outline-none">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
+            </svg>
+        </button>
+
+        <!-- Slide Down Menu -->
+        <div x-show="pencilOpen" x-transition.opacity.duration.200ms x-cloak class="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+            <div class="bg-gray-50 px-4 py-2 border-b border-gray-100">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Quick Actions</span>
+            </div>
+            
+            <div class="p-4 space-y-4">
+                <!-- Dropdown Answer -->
+                <div>
+                    <label class="block text-sm font-bold text-ink mb-1">Change Correct Option</label>
+                    <select onchange="alert('NTA Security Lock: Partial updates are disabled to prevent data corruption. Please click \'Edit JSON (Raw Power)\' below and paste your new AI-generated question to update the answer safely.')" class="w-full text-sm rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 cursor-pointer">
+                        <option value="">Select New Answer...</option>
+                        <option value="A">Option A</option>
+                        <option value="B">Option B</option>
+                        <option value="C">Option C</option>
+                        <option value="D">Option D</option>
+                    </select>
+                </div>
+
+                <!-- Image Switch -->
+                <div class="flex items-center justify-between bg-blue-50/50 p-2 rounded-md border border-blue-100">
+                    <label class="text-sm font-bold text-ink cursor-pointer">Image Required?</label>
+                    <label class="relative inline-flex items-center cursor-pointer" onclick="alert('NTA Security Lock: To safely toggle images without breaking the JSON payload, please click \'Edit JSON (Raw Power)\' below and update it there.')">
+                        <input type="checkbox" class="sr-only peer" {% if m.mock_questions and m.mock_questions.has_image %}checked{% endif %}>
+                        <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                </div>
+
+                <!-- Edit JSON (Raw Power) Button -->
+                <button @click="$dispatch('open-edit-modal', { id: '{{ m.mock_question_id }}' }); pencilOpen = false" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-md flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                      <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+                    </svg>
+                    Edit JSON (Raw Power)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+<!-- ================= END MACRO ================= -->
+
 <div class="max-w-6xl mx-auto px-6 py-10">
   
   <!-- PAGE HEADER -->
@@ -173,85 +252,6 @@
     </div>
   </div>
 </div>
-
-<!-- ==========================================
-     MACRO: QUESTION ROW COMPONENT 
-     (Generates the UI for each question with Pencil Menu)
-     ========================================== -->
-{% macro render_question_row(m, index_num, subject_type) %}
-<div class="p-5 hover:bg-gray-50 transition-colors flex gap-4 relative group" data-question-id="{{ m.mock_question_id }}">
-    
-    <!-- Strict Numbering (NTA Pattern) -->
-    <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-800 shrink-0 border border-indigo-200 shadow-sm">
-        Q.{{ index_num }}
-    </div>
-    
-    <!-- Question Content (Student View) -->
-    <div class="flex-1 min-w-0">
-        <p class="font-medium text-lg text-ink line-clamp-3">{{ m.mock_questions.question_text if m.mock_questions else 'Question Text' }}</p>
-        <div class="mt-2 flex items-center gap-2">
-            <span class="text-xs bg-gray-200 text-gray-700 font-bold px-2 py-1 rounded">{{ m.mock_questions.topic_name if m.mock_questions else 'Topic' }}</span>
-            {% if m.mock_questions and m.mock_questions.is_pyq %}
-                <span class="text-xs bg-purple-100 text-purple-800 font-bold px-2 py-1 rounded">PYQ {{ m.mock_questions.pyq_year }}</span>
-            {% endif %}
-            {% if m.mock_questions and m.mock_questions.has_image %}
-                <span class="text-xs bg-blue-100 text-blue-800 font-bold px-2 py-1 rounded flex items-center gap-1">
-                    📸 Image Req.
-                </span>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- THE PENCIL BUTTON MENU -->
-    <div x-data="{ pencilOpen: false }" class="relative shrink-0">
-        <!-- Main Pencil Trigger -->
-        <button @click="pencilOpen = !pencilOpen" @click.outside="pencilOpen = false" class="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-500 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 flex items-center justify-center transition-all shadow-sm focus:outline-none">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
-            </svg>
-        </button>
-
-        <!-- Slide Down Menu -->
-        <div x-show="pencilOpen" x-transition.opacity.duration.200ms x-cloak class="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
-            <div class="bg-gray-50 px-4 py-2 border-b border-gray-100">
-                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Quick Actions</span>
-            </div>
-            
-            <div class="p-4 space-y-4">
-                <!-- Dropdown Answer -->
-                <div>
-                    <label class="block text-sm font-bold text-ink mb-1">Change Correct Option</label>
-                    <select onchange="alert('NTA Security Lock: Partial updates are disabled to prevent data corruption. Please click \'Edit JSON (Raw Power)\' below and paste your new AI-generated question to update the answer safely.')" class="w-full text-sm rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 cursor-pointer">
-                        <option value="">Select New Answer...</option>
-                        <option value="A">Option A</option>
-                        <option value="B">Option B</option>
-                        <option value="C">Option C</option>
-                        <option value="D">Option D</option>
-                    </select>
-                </div>
-
-                <!-- Image Switch -->
-                <div class="flex items-center justify-between bg-blue-50/50 p-2 rounded-md border border-blue-100">
-                    <label class="text-sm font-bold text-ink cursor-pointer">Image Required?</label>
-                    <label class="relative inline-flex items-center cursor-pointer" onclick="alert('NTA Security Lock: To safely toggle images without breaking the JSON payload, please click \'Edit JSON (Raw Power)\' below and update it there.')">
-                        <input type="checkbox" class="sr-only peer" {% if m.mock_questions and m.mock_questions.has_image %}checked{% endif %}>
-                        <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                    </label>
-                </div>
-
-                <!-- Edit JSON (Raw Power) Button -->
-                <button @click="$dispatch('open-edit-modal', { id: '{{ m.mock_question_id }}' }); pencilOpen = false" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-md flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                      <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
-                    </svg>
-                    Edit JSON (Raw Power)
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-{% endmacro %}
-
 
 <!-- ==========================================
      LIVE JSON EDIT MODAL (Raw Power Box)
