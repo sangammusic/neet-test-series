@@ -1,0 +1,212 @@
+{% extends "shared/base.html" %}
+
+{% block title %}Manage & Edit Questions — {{ test.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-6 py-10 relative">
+    
+    <!-- HEADER -->
+    <div class="flex justify-between items-center mb-8 border-b border-ink/10 pb-4">
+        <div>
+            <h1 class="font-display text-3xl text-ink mb-1">Edit Questions: {{ test.title }}</h1>
+            <p class="text-ink/60 text-sm">Level 3B: Safely edit JSON to protect LaTeX/SVG, toggle images, or delete questions.</p>
+        </div>
+        <!-- Back to Folder Tests -->
+        <a href="{{ url_for('admin.series_tests', series_id=test.series_id if test.series_id else test.id) }}" class="text-sm font-medium text-ink bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-md transition-colors">
+            &larr; Back to Tests
+        </a>
+    </div>
+
+    <!-- FLASH MESSAGES -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="mb-6 space-y-2">
+            {% for category, message in messages %}
+                <div class="px-4 py-3 rounded-md text-sm {% if category == 'success' %}bg-green-50 text-green-800 border-green-200{% else %}bg-red-50 text-red-800 border-red-200{% endif %} border">
+                    {{ message }}
+                </div>
+            {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- LIST OF UPLOADED QUESTIONS -->
+    <div class="bg-white border border-ink/10 rounded-lg shadow-sm">
+        <div class="flex justify-between items-center bg-gray-50 px-6 py-3 border-b border-ink/10 rounded-t-lg">
+            <span class="font-bold text-ink">Total Questions: {{ mapped|length }}</span>
+            <span class="text-sm text-ink/60">Click 'Edit JSON' to safely modify content.</span>
+        </div>
+        
+        <div class="divide-y divide-ink/10 max-h-[800px] overflow-y-auto">
+            {% for row in mapped %}
+            {% set q = row.mock_questions %}
+            {% set qid = row.mock_question_id %}
+            
+            <div class="p-6 hover:bg-gray-50 transition-colors">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-bold px-2 py-1 rounded bg-gray-200 text-gray-700">Q.{{ loop.index }}</span>
+                        <span class="text-xs font-bold px-2 py-1 rounded bg-blue-100 text-blue-800">{{ q.subjects.name if q.subjects else 'Subject' }}</span>
+                        {% if q.has_image %}
+                            <span class="text-xs font-bold px-2 py-1 rounded bg-purple-100 text-purple-800">📸 Image Required</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center gap-3">
+                        <!-- Safe Edit Button: Passes Question ID and raw JSON data to JS Modal -->
+                        <button onclick="openEditModal('{{ qid }}', this.dataset.json)" 
+                                data-json="{{ q | tojson | forceescape }}"
+                                class="text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition-colors shadow-sm">
+                            ✏️ Edit JSON
+                        </button>
+
+                        <!-- Delete Question Form -->
+                        <form method="POST" action="{{ url_for('admin.tests_remove_question', test_id=test.id, question_id=qid) }}"
+                              onsubmit="return confirm('Delete this question permanently? If it has an image, the image will be wiped from storage too.');">
+                            <button type="submit" class="text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded transition-colors shadow-sm">
+                                🗑️ Delete
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Question Snippet Preview (Truncated for clean UI) -->
+                <div class="text-sm text-ink/80 mt-3 bg-white p-3 border border-ink/5 rounded font-mono overflow-hidden whitespace-nowrap text-ellipsis max-w-full">
+                    {{ q.question_text | striptags | truncate(150) }}
+                </div>
+            </div>
+            {% else %}
+            <div class="p-10 text-center text-ink/50">
+                <p>No questions uploaded yet. Go to the Upload page to add 25-chunks.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+
+<!-- EDIT JSON MODAL (Hidden by default) -->
+<div id="edit-modal" class="fixed inset-0 bg-ink/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+    <div class="bg-white w-full max-w-3xl rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        
+        <!-- Modal Header -->
+        <div class="px-6 py-4 border-b border-ink/10 bg-gray-50 flex justify-between items-center">
+            <h3 class="font-bold text-lg text-ink">Safe JSON Editor (LaTeX/SVG Protected)</h3>
+            <button onclick="closeEditModal()" class="text-ink/50 hover:text-red-500 font-bold text-xl">&times;</button>
+        </div>
+        
+        <!-- Modal Body -->
+        <div class="p-6 flex-1 overflow-y-auto">
+            <p class="text-sm text-ink/60 mb-4">
+                Modify the raw JSON below. You can change text, correct options, or LaTeX safely. 
+                <strong class="text-red-500">Do not break the JSON format (commas, quotes).</strong>
+            </p>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-bold text-ink mb-2">Question JSON Data</label>
+                <textarea id="edit-json-textarea" rows="12" class="w-full font-mono text-sm p-4 rounded-md border border-ink/20 focus:ring-2 focus:ring-indigo-500 bg-gray-900 text-green-400 outline-none"></textarea>
+            </div>
+            
+            <!-- Image Toggle Control -->
+            <div class="flex items-center gap-2 p-3 bg-blue-50 border border-blue-100 rounded-md">
+                <input type="checkbox" id="edit-has-image" class="w-5 h-5 text-blue-600 rounded">
+                <label for="edit-has-image" class="font-bold text-blue-900 text-sm">
+                    Requires Image (has_image = true)
+                </label>
+                <span class="text-xs text-blue-700 ml-2">Check this if the question needs a diagram uploaded later.</span>
+            </div>
+        </div>
+        
+        <!-- Modal Footer -->
+        <div class="px-6 py-4 border-t border-ink/10 bg-gray-50 flex justify-end gap-3">
+            <button onclick="closeEditModal()" class="px-5 py-2 rounded font-bold text-ink bg-white border border-ink/20 hover:bg-gray-100 transition-colors">
+                Cancel
+            </button>
+            <button onclick="saveEdit()" id="btn-save-edit" class="px-5 py-2 rounded font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
+                Save Changes
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL JAVASCRIPT LOGIC -->
+<script>
+    const testId = "{{ test.id }}";
+    let currentQuestionId = null;
+
+    function openEditModal(questionId, rawJsonString) {
+        currentQuestionId = questionId;
+        
+        try {
+            // Parse the data passed from the HTML data attribute
+            let data = JSON.parse(rawJsonString);
+            
+            // Set the checkbox status
+            document.getElementById('edit-has-image').checked = data.has_image || false;
+            
+            // Format the JSON nicely in the dark-mode textarea so it's easy to read
+            // We stringify it with 4 spaces for readability
+            document.getElementById('edit-json-textarea').value = JSON.stringify(data, null, 4);
+            
+            // Show the modal
+            document.getElementById('edit-modal').classList.remove('hidden');
+        } catch (e) {
+            alert("Error loading question data: " + e.message);
+        }
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-modal').classList.add('hidden');
+        currentQuestionId = null;
+    }
+
+    async function saveEdit() {
+        if (!currentQuestionId) return;
+        
+        const btn = document.getElementById('btn-save-edit');
+        const textarea = document.getElementById('edit-json-textarea');
+        const hasImageToggle = document.getElementById('edit-has-image').checked;
+        
+        let updatedPayload;
+        try {
+            updatedPayload = JSON.parse(textarea.value);
+        } catch (e) {
+            alert("Invalid JSON format! Please check for missing quotes or commas.\nError: " + e.message);
+            return;
+        }
+
+        // Apply the manual has_image toggle back into the JSON payload
+        updatedPayload.has_image = hasImageToggle;
+
+        // AJAX Request to the Backend Edit Route
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        try {
+            const response = await fetch(`/admin/tests/${testId}/questions/${currentQuestionId}/edit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(updatedPayload)
+            });
+            
+            const result = await response.json();
+            
+            if (result.ok) {
+                // If save was successful, reload the page to show updated snippet/badges
+                window.location.reload();
+            } else {
+                alert("Failed to save: " + result.error);
+                btn.disabled = false;
+                btn.innerText = "Save Changes";
+            }
+        } catch (error) {
+            alert("Network error occurred while saving.");
+            btn.disabled = false;
+            btn.innerText = "Save Changes";
+        }
+    }
+</script>
+{% endblock %}
