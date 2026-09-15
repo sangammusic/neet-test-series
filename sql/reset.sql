@@ -2,7 +2,7 @@
 -- RESET SCRIPT — run this FIRST, then run schema.sql fresh
 -- =========================================================
 -- CASCADE removes dependent objects too (foreign keys, indexes,
--- policies, the test_categories -> tests -> test_questions chain
+-- policies, the test_categories -> tests -> mock_test_questions chain
 -- etc.) so we don't hit leftover-constraint errors on the next run.
 --
 -- Order doesn't actually matter here because CASCADE handles it,
@@ -13,7 +13,6 @@ drop table if exists test_access_grants cascade;
 drop table if exists transactions cascade;
 drop table if exists attempt_answers cascade;
 drop table if exists test_attempts cascade;
-drop table if exists test_questions cascade;
 -- BUGFIX: mock_questions / mock_test_questions were added later in
 -- migration_mock_test_attempts.sql and were never added here, so a
 -- reset used to leave them behind (and any structure change to them
