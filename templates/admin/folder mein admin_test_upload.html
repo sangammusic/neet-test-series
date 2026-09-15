@@ -1,0 +1,257 @@
+{% extends "shared/base.html" %}
+
+{% block title %}Upload Questions — {{ test.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-6 py-10">
+    <!-- HEADER -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="font-display text-3xl text-ink mb-1">Upload: {{ test.title }}</h1>
+            <p class="text-ink/60 text-sm">Level 3: Set targets, paste JSON in max 25-question chunks.</p>
+        </div>
+        <!-- IMPORTANT: Redirects back to Level 2 (Folder) -->
+        <a href="{{ url_for('admin.series_tests', series_id=test.series_id if test.series_id else test.id) }}" class="text-sm font-medium text-ink bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-md transition-colors">
+            &larr; Back to Tests
+        </a>
+    </div>
+
+    <!-- STEP 1: SET TARGETS -->
+    <div id="step-1-targets" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 shadow-sm">
+        <h3 class="font-bold text-lg text-ink mb-4 border-b border-ink/10 pb-2">Step 1: Set Target Counts</h3>
+        <div class="grid grid-cols-3 gap-6 mb-4">
+            <div>
+                <label class="block text-sm font-medium text-ink mb-1">Physics Questions</label>
+                <input type="number" id="target_physics" value="45" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-ink mb-1">Chemistry Questions</label>
+                <input type="number" id="target_chemistry" value="45" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-ink mb-1">Biology Questions</label>
+                <input type="number" id="target_biology" value="90" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
+            </div>
+        </div>
+        <button onclick="lockTargets()" id="btn-lock-targets" class="w-full bg-ink text-paper font-medium py-3 rounded-md hover:bg-ink-light transition-colors">
+            Lock Targets & Unlock Upload Tabs
+        </button>
+    </div>
+
+    <!-- STEP 2: THE 3-TAB UPLOADER (Hidden until targets are locked) -->
+    <div id="step-2-uploader" class="hidden bg-white border border-ink/10 rounded-lg overflow-hidden shadow-sm">
+        
+        <!-- Tab Headers -->
+        <div class="flex border-b border-ink/10 bg-gray-50">
+            <button onclick="switchTab('physics')" id="tab-btn-physics" class="flex-1 py-3 text-sm font-bold text-blue-600 border-b-2 border-blue-600 transition-colors">
+                Physics (<span id="progress-text-physics">0/0</span>)
+            </button>
+            <button onclick="switchTab('chemistry')" id="tab-btn-chemistry" class="flex-1 py-3 text-sm font-bold text-gray-500 hover:text-ink transition-colors">
+                Chemistry (<span id="progress-text-chemistry">0/0</span>)
+            </button>
+            <button onclick="switchTab('biology')" id="tab-btn-biology" class="flex-1 py-3 text-sm font-bold text-gray-500 hover:text-ink transition-colors">
+                Biology (<span id="progress-text-biology">0/0</span>)
+            </button>
+        </div>
+
+        <!-- Tab Contents -->
+        <div class="p-6">
+            <!-- Physics Panel -->
+            <div id="panel-physics" class="tab-panel">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="font-bold text-ink">Paste JSON Array (Max 25 at a time)</label>
+                    <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-bold">Physics</span>
+                </div>
+                <textarea id="json-physics" rows="10" placeholder='[{"question_text": "...", "options": [...]}]' class="w-full rounded-md border border-ink/15 p-4 font-mono text-sm mb-4 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"></textarea>
+                <button onclick="uploadChunk('physics', 'Physics')" id="btn-upload-physics" class="bg-blue-600 text-white font-bold py-2 px-6 rounded hover:bg-blue-700 transition-colors">
+                    Save & Add More
+                </button>
+                <p id="msg-physics" class="mt-2 text-sm font-medium text-green-600 hidden"></p>
+            </div>
+
+            <!-- Chemistry Panel -->
+            <div id="panel-chemistry" class="tab-panel hidden">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="font-bold text-ink">Paste JSON Array (Max 25 at a time)</label>
+                    <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold">Chemistry</span>
+                </div>
+                <textarea id="json-chemistry" rows="10" placeholder='[{"question_text": "...", "options": [...]}]' class="w-full rounded-md border border-ink/15 p-4 font-mono text-sm mb-4 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"></textarea>
+                <button onclick="uploadChunk('chemistry', 'Chemistry')" id="btn-upload-chemistry" class="bg-yellow-600 text-white font-bold py-2 px-6 rounded hover:bg-yellow-700 transition-colors">
+                    Save & Add More
+                </button>
+                <p id="msg-chemistry" class="mt-2 text-sm font-medium text-green-600 hidden"></p>
+            </div>
+
+            <!-- Biology Panel -->
+            <div id="panel-biology" class="tab-panel hidden">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="font-bold text-ink">Paste JSON Array (Max 25 at a time)</label>
+                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold">Biology</span>
+                </div>
+                <textarea id="json-biology" rows="10" placeholder='[{"question_text": "...", "options": [...]}]' class="w-full rounded-md border border-ink/15 p-4 font-mono text-sm mb-4 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"></textarea>
+                <button onclick="uploadChunk('biology', 'Biology')" id="btn-upload-biology" class="bg-green-600 text-white font-bold py-2 px-6 rounded hover:bg-green-700 transition-colors">
+                    Save & Add More
+                </button>
+                <p id="msg-biology" class="mt-2 text-sm font-medium text-green-600 hidden"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 3: FINAL UPLOAD / MAKE TEST LIVE -->
+    <div id="step-3-final" class="hidden mt-8 text-center p-6 bg-green-50 border border-green-200 rounded-lg shadow-sm">
+        <h3 class="text-xl font-bold text-green-800 mb-2">🎉 All Targets Met!</h3>
+        <p class="text-green-700 mb-4">You have successfully uploaded all questions for this mock test.</p>
+        <form method="POST" action=""> <!-- Can point to an activate route if needed later -->
+            <a href="{{ url_for('admin.series_tests', series_id=test.series_id if test.series_id else test.id) }}" class="inline-block bg-green-600 text-white font-bold py-3 px-10 rounded-md hover:bg-green-700 transition-colors shadow-md">
+                Final Upload & Make Live
+            </a>
+        </form>
+    </div>
+
+</div>
+
+<!-- JAVASCRIPT FOR 25-CHUNK LOGIC & AJAX -->
+<script>
+    const testId = "{{ test.id }}";
+    const uploadUrl = `/admin/tests/${testId}/questions/bulk-map?ajax=1`;
+
+    let targets = { physics: 0, chemistry: 0, biology: 0 };
+    let uploaded = { physics: 0, chemistry: 0, biology: 0 };
+
+    function lockTargets() {
+        targets.physics = parseInt(document.getElementById('target_physics').value) || 0;
+        targets.chemistry = parseInt(document.getElementById('target_chemistry').value) || 0;
+        targets.biology = parseInt(document.getElementById('target_biology').value) || 0;
+
+        if (targets.physics + targets.chemistry + targets.biology === 0) {
+            alert("Targets cannot be zero.");
+            return;
+        }
+
+        // Lock inputs visually
+        document.getElementById('target_physics').disabled = true;
+        document.getElementById('target_chemistry').disabled = true;
+        document.getElementById('target_biology').disabled = true;
+        
+        let lockBtn = document.getElementById('btn-lock-targets');
+        lockBtn.innerText = "🔒 Targets Locked";
+        lockBtn.classList.replace("bg-ink", "bg-green-600");
+        lockBtn.classList.replace("hover:bg-ink-light", "hover:bg-green-700");
+        lockBtn.disabled = true;
+
+        updateProgressUI();
+        document.getElementById('step-2-uploader').classList.remove('hidden');
+    }
+
+    function switchTab(subject) {
+        // Hide all panels
+        document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
+        // Reset all buttons
+        ['physics', 'chemistry', 'biology'].forEach(sub => {
+            let btn = document.getElementById(`tab-btn-${sub}`);
+            btn.className = "flex-1 py-3 text-sm font-bold text-gray-500 hover:text-ink transition-colors";
+        });
+
+        // Show active panel
+        document.getElementById(`panel-${subject}`).classList.remove('hidden');
+        // Highlight active button
+        let activeBtn = document.getElementById(`tab-btn-${subject}`);
+        activeBtn.className = "flex-1 py-3 text-sm font-bold text-blue-600 border-b-2 border-blue-600 transition-colors";
+    }
+
+    function updateProgressUI() {
+        ['physics', 'chemistry', 'biology'].forEach(sub => {
+            document.getElementById(`progress-text-${sub}`).innerText = `${uploaded[sub]}/${targets[sub]}`;
+            
+            // If completed, lock textarea
+            if (uploaded[sub] >= targets[sub] && targets[sub] > 0) {
+                let ta = document.getElementById(`json-${sub}`);
+                let btn = document.getElementById(`btn-upload-${sub}`);
+                ta.disabled = true;
+                ta.value = "✅ Target reached for " + sub;
+                ta.classList.add("bg-green-50", "text-green-800");
+                btn.disabled = true;
+                btn.classList.add("opacity-50", "cursor-not-allowed");
+            }
+        });
+
+        // Check if EVERYTHING is completed
+        if (uploaded.physics >= targets.physics && 
+            uploaded.chemistry >= targets.chemistry && 
+            uploaded.biology >= targets.biology) {
+            document.getElementById('step-3-final').classList.remove('hidden');
+        }
+    }
+
+    async function uploadChunk(subject_key, subject_name) {
+        const jsonField = document.getElementById(`json-${subject_key}`);
+        const msgField = document.getElementById(`msg-${subject_key}`);
+        const btn = document.getElementById(`btn-upload-${subject_key}`);
+        
+        let rawText = jsonField.value.trim();
+        if (!rawText) {
+            alert("Paste some JSON first.");
+            return;
+        }
+
+        let parsedArray;
+        try {
+            parsedArray = JSON.parse(rawText);
+            if (!Array.isArray(parsedArray)) throw new Error("Not an array");
+        } catch (e) {
+            alert("Invalid JSON format. Please ensure it is a valid array of objects.");
+            return;
+        }
+
+        // Strict 25-chunk limit check
+        if (parsedArray.length > 25) {
+            alert(`You pasted ${parsedArray.length} questions. MAXIMUM allowed at once is 25. Please break them into smaller chunks.`);
+            return;
+        }
+
+        // Check if upload exceeds target
+        if (uploaded[subject_key] + parsedArray.length > targets[subject_key]) {
+            alert(`Warning: This chunk will exceed your target of ${targets[subject_key]}. Please paste only ${targets[subject_key] - uploaded[subject_key]} questions.`);
+            return;
+        }
+
+        // MAGIC: Auto-inject subject_name into every JSON object so admin doesn't have to!
+        parsedArray.forEach(item => {
+            item.subject_name = subject_name;
+        });
+
+        // Send to backend via AJAX
+        btn.disabled = true;
+        btn.innerText = "Uploading...";
+
+        try {
+            const response = await fetch(uploadUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bulk_json: parsedArray })
+            });
+            const data = await response.json();
+
+            if (data.ok) {
+                uploaded[subject_key] += data.inserted;
+                jsonField.value = ""; // Clear screen for next 25
+                msgField.innerText = `Success! Saved ${data.inserted} questions. Total: ${uploaded[subject_key]}/${targets[subject_key]}`;
+                msgField.classList.remove('hidden');
+                
+                updateProgressUI();
+            } else {
+                alert("Error from server: " + (data.error || "Validation failed"));
+                if (data.errors && data.errors.length > 0) {
+                    console.error(data.errors);
+                    alert("Row errors check console: " + data.errors[0]);
+                }
+            }
+        } catch (e) {
+            alert("Network error. Could not upload.");
+        }
+
+        btn.disabled = false;
+        btn.innerText = "Save & Add More";
+    }
+</script>
+{% endblock %}
