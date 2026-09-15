@@ -171,11 +171,9 @@ def cleanup_incomplete_attempts():
 def cleanup_orphaned_mock_questions():
     """
     Sweeps up mock_questions rows (and their bucket images) that got left
-    behind by a previous test/folder delete — i.e. no row in
-    mock_test_questions points to them anymore. This is the cleanup for data
-    that is ALREADY orphaned from before the delete-route fix; the fix itself
-    (in test_routes.py) stops NEW orphans from being created going forward.
-    Safe to run repeatedly — it only ever removes rows with zero mapping.
+    behind by a previous test/folder delete.
+    SANGAM STUDY HUB FIX: Strips trailing '?' from paths to ensure Supabase 
+    Storage deletes the orphaned images correctly instead of silently failing.
     """
     try:
         all_ids = {r["id"] for r in supabase_admin.table("mock_questions").select("id").execute().data}
@@ -204,7 +202,9 @@ def cleanup_orphaned_mock_questions():
             )
             for q in rows:
                 if q.get("image_url") and "question-images/" in q["image_url"]:
-                    image_paths.append(q["image_url"].split("question-images/")[1])
+                    # SANGAM STUDY HUB FIX: Extract path and strip trailing ?
+                    clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
+                    image_paths.append(clean_path)
 
         for i in range(0, len(image_paths), 50):
             try:
