@@ -69,6 +69,81 @@ def test_series_list():
     return render_template("admin_test_folders.html", series=series)
 
 
+@admin_bp.route("/test-series/<series_id>/edit", methods=["POST"])
+@admin_required
+def test_series_edit(series_id):
+    """
+    Renames an existing Test Series Folder.
+    Properly catches empty inputs and database constraint errors.
+    """
+    new_name = request.form.get("name", "").strip()
+    if not new_name:
+        flash("Folder name cannot be empty.", "error")
+    else:
+        try:
+            supabase_admin.table("mock_test_series").update({"name": new_name}).eq("id", series_id).execute()
+            flash("Folder renamed successfully.", "success")
+        except Exception as exc:
+            flash(f"Could not rename folder: {exc}", "error")
+            
+    return redirect(url_for("admin.test_series_list"))
+
+
+@admin_bp.route("/test-series/<series_id>/delete", methods=["POST"])
+@admin_required
+def test_series_delete(series_id):
+    """
+    Deep Storage Permanent Cleanup for an ENTIRE FOLDER.
+    Finds every test inside the folder, extracts all questions,
+    permanently deletes their images from the Supabase bucket,
+    and then wipes the questions, tests, and the folder itself.
+    Zero Kachra policy strictly enforced to save 1GB Storage Limit.
+    """
+    try:
+        # 1. Find all tests inside this folder
+        tests_in_series = supabase_admin.table("tests").select("id").eq("series_id", series_id).execute().data
+        test_ids = [t["id"] for t in tests_in_series]
+
+        if test_ids:
+            # 2. Find all questions mapped to ALL these tests
+            mapped = (
+                supabase_admin.table("mock_test_questions")
+                .select("mock_question_id, mock_questions(image_url)")
+                .in_("test_id", test_ids)
+                .execute()
+                .data
+            )
+
+            question_ids = []
+            for row in mapped:
+                qid = row.get("mock_question_id")
+                if qid:
+                    question_ids.append(qid)
+                
+                # 3. Permanently delete the physical image file from the Bucket
+                q = row.get("mock_questions")
+                if q and q.get("image_url"):
+                    _delete_image_from_storage(q["image_url"])
+
+            # 4. Delete all tests explicitly (to be safe before removing folder)
+            supabase_admin.table("tests").delete().in_("id", test_ids).execute()
+            
+            # 5. Delete all underlying questions from the question bank
+            if question_ids:
+                # Deduplicate question_ids safely just in case multiple tests shared a question
+                unique_question_ids = list(set(question_ids))
+                supabase_admin.table("mock_questions").delete().in_("id", unique_question_ids).execute()
+
+        # 6. Finally, delete the folder itself
+        supabase_admin.table("mock_test_series").delete().eq("id", series_id).execute()
+
+        flash("Folder and ALL its tests, questions, and images were permanently wiped.", "success")
+    except Exception as exc:
+        flash(f"Could not completely delete folder: {exc}", "error")
+
+    return redirect(url_for("admin.test_series_list"))
+
+
 # ==========================================
 # LEVEL 2: TESTS INSIDE A FOLDER
 # ==========================================
@@ -340,3 +415,4 @@ def tests_delete(test_id):
         flash(f"Could not completely delete test: {exc}", "error")
         
     return redirect(url_for("admin.test_series_list"))
+
