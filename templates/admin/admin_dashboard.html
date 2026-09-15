@@ -66,6 +66,19 @@
             </button>
           </form>
         </div>
+
+        <!-- Orphaned Mock Questions (left behind by old test/folder deletes) -->
+        <div class="flex items-center justify-between p-4 bg-ink/5 rounded-lg border border-ink/10">
+          <div>
+            <p class="font-bold text-ink">{{ orphan_info.orphaned_mock_questions }} Orphaned Questions</p>
+            <p class="text-xs text-ink/60 mt-0.5">Leftover from old test deletes — no test points to them anymore. Also wipes their bucket images.</p>
+          </div>
+          <form method="POST" action="{{ url_for('admin.cleanup_orphaned_mock_questions') }}" onsubmit="return confirm('⚠️ DANGER: This will permanently wipe all {{ orphan_info.orphaned_mock_questions }} orphaned questions and their images. Proceed?');">
+            <button type="submit" class="text-xs font-bold bg-white text-red-600 border border-red-200 hover:bg-red-50 px-4 py-2 rounded shadow-sm transition-colors" {{ 'disabled' if orphan_info.orphaned_mock_questions == 0 }}>
+              Wipe Orphans
+            </button>
+          </form>
+        </div>
       </div>
     </div>
 
