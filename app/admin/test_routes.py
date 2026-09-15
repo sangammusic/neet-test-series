@@ -13,6 +13,7 @@ Flow:
     D. Deep Storage Permanent Cleanup (Fixed Chunking Bug for 100% Wipe).
 """
 import json
+import logging
 
 from flask import render_template, request, redirect, url_for, flash, jsonify
 
@@ -20,6 +21,8 @@ from app.admin import admin_bp
 from app.admin.decorators import admin_required
 from app.admin.mock_question_routes import _validate_mock_question
 from app.extensions import supabase_admin
+
+logger = logging.getLogger(__name__)
 
 BUCKET_NAME = "question-images"
 
@@ -92,10 +95,16 @@ def test_series_delete(series_id):
     Deep Storage Permanent Cleanup for an ENTIRE FOLDER.
     SANGAM FIX: Implemented Batch Chunking to prevent 414 URI Too Long error, 
     ensuring absolutely NO ghost data remains in the DB or Storage.
+
+    DIAGNOSTIC LOGGING (Sep 2026): see the matching docstring note in
+    tests_delete() — Supabase's storage .remove() silently no-ops on a path
+    it can't match instead of raising, so every step here is logged to make
+    that failure mode visible in the Render logs if it happens again.
     """
     try:
         tests_in_series = supabase_admin.table("tests").select("id").eq("series_id", series_id).execute().data
         test_ids = [t["id"] for t in tests_in_series]
+        logger.info(f"[test_series_delete:{series_id}] tests in folder: {len(test_ids)}")
 
         question_ids = []
         image_paths = []
@@ -119,6 +128,7 @@ def test_series_delete(series_id):
             # matching comment in tests_delete() for why the join can silently
             # skip images that then get orphaned in storage.
             unique_question_ids = list(set(question_ids))
+            logger.info(f"[test_series_delete:{series_id}] unique question_ids: {len(unique_question_ids)}")
             if unique_question_ids:
                 for i in range(0, len(unique_question_ids), 100):
                     chunk = unique_question_ids[i:i + 100]
@@ -133,13 +143,26 @@ def test_series_delete(series_id):
                         if q.get("image_url") and "question-images/" in q["image_url"]:
                             image_paths.append(q["image_url"].split("question-images/")[1])
 
+            logger.info(f"[test_series_delete:{series_id}] image_paths to remove ({len(image_paths)}): {image_paths}")
+
             # 1. Chunked Image Deletion from Bucket (Max 50 per batch)
             if image_paths:
                 for i in range(0, len(image_paths), 50):
+                    batch = image_paths[i:i+50]
                     try:
-                        supabase_admin.storage.from_(BUCKET_NAME).remove(image_paths[i:i+50])
-                    except Exception:
-                        pass
+                        result = supabase_admin.storage.from_(BUCKET_NAME).remove(batch)
+                        removed_names = [r.get("name") for r in (result or []) if isinstance(r, dict)]
+                        logger.info(
+                            f"[test_series_delete:{series_id}] storage.remove asked for {len(batch)} paths, "
+                            f"Supabase confirmed {len(removed_names)} removed: {removed_names}"
+                        )
+                        if len(removed_names) < len(batch):
+                            logger.warning(
+                                f"[test_series_delete:{series_id}] MISMATCH — "
+                                f"{len(batch) - len(removed_names)} path(s) did not delete. Asked for: {batch}"
+                            )
+                    except Exception as e:
+                        logger.error(f"[test_series_delete:{series_id}] Bucket batch delete raised an exception: {e}")
 
             # 2. Chunked Test Mapping Deletion (Explicitly prevent FK blocks)
             for tid in test_ids:
@@ -159,8 +182,10 @@ def test_series_delete(series_id):
         # 5. Finally, delete the folder itself
         supabase_admin.table("mock_test_series").delete().eq("id", series_id).execute()
 
+        logger.info(f"[test_series_delete:{series_id}] DB cleanup complete.")
         flash("Folder and ALL its tests, questions, and images were permanently wiped.", "success")
     except Exception as exc:
+        logger.error(f"[test_series_delete:{series_id}] Delete failed with exception: {exc}")
         flash(f"Could not completely delete folder: {exc}", "error")
 
     return redirect(url_for("admin.test_series_list"))
@@ -484,6 +509,17 @@ def tests_delete(test_id):
     Fix: fetch image_url directly from mock_questions using the test's actual
     question_ids (not the join), so storage cleanup no longer depends on the
     mapping table being intact.
+
+    DIAGNOSTIC LOGGING (Sep 2026): Supabase's storage .remove() call does NOT
+    raise an exception when a given path doesn't match any existing file in
+    the bucket — it just returns an empty result, as if nothing was wrong.
+    That means a silent path-mismatch bug would never show up as an error
+    anywhere, before or after this fix. Every step below is logged so that if
+    images ever fail to disappear again, the Render log for this exact
+    request will show precisely how many questions/images were found, which
+    exact storage paths were sent to Supabase, and — critically — what
+    Supabase's response says it actually deleted. Compare "asked to delete X"
+    vs "server confirms Y removed" in the logs to pinpoint a mismatch.
     """
     try:
         test_info = supabase_admin.table("tests").select("series_id").eq("id", test_id).maybe_single().execute().data
@@ -497,6 +533,7 @@ def tests_delete(test_id):
             .data
         )
         question_ids = list({row["mock_question_id"] for row in mapped if row.get("mock_question_id")})
+        logger.info(f"[tests_delete:{test_id}] mapping rows found: {len(mapped)}, unique question_ids: {len(question_ids)}")
 
         # Fetch image_url directly from mock_questions by id — independent of
         # whether the mapping-join above was complete. This is the fix: we no
@@ -516,13 +553,29 @@ def tests_delete(test_id):
                     if q.get("image_url") and "question-images/" in q["image_url"]:
                         image_paths.append(q["image_url"].split("question-images/")[1])
 
+        logger.info(f"[tests_delete:{test_id}] image_paths to remove from storage ({len(image_paths)}): {image_paths}")
+
         # 1. Batch delete images from bucket safely in chunks of 50
         if image_paths:
             for i in range(0, len(image_paths), 50):
+                batch = image_paths[i:i+50]
                 try:
-                    supabase_admin.storage.from_(BUCKET_NAME).remove(image_paths[i:i+50])
+                    result = supabase_admin.storage.from_(BUCKET_NAME).remove(batch)
+                    # result is normally a list of the file objects Supabase actually
+                    # removed. If len(result) < len(batch), some paths didn't match
+                    # any real file in the bucket — that's the silent-failure case.
+                    removed_names = [r.get("name") for r in (result or []) if isinstance(r, dict)]
+                    logger.info(
+                        f"[tests_delete:{test_id}] storage.remove asked for {len(batch)} paths, "
+                        f"Supabase confirmed {len(removed_names)} removed: {removed_names}"
+                    )
+                    if len(removed_names) < len(batch):
+                        logger.warning(
+                            f"[tests_delete:{test_id}] MISMATCH — {len(batch) - len(removed_names)} "
+                            f"path(s) did not delete. Asked for: {batch}"
+                        )
                 except Exception as e:
-                    print(f"Bucket batch delete error: {e}")
+                    logger.error(f"[tests_delete:{test_id}] Bucket batch delete raised an exception: {e}")
 
         # 2. Delete test mapping explicitly to prevent FK constraint blocks
         supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).execute()
@@ -536,10 +589,12 @@ def tests_delete(test_id):
                 chunk = question_ids[i:i+40]
                 supabase_admin.table("mock_questions").delete().in_("id", chunk).execute()
 
+        logger.info(f"[tests_delete:{test_id}] DB cleanup complete — test, mapping, and {len(question_ids)} question(s) deleted.")
         flash("Test and ALL related questions/images permanently wiped from DB and Storage.", "success")
         if series_id:
             return redirect(url_for("admin.series_tests", series_id=series_id))
     except Exception as exc:
+        logger.error(f"[tests_delete:{test_id}] Delete failed with exception: {exc}")
         flash(f"Could not completely delete test: {exc}", "error")
 
     return redirect(url_for("admin.test_series_list"))
