@@ -5,7 +5,7 @@ Flow:
 1. Level 1: Admin creates "Test Series Folders" (mock_test_series).
 2. Level 2: Admin drills into a folder to see/create Tests.
    - BUG FIXED: Duplicate categories filtered.
-   - VALIDATION: Blank total_marks throws an error, no automatic default.
+   - VALIDATION: total_marks removed from initial creation. Marks_per_question handles it.
 3. Level 3: Admin manages questions for a test via:
     A. 25-Chunk Upload (3-Tabs) with STRICT SANGAM STUDY HUB RULES (45-45-90 for 720 marks).
     B. Live JSON Edit: Seamless replacement of JSON + Image toggle (No Duplicates).
@@ -157,11 +157,11 @@ def series_tests(series_id):
 
     if request.method == "POST":
         title = request.form.get("title", "").strip()
-        total_marks_raw = request.form.get("total_marks")
+        marks_per_question_raw = request.form.get("marks_per_question")
 
         # STRICT VALIDATION: Throws error if critical fields are blank
-        if not title or not total_marks_raw or not str(total_marks_raw).strip():
-            flash("Please fill all the details, including Total Marks.", "error")
+        if not title or not marks_per_question_raw or not str(marks_per_question_raw).strip():
+            flash("Please fill all the details, including Marks per Question.", "error")
             return redirect(url_for("admin.series_tests", series_id=series_id))
 
         negative_marking_raw = float(request.form.get("negative_marking") or 0)
@@ -174,7 +174,7 @@ def series_tests(series_id):
             "title": title,
             "description": request.form.get("description", "").strip() or None,
             "duration_minutes": int(request.form.get("duration_minutes") or 180),
-            "total_marks": int(total_marks_raw),
+            "total_marks": 0, # SANGAM FIX: Will be officially calculated and updated from Page 2
             "negative_marking": negative_marking,
             "is_premium": request.form.get("is_premium") == "on",
             "price_inr": float(request.form.get("price_inr") or 0),
@@ -182,9 +182,10 @@ def series_tests(series_id):
         try:
             result = supabase_admin.table("tests").insert(payload).execute()
             test_id = result.data[0]["id"]
-            flash("Test created — you can now start uploading questions.", "success")
-            # Redirect to the new dedicated UPLOAD PAGE
-            return redirect(url_for("admin.tests_upload", test_id=test_id))
+            flash("Test created — you can now set targets and start uploading questions.", "success")
+            
+            # Redirect to the new dedicated UPLOAD PAGE passing the marks per question secretly in URL
+            return redirect(url_for("admin.tests_upload", test_id=test_id, mpq=marks_per_question_raw))
         except Exception as exc:
             flash(f"Could not create test: {exc}", "error")
             return redirect(url_for("admin.series_tests", series_id=series_id))
@@ -225,8 +226,32 @@ def tests_upload(test_id):
         flash("Test not found.", "error")
         return redirect(url_for("admin.test_series_list"))
 
-    # Render dedicated upload UI. No question mapping is fetched here to keep it clean.
-    return render_template("admin_test_upload.html", test=test)
+    # Capture mpq (Marks Per Question) from the redirect. If old test, default to 4.
+    mpq = request.args.get("mpq", 4)
+
+    # Render dedicated upload UI. Passes mpq so frontend JS can auto-calculate.
+    return render_template("admin_test_upload.html", test=test, mpq=mpq)
+
+
+# NEW API ROUTE: LOCK TARGETS (Auto Calculate Total Marks)
+@admin_bp.route("/tests/<test_id>/lock-targets", methods=["POST"])
+@admin_required
+def tests_lock_targets(test_id):
+    """
+    SANGAM FIX: Called via AJAX from admin_test_upload.html when admin clicks "Lock Targets".
+    Receives dynamically calculated total marks and officially saves it in the DB.
+    """
+    data = request.json
+    total_marks = data.get("total_marks")
+    
+    if total_marks is None:
+        return jsonify({"ok": False, "error": "total_marks calculation missing."}), 400
+        
+    try:
+        supabase_admin.table("tests").update({"total_marks": int(total_marks)}).eq("id", test_id).execute()
+        return jsonify({"ok": True, "total_marks": total_marks})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 # PAGE B: MANAGEMENT SCREEN (Only for viewing/managing uploaded questions)
@@ -471,4 +496,3 @@ def tests_delete(test_id):
         flash(f"Could not completely delete test: {exc}", "error")
         
     return redirect(url_for("admin.test_series_list"))
-
