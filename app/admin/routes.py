@@ -1,163 +1,128 @@
-"""
-Per-question image upload & Deep Storage Cleanup (Pillar 4).
-
-Flow: bulk-paste JSON sets has_image=true on a question row but leaves
-image_url null. The admin UI then shows an "Upload Image" prompt. 
-
-This file handles:
-    1. Compressing phone/large photos into tiny JPEGs (30-100KB).
-    2. Uploading to Supabase Storage.
-    3. REPLACEMENT & REMOVAL CLEANUP (Zero-Kachra): Old images are 
-       permanently deleted from the bucket when replaced or removed.
-"""
-import io
-import uuid
-
-from flask import request, jsonify
-from PIL import Image, ImageOps
+import logging
+from flask import render_template, redirect, url_for, flash
 
 from app.admin import admin_bp
 from app.admin.decorators import admin_required
 from app.extensions import supabase_admin
+from app.admin.image_routes import BUCKET_NAME
 
-BUCKET_NAME = "question-images"
-ALLOWED_TABLES = {"questions", "mock_questions"}
+# Setup basic logger to catch silent errors without crashing the dashboard
+logger = logging.getLogger(__name__)
 
-# Compression targets. A NEET diagram only needs to be legible on a
-# phone/laptop screen, not print-quality — 1000px on the long edge at
-# JPEG quality 70 is plenty sharp for that and keeps files tiny.
-MAX_DIMENSION = 1000
-JPEG_QUALITY = 70
-MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15MB raw upload cap, before compression
-
-
-def _delete_image_from_storage(image_url):
-    """
-    Helper function for Pillar 4: Deep Storage Cleanup.
-    Extracts the file path from the public image_url and permanently 
-    deletes it from the Supabase Storage bucket to maintain zero-kachra.
-    """
-    if not image_url:
-        return
-    try:
-        # URL format: https://[project_ref].supabase.co/storage/v1/object/public/question-images/...
-        if f"{BUCKET_NAME}/" in image_url:
-            path = image_url.split(f"{BUCKET_NAME}/")[1]
-            supabase_admin.storage.from_(BUCKET_NAME).remove([path])
-    except Exception as e:
-        print(f"Failed to delete image from storage {image_url}: {e}")
-
-
-def compress_image(file_bytes: bytes) -> bytes:
-    """
-    Resizes to at most MAX_DIMENSION on the long edge and re-encodes
-    as JPEG at JPEG_QUALITY. Handles PNG-with-transparency and
-    phone-camera EXIF rotation correctly.
-    """
-    img = Image.open(io.BytesIO(file_bytes))
-    img = ImageOps.exif_transpose(img)  # fix phone-camera rotation
-
-    if img.mode in ("RGBA", "P"):
-        # Flatten transparency onto white — JPEG has no alpha channel.
-        background = Image.new("RGB", img.size, (255, 255, 255))
-        img = img.convert("RGBA")
-        background.paste(img, mask=img.split()[3])
-        img = background
-    else:
-        img = img.convert("RGB")
-
-    img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)
-
-    out = io.BytesIO()
-    img.save(out, format="JPEG", quality=JPEG_QUALITY, optimize=True)
-    return out.getvalue()
-
-
-@admin_bp.route("/questions/<table_name>/<question_id>/upload-image", methods=["POST"])
+@admin_bp.route("/dashboard")
 @admin_required
-def question_upload_image(table_name, question_id):
+def dashboard():
     """
-    AJAX endpoint for uploading/replacing images.
-    Pillar 4 Implementation: If the user is REPLACING an image, we 
-    must fetch the old image_url and delete it from storage first.
+    Landing page after admin login. Shows quick content counts.
+    Optimized: Added strict error handling and .limit(1) to make 
+    count queries drastically faster via PostgREST.
     """
-    if table_name not in ALLOWED_TABLES:
-        return jsonify({"ok": False, "error": "invalid table"}), 400
+    def _count(table):
+        try:
+            # limit(1) is a massive performance boost for count="exact" queries in Supabase
+            res = supabase_admin.table(table).select("id", count="exact").limit(1).execute()
+            return res.count or 0
+        except Exception as e:
+            logger.error(f"Error counting {table}: {e}")
+            return 0
 
-    file = request.files.get("image")
-    if not file or not file.filename:
-        return jsonify({"ok": False, "error": "No file uploaded"}), 400
+    def _count_pending_images(table):
+        try:
+            res = (
+                supabase_admin.table(table)
+                .select("id", count="exact")
+                .eq("has_image", True)
+                .is_("image_url", "null")
+                .limit(1)
+                .execute()
+            )
+            return res.count or 0
+        except Exception as e:
+            logger.error(f"Error counting pending images in {table}: {e}")
+            return 0
 
-    raw_bytes = file.read()
-    if not raw_bytes:
-        return jsonify({"ok": False, "error": "Empty file"}), 400
-    if len(raw_bytes) > MAX_UPLOAD_BYTES:
-        return jsonify({"ok": False, "error": "File too large (max 15MB before compression)"}), 400
+    counts = {
+        "streams": _count("streams"),
+        "subjects": _count("subjects"),
+        "chapters": _count("chapters"),
+        "questions": _count("questions"),
+        "tests": _count("tests"),
+    }
 
+    # FEATURE: Garbage tracking (Guest and Abandoned attempts).
     try:
-        compressed = compress_image(raw_bytes)
-    except Exception as exc:
-        return jsonify({"ok": False, "error": f"Could not process image — is it a valid photo? ({exc})"}), 400
-
-    # ZERO-KACHRA: Check if an old image exists and delete it before replacing
-    try:
-        old_data = supabase_admin.table(table_name).select("image_url").eq("id", question_id).single().execute().data
-        if old_data and old_data.get("image_url"):
-            _delete_image_from_storage(old_data["image_url"])
+        guest_count = supabase_admin.table("test_attempts").select("id", count="exact").is_("user_id", "null").limit(1).execute().count or 0
     except Exception:
-        pass  # If it fails to fetch, ignore and proceed with the new upload
-
-    storage_path = f"{table_name}/{question_id}/{uuid.uuid4().hex}.jpg"
+        guest_count = 0
 
     try:
-        supabase_admin.storage.from_(BUCKET_NAME).upload(
-            storage_path,
-            compressed,
-            {"content-type": "image/jpeg"},
-        )
-    except Exception as exc:
-        return jsonify({
-            "ok": False,
-            "error": f"Upload to storage failed: {exc}. Make sure a public bucket named '{BUCKET_NAME}' exists.",
-        }), 500
+        incomplete_count = supabase_admin.table("test_attempts").select("id", count="exact").is_("submitted_at", "null").limit(1).execute().count or 0
+    except Exception:
+        incomplete_count = 0
 
-    public_url = supabase_admin.storage.from_(BUCKET_NAME).get_public_url(storage_path)
+    garbage_info = {
+        "guest_attempts": guest_count,
+        "incomplete_attempts": incomplete_count,
+    }
 
+    # Storage usage estimation (~100KB per compressed image)
+    uploaded_count = 0
     try:
-        supabase_admin.table(table_name).update({
-            "image_url": public_url,
-            "has_image": True,
-        }).eq("id", question_id).execute()
-    except Exception as exc:
-        return jsonify({"ok": False, "error": f"Image uploaded but saving the link failed: {exc}"}), 500
+        for prefix in ("questions", "mock_questions"):
+            folders = supabase_admin.storage.from_(BUCKET_NAME).list(prefix)
+            for folder in folders or []:
+                # Ignore hidden system files (like .emptyFolderPlaceholder)
+                if folder.get('name', '').startswith('.'):
+                    continue
+                files = supabase_admin.storage.from_(BUCKET_NAME).list(f"{prefix}/{folder['name']}")
+                
+                # Count only valid image files
+                valid_files = [f for f in (files or []) if not f.get('name', '').startswith('.')]
+                uploaded_count += len(valid_files)
+    except Exception as e:
+        logger.warning(f"Storage bucket list failed: {e}")
+        uploaded_count = None
 
-    return jsonify({
-        "ok": True,
-        "image_url": public_url,
-        "compressed_size_kb": round(len(compressed) / 1024, 1),
-    })
+    storage_info = {
+        "uploaded_count": uploaded_count,
+        "estimated_mb": round((uploaded_count or 0) * 100 / 1024, 1) if uploaded_count is not None else None,
+        "pending_questions": _count_pending_images("questions"),
+        "pending_mock_questions": _count_pending_images("mock_questions"),
+    }
+
+    return render_template("admin_dashboard.html", counts=counts, storage_info=storage_info, garbage_info=garbage_info)
 
 
-@admin_bp.route("/questions/<table_name>/<question_id>/remove-image", methods=["POST"])
+@admin_bp.route("/cleanup/guests", methods=["POST"])
 @admin_required
-def question_remove_image(table_name, question_id):
+def cleanup_guest_attempts():
     """
-    Pillar 4 Implementation: Deep Storage Cleanup.
-    Instead of just setting image_url to None, this physically deletes 
-    the file from the Supabase Storage bucket. Zero orphan files left behind.
+    Nuclear option for Admin: Deletes all test attempts made by Guests.
+    Because of the DB's ON DELETE CASCADE, this automatically wipes millions 
+    of linked `attempt_answers` rows instantly, saving massive DB storage.
     """
-    if table_name not in ALLOWED_TABLES:
-        return jsonify({"ok": False, "error": "invalid table"}), 400
-
     try:
-        # Fetch the current image_url to delete from storage
-        old_data = supabase_admin.table(table_name).select("image_url").eq("id", question_id).single().execute().data
-        if old_data and old_data.get("image_url"):
-            _delete_image_from_storage(old_data["image_url"])
-
-        # Update database to clear the URL but keep has_image=True so the upload box still shows
-        supabase_admin.table(table_name).update({"image_url": None}).eq("id", question_id).execute()
+        res = supabase_admin.table("test_attempts").delete().is_("user_id", "null").execute()
+        # Fetch actual deleted count for a more satisfying UI message
+        deleted_count = len(res.data) if res.data else 0
+        flash(f"Success: {deleted_count} Guest attempts and their data have been permanently wiped.", "success")
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        flash(f"Cleanup failed: {exc}", "error")
+    return redirect(url_for("admin.dashboard"))
 
-    return jsonify({"ok": True})
+
+@admin_bp.route("/cleanup/incomplete", methods=["POST"])
+@admin_required
+def cleanup_incomplete_attempts():
+    """
+    Nuclear option for Admin: Deletes all abandoned test attempts (never submitted).
+    Frees up storage taken by students who started a test but closed the tab.
+    """
+    try:
+        res = supabase_admin.table("test_attempts").delete().is_("submitted_at", "null").execute()
+        # Fetch actual deleted count
+        deleted_count = len(res.data) if res.data else 0
+        flash(f"Success: {deleted_count} abandoned/incomplete test attempts have been permanently wiped.", "success")
+    except Exception as exc:
+        flash(f"Cleanup failed: {exc}", "error")
+    return redirect(url_for("admin.dashboard"))
