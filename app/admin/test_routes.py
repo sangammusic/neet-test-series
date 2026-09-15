@@ -356,6 +356,50 @@ def tests_bulk_map_questions(test_id):
         else:
             valid_payloads.append(payload)
 
+    # ==========================================
+    # SANGAM STUDY HUB: DUPLICATE DETECTION LOGIC
+    # ==========================================
+    if valid_payloads:
+        # 1. Fetch existing questions already mapped to this specific test
+        existing_mapped = (
+            supabase_admin.table("mock_test_questions")
+            .select("mock_questions(question_text)")
+            .eq("test_id", test_id)
+            .execute()
+            .data
+        )
+        
+        # Build a set of normalized existing texts for fast lookup O(1)
+        existing_texts = set()
+        for row in existing_mapped:
+            q = row.get("mock_questions")
+            if q and q.get("question_text"):
+                existing_texts.add(q["question_text"].strip().lower())
+
+        # 2. Check the incoming chunk against existing DB and against itself
+        incoming_texts = set()
+        for p in valid_payloads:
+            clean_text = p["question_text"].strip().lower()
+            
+            # DB Collision
+            if clean_text in existing_texts:
+                error_msg = f"Duplicate Detected: The question starting with '{clean_text[:40]}...' already exists in this test!"
+                if is_ajax: return jsonify({"ok": False, "error": error_msg}), 400
+                flash(error_msg, "error")
+                return redirect(url_for("admin.test_series_list"))
+            
+            # Internal Chunk Collision (Same question pasted twice in the same JSON block)
+            if clean_text in incoming_texts:
+                error_msg = f"Duplicate Detected: The question starting with '{clean_text[:40]}...' appears multiple times in your pasted JSON chunk!"
+                if is_ajax: return jsonify({"ok": False, "error": error_msg}), 400
+                flash(error_msg, "error")
+                return redirect(url_for("admin.test_series_list"))
+            
+            incoming_texts.add(clean_text)
+
+    # ==========================================
+    # SANGAM STUDY HUB: 45-45-90 RULE VALIDATION
+    # ==========================================
     if test.get("total_marks") == 720 and not errors:
         existing = supabase_admin.table("mock_test_questions").select("mock_questions(subjects(name))").eq("test_id", test_id).execute().data
         
@@ -484,6 +528,58 @@ def tests_edit_question(test_id, question_id):
     try:
         supabase_admin.table("mock_questions").update(payload).eq("id", question_id).execute()
         return jsonify({"ok": True, "has_image": payload.get("has_image")})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@admin_bp.route("/questions/mock_questions/<question_id>/toggle-image", methods=["POST"])
+@admin_required
+def toggle_question_image(question_id):
+    """
+    Live Pencil Menu Edit: Instantly saves the 'has_image' toggle state.
+    Enforces Zero-Kachra: If toggled to False, automatically wipes the physical image from the storage bucket.
+    """
+    data = request.json
+    if not data or "has_image" not in data:
+        return jsonify({"ok": False, "error": "Missing has_image payload"}), 400
+    
+    has_image = bool(data["has_image"])
+    
+    try:
+        # Update DB flag
+        supabase_admin.table("mock_questions").update({"has_image": has_image}).eq("id", question_id).execute()
+        
+        # Zero-Kachra Policy: Delete the actual file if the admin turned the image requirement OFF
+        if not has_image:
+            old_q = supabase_admin.table("mock_questions").select("image_url").eq("id", question_id).maybe_single().execute().data
+            if old_q and old_q.get("image_url"):
+                _delete_image_from_storage(old_q["image_url"])
+                # Wipe the URL link from DB
+                supabase_admin.table("mock_questions").update({"image_url": None}).eq("id", question_id).execute()
+
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@admin_bp.route("/questions/mock_questions/<question_id>/change-answer", methods=["POST"])
+@admin_required
+def change_question_answer(question_id):
+    """
+    Live Pencil Menu Edit: Instantly updates the correct answer without opening the JSON modal.
+    """
+    data = request.json
+    if not data or not data.get("correct_option"):
+        return jsonify({"ok": False, "error": "Missing correct_option payload"}), 400
+    
+    correct_option = str(data["correct_option"]).strip().upper()
+    
+    if correct_option not in ("A", "B", "C", "D"):
+        return jsonify({"ok": False, "error": "Invalid option"}), 400
+    
+    try:
+        supabase_admin.table("mock_questions").update({"correct_option": correct_option}).eq("id", question_id).execute()
+        return jsonify({"ok": True})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
