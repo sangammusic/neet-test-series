@@ -3,11 +3,14 @@ Pillar 1: Mock Test Series (The Folder System).
 
 Flow:
 1. Level 1: Admin creates "Test Series Folders" (mock_test_series).
-2. Level 2: Admin drills into a folder to see/create Tests. (Category duplication bug fixed).
+2. Level 2: Admin drills into a folder to see/create Tests.
+   - BUG FIXED: Duplicate categories filtered.
+   - VALIDATION: Blank total_marks throws an error, no automatic default.
 3. Level 3: Admin manages questions for a test via:
-    A. 25-Chunk Upload (3-Tabs): Uploads batch by batch via AJAX.
-    B. Live JSON Edit: Modifies existing questions securely (LaTeX/SVG safe), toggles images.
-    C. Deep Storage Cleanup: Deletes unused images automatically.
+    A. 25-Chunk Upload (3-Tabs) with STRICT NTA LIMITS (45-45-90 for 720 marks).
+    B. Live JSON Edit: Seamless replacement of JSON + Image toggle.
+    C. NO DELETE FOR SINGLE QUESTIONS (Pattern protection).
+    D. Deep Storage Cleanup on Full Test Delete.
 """
 import json
 
@@ -44,9 +47,6 @@ def _delete_image_from_storage(image_url):
 @admin_bp.route("/test-series", methods=["GET", "POST"])
 @admin_required
 def test_series_list():
-    """
-    Box 1 Entry Point: Shows folders (e.g., 'Indian Test Series') and allows creating new ones.
-    """
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         if not name:
@@ -75,29 +75,31 @@ def test_series_list():
 @admin_bp.route("/test-series/<series_id>/tests", methods=["GET", "POST"])
 @admin_required
 def series_tests(series_id):
-    """
-    Shows tests inside a specific folder. Also handles creating a new test inside it.
-    Category duplication bug is fixed here by filtering distinct categories.
-    """
     series_data = supabase_admin.table("mock_test_series").select("*").eq("id", series_id).single().execute().data
     if not series_data:
         flash("Test Series Folder not found.", "error")
         return redirect(url_for("admin.test_series_list"))
 
     if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        total_marks_raw = request.form.get("total_marks")
+
+        # STRICT VALIDATION: Throws error if critical fields are blank
+        if not title or not total_marks_raw or not str(total_marks_raw).strip():
+            flash("Please fill all the details, including Total Marks.", "error")
+            return redirect(url_for("admin.series_tests", series_id=series_id))
+
         negative_marking_raw = float(request.form.get("negative_marking") or 0)
-        if negative_marking_raw < 0:
-            flash("Negative Marking can't be negative — saved as positive value.", "error")
         negative_marking = abs(negative_marking_raw)
 
         payload = {
             "series_id": series_id,
             "stream_id": request.form.get("stream_id"),
             "category_id": request.form.get("category_id"),
-            "title": request.form.get("title", "").strip(),
+            "title": title,
             "description": request.form.get("description", "").strip() or None,
-            "duration_minutes": int(request.form.get("duration_minutes") or 60),
-            "total_marks": int(request.form.get("total_marks")) if request.form.get("total_marks") else None,
+            "duration_minutes": int(request.form.get("duration_minutes") or 180),
+            "total_marks": int(total_marks_raw),
             "negative_marking": negative_marking,
             "is_premium": request.form.get("is_premium") == "on",
             "price_inr": float(request.form.get("price_inr") or 0),
@@ -105,7 +107,7 @@ def series_tests(series_id):
         try:
             result = supabase_admin.table("tests").insert(payload).execute()
             test_id = result.data[0]["id"]
-            flash("Test created — you can now map questions in batches.", "success")
+            flash("Test created — you can now map questions in chunks.", "success")
             return redirect(url_for("admin.tests_manage", test_id=test_id))
         except Exception as exc:
             flash(f"Could not create test: {exc}", "error")
@@ -113,12 +115,12 @@ def series_tests(series_id):
 
     streams = supabase_admin.table("streams").select("id, name").order("display_order").execute().data
     
-    # BUG FIX: Deduplicate categories so "Minor Test" doesn't show 4 times
+    # CATEGORY DEDUPLICATION: Ensures "Minor Test" prints only once
     raw_categories = supabase_admin.table("test_categories").select("id, name, stream_id").order("display_order").execute().data
     seen_cats = set()
     categories = []
     for c in raw_categories:
-        key = (c["name"].strip().lower(), c["stream_id"])
+        key = c["name"].strip().lower() 
         if key not in seen_cats:
             seen_cats.add(key)
             categories.append(c)
@@ -147,8 +149,9 @@ def tests_manage(test_id):
 
     mapped = (
         supabase_admin.table("mock_test_questions")
-        .select("mock_question_id, mock_questions(question_text, topic_name, is_pyq, pyq_year, has_image, image_url, subjects(name))")
+        .select("mock_question_id, question_order, mock_questions(question_text, topic_name, is_pyq, pyq_year, has_image, image_url, subjects(name))")
         .eq("test_id", test_id)
+        .order("question_order")
         .execute()
         .data
     )
@@ -158,13 +161,9 @@ def tests_manage(test_id):
 @admin_bp.route("/tests/<test_id>/questions/bulk-map", methods=["POST"])
 @admin_required
 def tests_bulk_map_questions(test_id):
-    """
-    25-Chunk Upload logic. Accepts AJAX JSON payload from the 3-tabs frontend, 
-    validates, inserts, and maps to the test instantly.
-    """
     is_ajax = request.args.get("ajax") == "1"
     
-    test = supabase_admin.table("tests").select("id, stream_id").eq("id", test_id).single().execute().data
+    test = supabase_admin.table("tests").select("id, stream_id, total_marks").eq("id", test_id).single().execute().data
     if not test:
         if is_ajax: return jsonify({"ok": False, "error": "Test not found."}), 404
         flash("Test not found.", "error")
@@ -185,15 +184,17 @@ def tests_bulk_map_questions(test_id):
     try:
         parsed = json.loads(raw_json)
     except json.JSONDecodeError as exc:
-        if is_ajax: return jsonify({"ok": False, "error": f"Invalid JSON: {exc}"}), 400
+        if is_ajax: return jsonify({"ok": False, "error": "Invalid JSON format. Check commas and quotes."}), 400
         return jsonify({"ok": False, "error": "Invalid JSON"}), 400
 
-    if not isinstance(parsed, list) or not parsed:
+    if not isinstance(parsed, list) or len(parsed) == 0:
         if is_ajax: return jsonify({"ok": False, "error": "Empty or invalid array."}), 400
         return jsonify({"ok": False, "error": "Empty array"}), 400
 
     subjects_for_stream = supabase_admin.table("subjects").select("id, name").eq("stream_id", stream_id).execute().data
     subject_name_to_id = {s["name"].strip().lower(): s["id"] for s in subjects_for_stream}
+    id_to_subj = {s["id"]: s["name"].strip().lower() for s in subjects_for_stream}
+    
     difficulty_ids = {d["id"] for d in supabase_admin.table("difficulty_levels").select("id").execute().data}
 
     valid_payloads, errors = [], []
@@ -204,8 +205,40 @@ def tests_bulk_map_questions(test_id):
         else:
             valid_payloads.append(payload)
 
+    # ---------------------------------------------------------
+    # STRICT NTA LIMIT LOGIC (45-45-90) FOR 720 MARKS TESTS
+    # ---------------------------------------------------------
+    if test.get("total_marks") == 720 and not errors:
+        existing = supabase_admin.table("mock_test_questions").select("mock_questions(subjects(name))").eq("test_id", test_id).execute().data
+        
+        phys_count = 0
+        chem_count = 0
+        bio_count = 0
+        
+        for row in existing:
+            q = row.get("mock_questions")
+            if q and q.get("subjects") and q["subjects"].get("name"):
+                s_name = q["subjects"]["name"].strip().lower()
+                if "physics" in s_name: phys_count += 1
+                elif "chem" in s_name: chem_count += 1
+                elif "bio" in s_name or "botan" in s_name or "zoolo" in s_name: bio_count += 1
+                
+        for p in valid_payloads:
+            s_name = id_to_subj.get(p.get("subject_id"), "")
+            if "physics" in s_name: phys_count += 1
+            elif "chem" in s_name: chem_count += 1
+            elif "bio" in s_name or "botan" in s_name or "zoolo" in s_name: bio_count += 1
+            
+        if phys_count > 45:
+            if is_ajax: return jsonify({"ok": False, "error": f"NTA LIMIT ERROR: Uploading exceeds the 45 Physics limit. (Total would be {phys_count})"}), 400
+        if chem_count > 45:
+            if is_ajax: return jsonify({"ok": False, "error": f"NTA LIMIT ERROR: Uploading exceeds the 45 Chemistry limit. (Total would be {chem_count})"}), 400
+        if bio_count > 90:
+            if is_ajax: return jsonify({"ok": False, "error": f"NTA LIMIT ERROR: Uploading exceeds the 90 Biology limit. (Total would be {bio_count})"}), 400
+    # ---------------------------------------------------------
+
     inserted_ids = []
-    if valid_payloads:
+    if valid_payloads and not errors:
         try:
             result = supabase_admin.table("mock_questions").insert(valid_payloads).execute()
             inserted_ids = [row["id"] for row in result.data]
@@ -233,8 +266,8 @@ def tests_bulk_map_questions(test_id):
 @admin_required
 def tests_edit_question(test_id, question_id):
     """
-    Live JSON Edit: Updates question text, answer, image toggle. 
-    LaTeX/SVG safe by parsing direct JSON.
+    Live JSON Edit: Fully replaces the question text, options directly.
+    Handles manual True/False image toggle safely.
     """
     raw = request.json
     if not raw:
@@ -253,7 +286,6 @@ def tests_edit_question(test_id, question_id):
     if error:
         return jsonify({"ok": False, "error": error}), 400
 
-    # Image toggle logic: Wipe image from bucket if admin unchecks it
     old_q = supabase_admin.table("mock_questions").select("image_url, has_image").eq("id", question_id).single().execute().data
     if old_q and old_q.get("image_url") and not payload.get("has_image"):
         _delete_image_from_storage(old_q["image_url"])
@@ -266,31 +298,13 @@ def tests_edit_question(test_id, question_id):
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
-@admin_bp.route("/tests/<test_id>/questions/<question_id>/remove", methods=["POST"])
-@admin_required
-def tests_remove_question(test_id, question_id):
-    """
-    Deep Storage Cleanup: Removing single question permanently wipes image too.
-    """
-    try:
-        q = supabase_admin.table("mock_questions").select("image_url").eq("id", question_id).single().execute().data
-        if q and q.get("image_url"):
-            _delete_image_from_storage(q["image_url"])
-
-        supabase_admin.table("mock_questions").delete().eq("id", question_id).execute()
-        flash("Question and its image permanently deleted.", "success")
-    except Exception as exc:
-        flash(f"Failed to remove question: {exc}", "error")
-        
-    return redirect(url_for("admin.tests_manage", test_id=test_id))
-
-
 @admin_bp.route("/tests/<test_id>/delete", methods=["POST"])
 @admin_required
 def tests_delete(test_id):
     """
-    Deep Storage Cleanup: Deleting test wipes all its questions and bucket images.
-    Redirects back to the parent Folder.
+    Deep Storage Permanent Cleanup: 
+    When an admin deletes a test, the backend permanently deletes EVERY 
+    single image attached to this test before wiping it from DB.
     """
     try:
         test_info = supabase_admin.table("tests").select("series_id").eq("id", test_id).single().execute().data
@@ -309,15 +323,17 @@ def tests_delete(test_id):
             qid = row.get("mock_question_id")
             if qid:
                 question_ids.append(qid)
+            
             q = row.get("mock_questions")
             if q and q.get("image_url"):
                 _delete_image_from_storage(q["image_url"])
 
         supabase_admin.table("tests").delete().eq("id", test_id).execute()
+        
         if question_ids:
             supabase_admin.table("mock_questions").delete().in_("id", question_ids).execute()
 
-        flash("Test and all related images permanently wiped.", "success")
+        flash("Test and ALL related images permanently wiped from storage.", "success")
         if series_id:
             return redirect(url_for("admin.series_tests", series_id=series_id))
     except Exception as exc:
