@@ -1,41 +1,50 @@
 {% extends "shared/base.html" %}
-{% block title %}Map Questions — {{ test.title }}{% endblock %}
+{% block title %}Manage Questions — {{ test.title }}{% endblock %}
 {% block content %}
-{% include "admin/_admin_nav.html" %}
 
-<!-- Alpine.js for State Management (Tabs, Chunking, Modals) -->
+<!-- Alpine.js for State Management (Tabs, Chunking, Modals, Menus) -->
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
-<div class="max-w-5xl mx-auto px-6 py-10">
-  <div class="flex items-start justify-between gap-4 mb-1">
-    <h1 class="font-display text-3xl text-ink">{{ test.title }}</h1>
+<div class="max-w-6xl mx-auto px-6 py-10">
+  
+  <!-- PAGE HEADER -->
+  <div class="flex items-start justify-between gap-4 mb-2">
+    <div>
+      <h1 class="font-display text-4xl text-ink font-bold">{{ test.title }}</h1>
+      <p class="text-ink/60 text-sm mt-2 font-medium">Level 3: Strict NTA Question Manager (180 Limits enforced)</p>
+    </div>
+    
+    <!-- Deep Wipe Delete Form -->
     <form method="POST" action="{{ url_for('admin.tests_delete', test_id=test.id) }}"
-          onsubmit="return confirm('⚠️ DANGER: Delete &quot;{{ test.title }}&quot;? This permanently removes its question mapping, student attempts, AND completely wipes all associated images from the Storage Bucket. This cannot be undone.');">
-      <button type="submit" class="text-sm text-red-600 hover:underline whitespace-nowrap font-semibold">Delete this test (Zero Kachra)</button>
+          onsubmit="return confirm('⚠️ DANGER: Delete &quot;{{ test.title }}&quot;?\n\nThis permanently removes its question mapping AND completely wipes all associated images from the Storage Bucket.\n\nTHIS CANNOT BE UNDONE.');">
+      <button type="submit" class="text-sm bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white transition-colors px-4 py-2 rounded-md font-bold shadow-sm">
+        🗑️ Delete This Test (Zero Kachra)
+      </button>
     </form>
   </div>
+  
   {% if test.description %}
-  <p class="text-ink/60 text-sm mb-8"><span class="font-medium text-ink/80">Syllabus:</span> {{ test.description }}</p>
-  {% else %}
-  <p class="text-ink/40 text-sm mb-8">No syllabus set for this test.</p>
+  <p class="text-ink/70 text-sm mb-8 bg-gray-50 inline-block px-4 py-2 rounded-md border border-gray-200">
+    <span class="font-bold text-ink">Syllabus:</span> {{ test.description }}
+  </p>
   {% endif %}
 
   <!-- ==========================================
-       PILLAR 1: TABS & 25-CHUNK AJAX UPLOADER
+       PILLAR 1: 25-CHUNK AJAX UPLOADER (Strict Limits)
        ========================================== -->
-  <div x-data="bulkUploader()" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 shadow-sm">
-    <div class="flex items-center justify-between mb-6">
+  <div x-data="bulkUploader()" class="bg-white border-2 border-indigo-100 rounded-lg p-6 mb-10 shadow-md">
+    <div class="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
       <div>
-        <h2 class="font-medium text-ink text-lg">Upload Questions (Chunk System)</h2>
-        <p class="text-sm text-ink/60 mt-0.5">Paste JSON arrays batch by batch. Max 25 questions per save.</p>
+        <h2 class="font-bold text-ink text-xl">📥 Upload Questions (25-Chunk System)</h2>
+        <p class="text-sm text-red-500 font-bold mt-1">Strict NTA Limits Active: Physics (45), Chemistry (45), Biology (90).</p>
       </div>
-      <button type="button" @click="showFormat = !showFormat" class="text-sm text-gold hover:underline whitespace-nowrap font-medium">
-        Toggle Format Guide
+      <button type="button" @click="showFormat = !showFormat" class="text-sm text-indigo-600 hover:underline font-bold bg-indigo-50 px-3 py-1.5 rounded-md">
+        JSON Format Guide
       </button>
     </div>
 
     <!-- Format Guide -->
-    <pre x-show="showFormat" x-cloak class="bg-ink/5 border border-ink/10 rounded-md p-4 text-xs text-ink/70 overflow-x-auto mb-6">[
+    <pre x-show="showFormat" x-cloak class="bg-gray-900 border border-gray-800 rounded-md p-4 text-xs text-green-400 overflow-x-auto mb-6 shadow-inner font-mono">[
   {
     "subject_name": "Physics",
     "topic_name": "Vectors",
@@ -51,151 +60,231 @@
   }
 ]</pre>
 
-    <!-- Dynamic Tabs -->
-    <div class="flex gap-2 border-b border-ink/10 mb-5">
-      <template x-for="tab in ['Physics', 'Chemistry', 'Biology', 'Mathematics']" :key="tab">
+    <!-- Upload Tabs (Restricted to NTA Subjects) -->
+    <div class="flex gap-4 border-b border-ink/10 mb-5">
+      <template x-for="tab in ['Physics', 'Chemistry', 'Biology']" :key="tab">
         <button type="button" @click="activeTab = tab"
-                class="px-4 py-2 text-sm font-semibold border-b-2 transition-colors"
-                :class="activeTab === tab ? 'border-gold text-gold' : 'border-transparent text-ink/50 hover:text-ink'">
+                class="px-5 py-3 text-sm font-bold border-b-4 transition-colors"
+                :class="activeTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-400 hover:text-gray-700'">
           <span x-text="tab"></span>
         </button>
       </template>
     </div>
 
-    <!-- Upload Box -->
-    <div class="space-y-4">
+    <!-- JSON Input Box -->
+    <div class="space-y-4 bg-gray-50 p-5 rounded-lg border border-gray-200">
       <div>
-        <label class="block text-sm font-medium text-ink mb-1">
-          Paste JSON for <span x-text="activeTab" class="text-gold"></span>
+        <label class="block text-sm font-bold text-ink mb-2">
+          Paste 25-Question JSON array for <span x-text="activeTab" class="text-indigo-600 uppercase"></span>
         </label>
-        <textarea x-model="jsonText" @input="validateInput" rows="10" placeholder='[{"subject_name": "Physics", "question_text": "...", ...}]'
-                  class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-gold focus:outline-none"></textarea>
+        <textarea x-model="jsonText" @input="validateInput" rows="8" placeholder='[{"subject_name": "Physics", "question_text": "...", ...}]'
+                  class="w-full rounded-md border border-gray-300 px-4 py-3 font-mono text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none shadow-sm"></textarea>
         
-        <!-- Validation / Status Messages -->
-        <div class="mt-2 text-sm flex justify-between items-center">
-          <p :class="qCount > 25 ? 'text-red-600 font-semibold' : 'text-ink/50'" x-show="jsonText.length > 0">
-            Detected: <span x-text="qCount"></span> questions (Max 25)
+        <div class="mt-3 text-sm flex justify-between items-center font-bold">
+          <p :class="qCount > 25 ? 'text-red-600' : 'text-gray-500'" x-show="jsonText.length > 0">
+            Detected: <span x-text="qCount"></span> questions (Max 25 at a time)
           </p>
-          <p x-show="errorMsg" class="text-red-600 font-medium" x-text="errorMsg"></p>
-          <p x-show="successMsg" class="text-green-600 font-semibold animate-pulse" x-text="successMsg"></p>
+          <p x-show="errorMsg" class="text-red-600" x-text="errorMsg"></p>
+          <p x-show="successMsg" class="text-green-600 animate-pulse" x-text="successMsg"></p>
         </div>
       </div>
 
-      <div class="flex items-center justify-between pt-4 border-t border-ink/10">
-        <p class="text-sm font-bold text-ink">
-          Total Uploaded this session: <span x-text="totalSaved" class="text-gold text-lg"></span>
+      <div class="flex items-center justify-between pt-4 border-t border-gray-200 mt-4">
+        <p class="text-sm font-bold text-gray-600">
+          Total Uploaded this session: <span x-text="totalSaved" class="text-indigo-600 text-lg"></span>
         </p>
         <div class="flex gap-3">
           <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25"
-                  class="bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light disabled:opacity-50 transition-colors">
-            <span x-text="isSaving ? 'Saving...' : 'Save & Add More'"></span>
+                  class="bg-indigo-600 text-white font-bold py-2.5 px-8 rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md">
+            <span x-text="isSaving ? 'Uploading...' : 'Save & Add More'"></span>
           </button>
           <button type="button" @click="window.location.reload()"
-                  class="border-2 border-ink text-ink font-medium py-2.5 px-6 rounded-md hover:bg-ink/5 transition-colors">
-            Final Upload / Refresh
+                  class="bg-white border-2 border-indigo-600 text-indigo-600 font-bold py-2.5 px-6 rounded-md hover:bg-indigo-50 transition-colors shadow-sm">
+            Refresh View
           </button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ==========================================
-       LIST OF MAPPED QUESTIONS & LIVE EDIT
-       ========================================== -->
-  <h2 class="font-display text-xl text-ink mb-3">Questions in this test ({{ mapped|length }})</h2>
-  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
-    {% set ns = namespace(pending=0) %}
-    {% for m in mapped %}
-      {% if m.mock_questions and m.mock_questions.has_image and not m.mock_questions.image_url %}
-        {% set ns.pending = ns.pending + 1 %}
-      {% endif %}
-    {% endfor %}
-    
-    {% if ns.pending > 0 %}
-    <div class="px-5 py-3 bg-gold/10">
-      <span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5">{{ ns.pending }} image(s) pending upload</span>
-    </div>
-    {% endif %}
-    
-    {% for m in mapped %}
-    <div class="px-5 py-4 gap-4 transition-colors hover:bg-ink/5" data-question-row data-table="mock_questions" data-question-id="{{ m.mock_question_id }}">
-      <div class="flex items-start justify-between gap-4">
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-ink">{{ m.mock_questions.question_text if m.mock_questions }}</p>
-          <p class="text-xs text-ink/50 mt-1">
-            <span class="font-semibold text-ink/70">{{ m.mock_questions.subjects.name if m.mock_questions and m.mock_questions.subjects else '—' }}</span>
-            · Topic: {{ m.mock_questions.topic_name if m.mock_questions }}
-            {% if m.mock_questions and m.mock_questions.is_pyq %}· PYQ {{ m.mock_questions.pyq_year }}{% endif %}
-          </p>
-        </div>
-        
-        <!-- Action Buttons: Edit & Remove -->
-        <div class="flex flex-col items-end gap-2 shrink-0">
-          <button type="button" @click="$dispatch('open-edit-modal', { id: '{{ m.mock_question_id }}' })"
-                  class="text-xs font-semibold bg-gold/20 text-gold-light px-3 py-1 rounded hover:bg-gold hover:text-ink transition-colors">
-            Edit JSON
-          </button>
-          <form method="POST" action="{{ url_for('admin.tests_remove_question', test_id=test.id, question_id=m.mock_question_id) }}"
-                onsubmit="return confirm('Remove this question? Its image will be permanently deleted from storage.');">
-            <button class="text-xs text-red-600 hover:underline whitespace-nowrap">Remove</button>
-          </form>
-        </div>
-      </div>
 
-      <!-- Image Zone: Dynamically updated via JS when edited -->
-      <div class="mt-3" data-image-zone="true">
-        {% if m.mock_questions and m.mock_questions.has_image %}
-          {% if m.mock_questions.image_url %}
-          <div class="flex items-center gap-3" data-image-uploaded>
-            <img src="{{ m.mock_questions.image_url }}" alt="" class="h-16 w-16 object-cover rounded border border-ink/10">
-            <div class="flex flex-col gap-1">
-              <label class="text-xs text-ink/60 hover:text-ink underline cursor-pointer w-fit">
-                Replace image
-                <input type="file" accept="image/*" class="hidden" data-image-input>
-              </label>
-              <button type="button" class="text-xs text-red-600 hover:underline text-left" data-remove-image>Remove image</button>
-            </div>
-          </div>
-          {% else %}
-          <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3" data-image-pending>
-            <p class="text-xs text-ink/70">📷 This question needs a diagram — <span data-upload-status>no image uploaded yet</span></p>
-            <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
-              Upload Image
-              <input type="file" accept="image/*" class="hidden" data-image-input>
-            </label>
-          </div>
-          {% endif %}
-        {% endif %}
-      </div>
+  <!-- ==========================================
+       PILLAR 2: SUBJECT-WISE SPLIT MENU (180 Manager)
+       ========================================== -->
+  
+  <!-- JINJA LOGIC: Separating Questions by Subject for clean UI rendering -->
+  {% set phys_list = [] %}
+  {% set chem_list = [] %}
+  {% set bio_list = [] %}
+  {% for m in mapped %}
+      {% set s_name = (m.mock_questions.subjects.name|lower) if (m.mock_questions and m.mock_questions.subjects) else '' %}
+      {% if 'phys' in s_name %}{% set _ = phys_list.append(m) %}
+      {% elif 'chem' in s_name %}{% set _ = chem_list.append(m) %}
+      {% elif 'bio' in s_name or 'botan' in s_name or 'zool' in s_name %}{% set _ = bio_list.append(m) %}
+      {% endif %}
+  {% endfor %}
+
+  <div x-data="{ viewSubject: 'Physics' }" class="mb-10">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="font-display text-2xl text-ink font-bold">180-Question Manager</h2>
+        <span class="text-xs bg-gray-200 text-gray-700 font-bold px-3 py-1 rounded-full">NO DELETE ALLOWED</span>
     </div>
-    {% else %}
-    <p class="px-5 py-8 text-ink/50 text-sm text-center">No questions mapped yet — start pasting JSON chunks above.</p>
-    {% endfor %}
+    
+    <!-- Subject-Wise Split Menu Tabs -->
+    <div class="flex gap-4 border-b border-gray-200 mb-6">
+        <button @click="viewSubject = 'Physics'" :class="viewSubject === 'Physics' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' : 'border-transparent text-gray-500 hover:bg-gray-50'" class="px-6 py-3 font-bold border-b-4 transition-colors rounded-t-lg">
+            👉 Edit Physics Questions <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-white border">{{ phys_list|length }}/45</span>
+        </button>
+        <button @click="viewSubject = 'Chemistry'" :class="viewSubject === 'Chemistry' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' : 'border-transparent text-gray-500 hover:bg-gray-50'" class="px-6 py-3 font-bold border-b-4 transition-colors rounded-t-lg">
+            👉 Edit Chemistry Questions <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-white border">{{ chem_list|length }}/45</span>
+        </button>
+        <button @click="viewSubject = 'Biology'" :class="viewSubject === 'Biology' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' : 'border-transparent text-gray-500 hover:bg-gray-50'" class="px-6 py-3 font-bold border-b-4 transition-colors rounded-t-lg">
+            👉 Edit Biology Questions <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-white border">{{ bio_list|length }}/90</span>
+        </button>
+    </div>
+
+    <!-- The Student-View Question Lists -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        
+        <!-- PHYSICS TAB (Q.1 to Q.45) -->
+        <div x-show="viewSubject === 'Physics'" class="divide-y divide-gray-100">
+            {% if phys_list|length == 0 %}<p class="p-8 text-center text-gray-500 font-medium">No Physics questions uploaded yet.</p>{% endif %}
+            {% for m in phys_list %}
+                {{ render_question_row(m, loop.index, "Physics") }}
+            {% endfor %}
+        </div>
+
+        <!-- CHEMISTRY TAB (Q.46 to Q.90) -->
+        <div x-show="viewSubject === 'Chemistry'" x-cloak class="divide-y divide-gray-100">
+            {% if chem_list|length == 0 %}<p class="p-8 text-center text-gray-500 font-medium">No Chemistry questions uploaded yet.</p>{% endif %}
+            {% for m in chem_list %}
+                {{ render_question_row(m, 45 + loop.index, "Chemistry") }}
+            {% endfor %}
+        </div>
+
+        <!-- BIOLOGY TAB (Q.91 to Q.180) -->
+        <div x-show="viewSubject === 'Biology'" x-cloak class="divide-y divide-gray-100">
+            {% if bio_list|length == 0 %}<p class="p-8 text-center text-gray-500 font-medium">No Biology questions uploaded yet.</p>{% endif %}
+            {% for m in bio_list %}
+                {{ render_question_row(m, 90 + loop.index, "Biology") }}
+            {% endfor %}
+        </div>
+
+    </div>
   </div>
 </div>
 
 <!-- ==========================================
-     LIVE JSON EDIT MODAL (Pop-up)
+     MACRO: QUESTION ROW COMPONENT 
+     (Generates the UI for each question with Pencil Menu)
      ========================================== -->
-<div x-data="editModalApp()" @open-edit-modal.window="openModal($event.detail)" x-show="isOpen" x-cloak class="fixed inset-0 bg-ink/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-  <div class="bg-paper border border-ink/10 rounded-xl p-6 w-full max-w-2xl shadow-2xl relative" @click.outside="closeModal()">
-    <button @click="closeModal()" class="absolute top-4 right-4 text-ink/40 hover:text-ink">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-    </button>
+{% macro render_question_row(m, index_num, subject_type) %}
+<div class="p-5 hover:bg-gray-50 transition-colors flex gap-4 relative group" data-question-id="{{ m.mock_question_id }}">
     
-    <h3 class="font-display text-2xl font-semibold text-ink mb-2">Edit Question JSON</h3>
-    <p class="text-sm text-ink/60 mb-4">Paste the completely updated JSON object for this single question.</p>
+    <!-- Strict Numbering (NTA Pattern) -->
+    <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-800 shrink-0 border border-indigo-200 shadow-sm">
+        Q.{{ index_num }}
+    </div>
     
-    <textarea x-model="editJsonText" rows="12" placeholder='{\n  "subject_name": "Physics",\n  "question_text": "Updated text...",\n  "has_image": true\n}'
-              class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-gold focus:outline-none mb-4"></textarea>
+    <!-- Question Content (Student View) -->
+    <div class="flex-1 min-w-0">
+        <p class="font-medium text-lg text-ink line-clamp-3">{{ m.mock_questions.question_text if m.mock_questions else 'Question Text' }}</p>
+        <div class="mt-2 flex items-center gap-2">
+            <span class="text-xs bg-gray-200 text-gray-700 font-bold px-2 py-1 rounded">{{ m.mock_questions.topic_name if m.mock_questions else 'Topic' }}</span>
+            {% if m.mock_questions and m.mock_questions.is_pyq %}
+                <span class="text-xs bg-purple-100 text-purple-800 font-bold px-2 py-1 rounded">PYQ {{ m.mock_questions.pyq_year }}</span>
+            {% endif %}
+            {% if m.mock_questions and m.mock_questions.has_image %}
+                <span class="text-xs bg-blue-100 text-blue-800 font-bold px-2 py-1 rounded flex items-center gap-1">
+                    📸 Image Req.
+                </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- THE PENCIL BUTTON MENU -->
+    <div x-data="{ pencilOpen: false }" class="relative shrink-0">
+        <!-- Main Pencil Trigger -->
+        <button @click="pencilOpen = !pencilOpen" @click.outside="pencilOpen = false" class="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-500 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 flex items-center justify-center transition-all shadow-sm focus:outline-none">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
+            </svg>
+        </button>
+
+        <!-- Slide Down Menu -->
+        <div x-show="pencilOpen" x-transition.opacity.duration.200ms x-cloak class="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+            <div class="bg-gray-50 px-4 py-2 border-b border-gray-100">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Quick Actions</span>
+            </div>
+            
+            <div class="p-4 space-y-4">
+                <!-- Dropdown Answer -->
+                <div>
+                    <label class="block text-sm font-bold text-ink mb-1">Change Correct Option</label>
+                    <select onchange="alert('NTA Security Lock: Partial updates are disabled to prevent data corruption. Please click \'Edit JSON (Raw Power)\' below and paste your new AI-generated question to update the answer safely.')" class="w-full text-sm rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 cursor-pointer">
+                        <option value="">Select New Answer...</option>
+                        <option value="A">Option A</option>
+                        <option value="B">Option B</option>
+                        <option value="C">Option C</option>
+                        <option value="D">Option D</option>
+                    </select>
+                </div>
+
+                <!-- Image Switch -->
+                <div class="flex items-center justify-between bg-blue-50/50 p-2 rounded-md border border-blue-100">
+                    <label class="text-sm font-bold text-ink cursor-pointer">Image Required?</label>
+                    <label class="relative inline-flex items-center cursor-pointer" onclick="alert('NTA Security Lock: To safely toggle images without breaking the JSON payload, please click \'Edit JSON (Raw Power)\' below and update it there.')">
+                        <input type="checkbox" class="sr-only peer" {% if m.mock_questions and m.mock_questions.has_image %}checked{% endif %}>
+                        <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                </div>
+
+                <!-- Edit JSON (Raw Power) Button -->
+                <button @click="$dispatch('open-edit-modal', { id: '{{ m.mock_question_id }}' }); pencilOpen = false" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-md flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                      <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+                    </svg>
+                    Edit JSON (Raw Power)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+<!-- ==========================================
+     LIVE JSON EDIT MODAL (Raw Power Box)
+     ========================================== -->
+<div x-data="editModalApp()" @open-edit-modal.window="openModal($event.detail)" x-show="isOpen" x-cloak class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden" @click.outside="closeModal()">
     
-    <p x-show="editError" class="text-red-600 text-sm mb-4 font-medium" x-text="editError"></p>
+    <!-- Modal Header -->
+    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+        <div>
+            <h3 class="font-display text-2xl font-bold text-indigo-900">Edit JSON (Raw Power)</h3>
+            <p class="text-xs font-bold text-gray-500 mt-1">Directly paste the newly generated NTA question JSON below.</p>
+        </div>
+        <button @click="closeModal()" class="text-gray-400 hover:text-red-500 transition-colors bg-gray-200 hover:bg-red-100 rounded-full p-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
     
-    <div class="flex justify-end gap-3">
-      <button @click="closeModal()" class="px-5 py-2 rounded-md text-ink font-medium border border-ink/20 hover:bg-ink/5">Cancel</button>
-      <button @click="submitEdit()" :disabled="isSaving" class="px-5 py-2 rounded-md bg-gold text-ink font-semibold hover:bg-gold-light disabled:opacity-50 flex items-center gap-2">
-        <span x-text="isSaving ? 'Updating...' : 'Update Question'"></span>
-      </button>
+    <!-- Modal Body -->
+    <div class="p-6 flex-1 overflow-y-auto bg-gray-900">
+        <textarea x-model="editJsonText" rows="15" placeholder='Paste your AI generated complete JSON here...'
+                  class="w-full bg-gray-900 text-green-400 font-mono text-sm border-0 focus:ring-0 resize-none outline-none"></textarea>
+    </div>
+    
+    <!-- Modal Footer -->
+    <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+        <p x-show="editError" class="text-red-600 text-sm font-bold bg-red-100 px-3 py-1 rounded-md" x-text="editError"></p>
+        <div class="flex gap-3 ml-auto">
+            <button @click="closeModal()" class="px-6 py-2.5 rounded-lg text-gray-700 font-bold border border-gray-300 hover:bg-gray-100 transition-colors">Cancel</button>
+            <button @click="submitEdit()" :disabled="isSaving" class="px-8 py-2.5 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md">
+                <span x-text="isSaving ? 'Validating & Saving...' : 'Save AI JSON'"></span>
+            </button>
+        </div>
     </div>
   </div>
 </div>
@@ -204,7 +293,7 @@
      SCRIPTS & ALPINE.JS LOGIC
      ========================================== -->
 <script>
-  // Chunk Uploader Component Logic
+  // Chunk Uploader Logic
   function bulkUploader() {
     return {
       activeTab: 'Physics',
@@ -232,7 +321,7 @@
           }
           this.qCount = parsed.length;
         } catch (e) {
-          this.errorMsg = 'Invalid JSON format';
+          this.errorMsg = 'Invalid JSON format (Check commas/quotes)';
           this.qCount = 0;
         }
       },
@@ -245,7 +334,6 @@
         
         try {
           const parsedData = JSON.parse(this.jsonText);
-          
           const res = await fetch("{{ url_for('admin.tests_bulk_map_questions', test_id=test.id) }}?ajax=1", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -257,13 +345,13 @@
             this.totalSaved += data.inserted;
             this.jsonText = '';
             this.qCount = 0;
-            this.successMsg = `Success! ${data.inserted} questions saved. Ready for next chunk.`;
+            this.successMsg = `Success! ${data.inserted} questions saved securely.`;
             setTimeout(() => this.successMsg = '', 4000);
           } else {
-            this.errorMsg = data.error || 'Server error occurred.';
+            this.errorMsg = data.error || 'Server rejected the payload.';
           }
         } catch (err) {
-          this.errorMsg = 'Connection error. Check your network.';
+          this.errorMsg = 'Network Error. Check connection.';
         } finally {
           this.isSaving = false;
         }
@@ -271,7 +359,7 @@
     };
   }
 
-  // Live JSON Edit Modal Component Logic
+  // Live JSON Edit Modal Logic (Raw Power)
   function editModalApp() {
     return {
       isOpen: false,
@@ -296,7 +384,7 @@
         try {
           parsedData = JSON.parse(this.editJsonText);
         } catch(e) {
-          this.editError = 'Invalid JSON syntax.';
+          this.editError = 'Invalid JSON Syntax. Check brackets and commas.';
           return;
         }
         
@@ -310,96 +398,17 @@
           const data = await res.json();
           
           if (data.ok) {
-            // MAGIC DOM INJECTION: Add or remove image upload box without refresh
-            const row = document.querySelector(`[data-question-id="${this.qId}"]`);
-            let imgZone = row.querySelector('[data-image-zone]');
-            
-            // Update question text visually so admin sees the change
-            if (parsedData.question_text) {
-               const textNode = row.querySelector('p.font-medium');
-               if (textNode) textNode.textContent = parsedData.question_text;
-            }
-
-            if (data.has_image) {
-              const existingImg = imgZone.querySelector('[data-image-uploaded], [data-image-pending]');
-              if (!existingImg) {
-                imgZone.innerHTML = `
-                  <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3 animate-pulse" data-image-pending>
-                    <p class="text-xs text-ink/70">📷 Image required — <span data-upload-status>no image uploaded yet</span></p>
-                    <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
-                      Upload Image
-                      <input type="file" accept="image/*" class="hidden" data-image-input>
-                    </label>
-                  </div>`;
-              }
-            } else {
-              imgZone.innerHTML = ''; // Clear image box if changed to false
-            }
-            this.closeModal();
+            window.location.reload(); // Hard reload to reflect changes safely everywhere
           } else {
             this.editError = data.error;
           }
         } catch (err) {
-          this.editError = 'Failed to communicate with server.';
+          this.editError = 'Network failure.';
         } finally {
           this.isSaving = false;
         }
       }
     };
   }
-
-  // Preserve existing global image upload/remove handlers
-  document.addEventListener('change', async (e) => {
-    const input = e.target.closest('[data-image-input]');
-    if (!input || !input.files[0]) return;
-
-    const row = input.closest('[data-question-row]');
-    const tableName = row.dataset.table;
-    const questionId = row.dataset.questionId;
-    const statusEl = row.querySelector('[data-upload-status]');
-    if (statusEl) statusEl.textContent = 'Uploading…';
-
-    const formData = new FormData();
-    formData.append('image', input.files[0]);
-
-    try {
-      const res = await fetch(`/admin/questions/${tableName}/${questionId}/upload-image`, {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.ok) {
-        window.location.reload();
-      } else {
-        alert('Upload failed: ' + data.error);
-        if (statusEl) statusEl.textContent = 'no image uploaded yet';
-      }
-    } catch (err) {
-      alert('Upload failed: ' + err);
-      if (statusEl) statusEl.textContent = 'no image uploaded yet';
-    }
-  });
-
-  document.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-remove-image]');
-    if (!btn) return;
-    if (!confirm('Remove this image? The question will show the upload box again.')) return;
-
-    const row = btn.closest('[data-question-row]');
-    const tableName = row.dataset.table;
-    const questionId = row.dataset.questionId;
-
-    try {
-      const res = await fetch(`/admin/questions/${tableName}/${questionId}/remove-image`, { method: 'POST' });
-      const data = await res.json();
-      if (data.ok) {
-        window.location.reload();
-      } else {
-        alert('Could not remove image: ' + data.error);
-      }
-    } catch (err) {
-      alert('Could not remove image: ' + err);
-    }
-  });
 </script>
 {% endblock %}
