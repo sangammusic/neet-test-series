@@ -1,0 +1,129 @@
+{% extends "admin/base.html" %} <!-- Agar tera base file ka naam alag hai, toh usko yahan theek kar lena, jaise "admin_base.html" -->
+
+{% block title %}Mock Test Series - Sangam Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    
+    <!-- PAGE HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">📦 Mock Test Series</h2>
+            <p class="text-muted mb-0">Level 1: Manage your test series folders. Create a new folder or select an existing one.</p>
+        </div>
+        <div>
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">
+                &larr; Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- FLASH MESSAGES (Error/Success popups) -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- LEVEL 1: CREATE NEW FOLDER BOX -->
+    <div class="card shadow-sm mb-5 create-folder-card">
+        <div class="card-body p-4">
+            <h5 class="card-title fw-bold mb-3">Add New Test Series Folder</h5>
+            
+            <form action="{{ url_for('admin.test_series_list') }}" method="POST">
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-9">
+                        <input type="text" 
+                               name="name" 
+                               class="form-control form-control-lg" 
+                               placeholder="Enter folder name... e.g., Indian Test Series, Alien Test Series" 
+                               required 
+                               autocomplete="off">
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold">
+                            + Create Folder
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EXISTING FOLDERS LIST -->
+    <h4 class="fw-bold mb-4">Existing Folders</h4>
+    <div class="row">
+        {% if series and series|length > 0 %}
+            {% for folder in series %}
+            <div class="col-md-4 mb-4">
+                <div class="card folder-card h-100 shadow-sm border-0">
+                    <div class="card-body d-flex flex-column p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <!-- Folder Icon SVG -->
+                            <div class="me-3 text-warning">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" class="bi bi-folder-fill" viewBox="0 0 16 16">
+                                  <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3zm-8.322.12C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139z"/>
+                                </svg>
+                            </div>
+                            <h4 class="card-title mb-0 fw-bold text-dark">{{ folder.name }}</h4>
+                        </div>
+                        
+                        <!-- Small details like creation date (formatting assuming standard Postgres Timestamptz string or datetime object) -->
+                        <p class="text-muted small mb-4">
+                            Created on: {{ folder.created_at[:10] if folder.created_at is string else folder.created_at.strftime('%Y-%m-%d') }}
+                        </p>
+                        
+                        <!-- Enter Folder Button -->
+                        <div class="mt-auto">
+                            <!-- Yeh link direct Level 2 (us folder ke andar ke tests) par le jayega -->
+                            <a href="{{ url_for('admin.series_tests', series_id=folder.id) }}" class="btn btn-dark w-100 fw-bold">
+                                Open Folder &rarr;
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <!-- Khali State: Agar koi folder nahi hai -->
+            <div class="col-12">
+                <div class="alert alert-light border text-center p-5">
+                    <h5 class="text-muted mb-0">No Test Series Folders found. Create your first folder using the box above!</h5>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<!-- CSS directly in template for easy testing, you can move this to your main CSS file later -->
+<style>
+    .create-folder-card {
+        border-left: 6px solid #0d6efd; /* Blue accent line */
+        background-color: #f8f9fa;
+    }
+    
+    .folder-card {
+        transition: all 0.3s ease;
+        border-radius: 12px;
+        background: #ffffff;
+    }
+    
+    .folder-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important;
+        border: 1px solid #0d6efd;
+    }
+    
+    /* Make the button stand out on hover */
+    .folder-card:hover .btn-dark {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+</style>
+{% endblock %}
