@@ -10,7 +10,7 @@ Flow:
     A. 25-Chunk Upload (3-Tabs) with STRICT SANGAM STUDY HUB RULES (45-45-90 for 720 marks).
     B. Live JSON Edit: Seamless replacement of JSON + Image toggle (No Duplicates).
     C. Undo Chunk: Temporary history destruction with Deep Storage Cleanup.
-    D. Deep Storage Permanent Cleanup (Fixed Chunking Bug & Trailing '?' Bug for 100% Wipe).
+    D. Deep Storage Permanent Cleanup (Fixed Chunking Bug for 100% Wipe).
 """
 import json
 import logging
@@ -30,13 +30,13 @@ BUCKET_NAME = "question-images"
 def _delete_image_from_storage(image_url):
     """
     Fallback Helper function for single image deletions.
-    SANGAM FIX: Strips any trailing '?' from the URL to prevent silent Storage API failures.
+    SANGAM STUDY HUB FIX: Strips any trailing '?' from the URL to prevent silent Storage API failures.
     """
     if not image_url:
         return
     try:
         if "question-images/" in image_url:
-            # Extract path and strip any query parameters (like ?t=...)
+            # Extract path and cleanly strip any query parameters
             path = image_url.split("question-images/")[1].split("?")[0]
             supabase_admin.storage.from_(BUCKET_NAME).remove([path])
     except Exception as e:
@@ -98,8 +98,8 @@ def test_series_delete(series_id):
     SANGAM FIX: Implemented Batch Chunking to prevent 414 URI Too Long error, 
     ensuring absolutely NO ghost data remains in the DB or Storage.
 
-    DIAGNOSTIC LOGGING & PATH FIX (Sep 2026): Stripping trailing '?' from paths
-    so Supabase Storage doesn't silently fail to delete the images.
+    DIAGNOSTIC LOGGING (Sep 2026): Supabase's storage .remove() silently no-ops 
+    on a path it can't match instead of raising. Trailing '?' bug is fixed here.
     """
     try:
         tests_in_series = supabase_admin.table("tests").select("id").eq("series_id", series_id).execute().data
@@ -123,7 +123,6 @@ def test_series_delete(series_id):
                     if qid:
                         question_ids.append(qid)
 
-            # ROOT-CAUSE FIX: fetch image_url directly from mock_questions by id
             unique_question_ids = list(set(question_ids))
             logger.info(f"[test_series_delete:{series_id}] unique question_ids: {len(unique_question_ids)}")
             if unique_question_ids:
@@ -138,7 +137,7 @@ def test_series_delete(series_id):
                     )
                     for q in rows:
                         if q.get("image_url") and "question-images/" in q["image_url"]:
-                            # SANGAM FIX: Split by '?' to remove trailing query strings
+                            # SANGAM STUDY HUB FIX: Strip trailing ? to ensure bucket matches exactly
                             clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
                             image_paths.append(clean_path)
 
@@ -417,7 +416,7 @@ def tests_undo_chunk(test_id):
     PERMANENT DELETION ROUTE. 
     Accepts an array of question_ids and wipes them from mapping, question bank, 
     and deletes any attached images from the Storage Bucket in batches.
-    SANGAM FIX: Added trailing '?' stripper logic here too.
+    SANGAM STUDY HUB FIX: Added trailing '?' stripper logic here too.
     """
     payload = request.json
     if not payload or not payload.get("question_ids"):
@@ -431,7 +430,7 @@ def tests_undo_chunk(test_id):
         image_paths = []
         for q in questions:
             if q.get("image_url") and "question-images/" in q["image_url"]:
-                # Remove trailing '?' before adding to deletion list
+                # Clean path by removing trailing '?' before deleting
                 clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
                 image_paths.append(clean_path)
         
@@ -494,8 +493,15 @@ def tests_edit_question(test_id, question_id):
 def tests_delete(test_id):
     """
     Deep Storage Permanent Cleanup:
-    SANGAM FIX: Implemented Chunking to prevent 414 URI Too Long errors.
-    SANGAM FIX 2: Strips trailing '?' from paths to prevent silent Storage API failures.
+    SANGAM FIX: Implemented Chunking to prevent 414 URI Too Long errors on 180+ tests.
+    Every image, mapping, and question will be flawlessly wiped from DB & Storage.
+
+    ROOT-CAUSE FIX (Sep 2026): The old version discovered which questions/images
+    to delete ONLY via the mock_test_questions mapping join. If that failed, images 
+    became orphaned. Now we fetch directly from mock_questions.
+
+    DIAGNOSTIC LOGGING & PATH FIX (Sep 2026): Supabase storage remove silently fails 
+    if there's a trailing '?'. We strip that off completely so images are 100% deleted.
     """
     try:
         test_info = supabase_admin.table("tests").select("series_id").eq("id", test_id).maybe_single().execute().data
@@ -524,7 +530,7 @@ def tests_delete(test_id):
                 )
                 for q in rows:
                     if q.get("image_url") and "question-images/" in q["image_url"]:
-                        # Remove trailing '?' so Supabase doesn't fail silently
+                        # SANGAM STUDY HUB FIX: Remove trailing '?' so Supabase doesn't fail silently
                         clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
                         image_paths.append(clean_path)
 
