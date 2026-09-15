@@ -10,7 +10,7 @@ Flow:
     A. 25-Chunk Upload (3-Tabs) with STRICT SANGAM STUDY HUB RULES (45-45-90 for 720 marks).
     B. Live JSON Edit: Seamless replacement of JSON + Image toggle (No Duplicates).
     C. Undo Chunk: Temporary history destruction with Deep Storage Cleanup.
-    D. Deep Storage Permanent Cleanup (Fixed Chunking Bug for 100% Wipe).
+    D. Deep Storage Permanent Cleanup (Fixed Chunking Bug & Trailing '?' Bug for 100% Wipe).
 """
 import json
 import logging
@@ -30,12 +30,14 @@ BUCKET_NAME = "question-images"
 def _delete_image_from_storage(image_url):
     """
     Fallback Helper function for single image deletions.
+    SANGAM FIX: Strips any trailing '?' from the URL to prevent silent Storage API failures.
     """
     if not image_url:
         return
     try:
         if "question-images/" in image_url:
-            path = image_url.split("question-images/")[1]
+            # Extract path and strip any query parameters (like ?t=...)
+            path = image_url.split("question-images/")[1].split("?")[0]
             supabase_admin.storage.from_(BUCKET_NAME).remove([path])
     except Exception as e:
         print(f"Failed to delete image from storage {image_url}: {e}")
@@ -96,10 +98,8 @@ def test_series_delete(series_id):
     SANGAM FIX: Implemented Batch Chunking to prevent 414 URI Too Long error, 
     ensuring absolutely NO ghost data remains in the DB or Storage.
 
-    DIAGNOSTIC LOGGING (Sep 2026): see the matching docstring note in
-    tests_delete() — Supabase's storage .remove() silently no-ops on a path
-    it can't match instead of raising, so every step here is logged to make
-    that failure mode visible in the Render logs if it happens again.
+    DIAGNOSTIC LOGGING & PATH FIX (Sep 2026): Stripping trailing '?' from paths
+    so Supabase Storage doesn't silently fail to delete the images.
     """
     try:
         tests_in_series = supabase_admin.table("tests").select("id").eq("series_id", series_id).execute().data
@@ -123,10 +123,7 @@ def test_series_delete(series_id):
                     if qid:
                         question_ids.append(qid)
 
-            # ROOT-CAUSE FIX (Sep 2026): fetch image_url directly from
-            # mock_questions by id instead of via the mapping join — see the
-            # matching comment in tests_delete() for why the join can silently
-            # skip images that then get orphaned in storage.
+            # ROOT-CAUSE FIX: fetch image_url directly from mock_questions by id
             unique_question_ids = list(set(question_ids))
             logger.info(f"[test_series_delete:{series_id}] unique question_ids: {len(unique_question_ids)}")
             if unique_question_ids:
@@ -141,7 +138,9 @@ def test_series_delete(series_id):
                     )
                     for q in rows:
                         if q.get("image_url") and "question-images/" in q["image_url"]:
-                            image_paths.append(q["image_url"].split("question-images/")[1])
+                            # SANGAM FIX: Split by '?' to remove trailing query strings
+                            clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
+                            image_paths.append(clean_path)
 
             logger.info(f"[test_series_delete:{series_id}] image_paths to remove ({len(image_paths)}): {image_paths}")
 
@@ -418,6 +417,7 @@ def tests_undo_chunk(test_id):
     PERMANENT DELETION ROUTE. 
     Accepts an array of question_ids and wipes them from mapping, question bank, 
     and deletes any attached images from the Storage Bucket in batches.
+    SANGAM FIX: Added trailing '?' stripper logic here too.
     """
     payload = request.json
     if not payload or not payload.get("question_ids"):
@@ -431,7 +431,9 @@ def tests_undo_chunk(test_id):
         image_paths = []
         for q in questions:
             if q.get("image_url") and "question-images/" in q["image_url"]:
-                image_paths.append(q["image_url"].split("question-images/")[1])
+                # Remove trailing '?' before adding to deletion list
+                clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
+                image_paths.append(clean_path)
         
         # Batch delete from storage
         if image_paths:
@@ -492,34 +494,8 @@ def tests_edit_question(test_id, question_id):
 def tests_delete(test_id):
     """
     Deep Storage Permanent Cleanup:
-    SANGAM FIX: Implemented Chunking to prevent 414 URI Too Long errors on 180+ tests.
-    Every image, mapping, and question will be flawlessly wiped from DB & Storage.
-
-    ROOT-CAUSE FIX (Sep 2026): The old version discovered which questions/images
-    to delete ONLY via the mock_test_questions mapping join
-    (`.select("mock_question_id, mock_questions(image_url)")`). If that nested
-    join ever came back empty/partial for a row (a mapping row present but the
-    joined question missing, or vice versa), that question's image_url was
-    silently skipped from the storage-delete step even though the question row
-    itself still got deleted a few lines later via `question_ids`. Result:
-    the DB row disappeared but the file stayed orphaned in the bucket forever,
-    and the dashboard's "pending" counter could stay stuck too if the mapping
-    broke before an image was ever uploaded.
-
-    Fix: fetch image_url directly from mock_questions using the test's actual
-    question_ids (not the join), so storage cleanup no longer depends on the
-    mapping table being intact.
-
-    DIAGNOSTIC LOGGING (Sep 2026): Supabase's storage .remove() call does NOT
-    raise an exception when a given path doesn't match any existing file in
-    the bucket — it just returns an empty result, as if nothing was wrong.
-    That means a silent path-mismatch bug would never show up as an error
-    anywhere, before or after this fix. Every step below is logged so that if
-    images ever fail to disappear again, the Render log for this exact
-    request will show precisely how many questions/images were found, which
-    exact storage paths were sent to Supabase, and — critically — what
-    Supabase's response says it actually deleted. Compare "asked to delete X"
-    vs "server confirms Y removed" in the logs to pinpoint a mismatch.
+    SANGAM FIX: Implemented Chunking to prevent 414 URI Too Long errors.
+    SANGAM FIX 2: Strips trailing '?' from paths to prevent silent Storage API failures.
     """
     try:
         test_info = supabase_admin.table("tests").select("series_id").eq("id", test_id).maybe_single().execute().data
@@ -535,9 +511,6 @@ def tests_delete(test_id):
         question_ids = list({row["mock_question_id"] for row in mapped if row.get("mock_question_id")})
         logger.info(f"[tests_delete:{test_id}] mapping rows found: {len(mapped)}, unique question_ids: {len(question_ids)}")
 
-        # Fetch image_url directly from mock_questions by id — independent of
-        # whether the mapping-join above was complete. This is the fix: we no
-        # longer trust the nested join to hand us every image_url.
         image_paths = []
         if question_ids:
             for i in range(0, len(question_ids), 100):
@@ -551,7 +524,9 @@ def tests_delete(test_id):
                 )
                 for q in rows:
                     if q.get("image_url") and "question-images/" in q["image_url"]:
-                        image_paths.append(q["image_url"].split("question-images/")[1])
+                        # Remove trailing '?' so Supabase doesn't fail silently
+                        clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
+                        image_paths.append(clean_path)
 
         logger.info(f"[tests_delete:{test_id}] image_paths to remove from storage ({len(image_paths)}): {image_paths}")
 
@@ -561,9 +536,6 @@ def tests_delete(test_id):
                 batch = image_paths[i:i+50]
                 try:
                     result = supabase_admin.storage.from_(BUCKET_NAME).remove(batch)
-                    # result is normally a list of the file objects Supabase actually
-                    # removed. If len(result) < len(batch), some paths didn't match
-                    # any real file in the bucket — that's the silent-failure case.
                     removed_names = [r.get("name") for r in (result or []) if isinstance(r, dict)]
                     logger.info(
                         f"[tests_delete:{test_id}] storage.remove asked for {len(batch)} paths, "
