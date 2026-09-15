@@ -256,9 +256,30 @@
                     return;
                 }
 
-                // Auto-inject subject name strictly
+                // SANGAM STUDY HUB CROSS-SUBJECT PREVENTION CHECK
                 const subjectNameMapping = { 'physics': 'Physics', 'chemistry': 'Chemistry', 'biology': 'Biology' };
-                parsedArray.forEach(item => { item.subject_name = subjectNameMapping[subject]; });
+                const expectedSubjectName = subjectNameMapping[subject];
+                
+                let mismatchFound = false;
+                let mismatchedName = "";
+
+                for (let i = 0; i < parsedArray.length; i++) {
+                    let item = parsedArray[i];
+                    // If subject_name is explicitly defined in JSON but doesn't match the current tab (case-insensitive)
+                    if (item.subject_name && item.subject_name.trim().toLowerCase() !== expectedSubjectName.toLowerCase()) {
+                        mismatchFound = true;
+                        mismatchedName = item.subject_name;
+                        break;
+                    }
+                }
+
+                if (mismatchFound) {
+                    this.showMessage(subject, `⚠️ SANGAM STUDY HUB RULES: Mismatch Detected! You are trying to upload a '${mismatchedName}' question into the '${expectedSubjectName}' tab. Please check your JSON array before uploading.`, true);
+                    return;
+                }
+
+                // If check passes, auto-inject the correct subject name just to be safe before sending to backend
+                parsedArray.forEach(item => { item.subject_name = expectedSubjectName; });
 
                 this.isProcessing = true;
                 this.messages[subject] = '';
@@ -288,7 +309,8 @@
 
                         this.showMessage(subject, `✅ SANGAM STUDY HUB: Successfully uploaded ${data.inserted} questions.`);
                     } else {
-                        this.showMessage(subject, "Error: " + (data.error || "Upload failed."), true);
+                        // Dynamically catch Duplicate Detection Error from Backend
+                        this.showMessage(subject, "❌ " + (data.error || "Upload failed due to database error."), true);
                     }
                 } catch (e) {
                     this.showMessage(subject, "Network Error. Please try again.", true);
