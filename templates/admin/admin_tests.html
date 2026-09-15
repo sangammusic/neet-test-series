@@ -5,14 +5,25 @@
 {% block content %}
 <!-- LEVEL 2 HEADER: Folder Context -->
 <div class="max-w-5xl mx-auto px-6 py-10">
+  
   <div class="flex justify-between items-center mb-8">
     <div>
       <h1 class="font-display text-3xl text-ink mb-1">📂 {{ series.name }}</h1>
-      <p class="text-ink/60 text-sm">Level 2: Manage tests inside this folder or create a new one.</p>
+      <p class="text-ink/60 text-sm">Level 2: Manage existing tests or add a new one.</p>
     </div>
-    <a href="{{ url_for('admin.test_series_list') }}" class="text-sm font-medium text-ink bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-md transition-colors">
-      &larr; Back to Folders
-    </a>
+    <div class="flex items-center gap-4">
+      <a href="{{ url_for('admin.test_series_list') }}" class="text-sm font-bold text-ink bg-gray-100 hover:bg-gray-200 px-4 py-2.5 rounded-md transition-colors border border-gray-200 shadow-sm">
+        &larr; Back to Folders
+      </a>
+      
+      <!-- THE STYLISH "+" ICON BUTTON TO ADD TEST -->
+      <button onclick="toggleCreateForm()" class="flex items-center gap-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-md transition-colors shadow-md">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z"/>
+        </svg>
+        Add New Test
+      </button>
+    </div>
   </div>
 
   <!-- FLASH MESSAGES -->
@@ -28,104 +39,194 @@
     {% endif %}
   {% endwith %}
 
-  <!-- CREATE NEW TEST INSIDE THIS FOLDER -->
-  <form method="POST" action="{{ url_for('admin.series_tests', series_id=series.id) }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 grid grid-cols-2 gap-4 shadow-sm">
-    <div class="col-span-2 mb-2 border-b border-ink/10 pb-2">
-        <h3 class="font-bold text-lg text-ink">Add New Test in {{ series.name }}</h3>
-    </div>
+  <!-- CREATE NEW TEST FORM (Hidden by default, shown by the + Button) -->
+  <div id="create-test-box" class="hidden bg-white border-2 border-indigo-100 rounded-lg p-6 mb-8 shadow-lg relative">
     
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Stream</label>
-      <select name="stream_id" required class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
-        <option value="" disabled selected>-- Select Stream --</option>
-        {% for s in streams %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
-      </select>
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Category</label>
-      <select name="category_id" required class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
-        <option value="" disabled selected>-- Select Category --</option>
-        {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
-      </select>
-    </div>
-    
-    <div class="col-span-2">
-      <label class="block text-sm font-medium text-ink mb-1">Test Name</label>
-      <input type="text" name="title" required placeholder="e.g. NEET Full Mock #1" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
-    </div>
-    
-    <div class="col-span-2">
-      <label class="block text-sm font-medium text-ink mb-1">Test Syllabus (Topics covered)</label>
-      <textarea name="description" rows="2" placeholder="e.g. Full syllabus — Physics, Chemistry, Biology (Class 11 + 12)" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"></textarea>
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Duration (minutes)</label>
-      <input type="number" name="duration_minutes" value="180" required class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Total Marks</label>
-      <input type="number" name="total_marks" placeholder="e.g. 720" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Negative Marking (per wrong answer)</label>
-      <input type="number" step="0.25" name="negative_marking" value="0" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Price (₹, if premium)</label>
-      <input type="number" step="1" name="price_inr" value="0" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
-    </div>
-    
-    <label class="col-span-2 flex items-center gap-2 text-sm font-medium text-ink mt-2">
-      <input type="checkbox" name="is_premium" class="rounded border-ink/30 text-blue-600 focus:ring-blue-500"> Is Premium?
-    </label>
-    
-    <button type="submit" class="col-span-2 bg-ink text-paper font-medium py-3 mt-2 rounded-md hover:bg-ink-light transition-colors">
-      Create Test → Map Questions
+    <!-- Close Form Button (X) -->
+    <button onclick="toggleCreateForm()" class="absolute top-4 right-4 text-gray-400 hover:text-red-500">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+      </svg>
     </button>
-  </form>
+
+    <div class="mb-6 border-b border-ink/10 pb-3">
+        <h3 class="font-bold text-xl text-ink">📝 Create New Test</h3>
+        <p class="text-sm text-red-500 font-medium">All fields are mandatory.</p>
+    </div>
+    
+    <form method="POST" action="{{ url_for('admin.series_tests', series_id=series.id) }}" class="grid grid-cols-2 gap-5">
+      
+      <div>
+        <label class="block text-sm font-bold text-ink mb-1">Stream <span class="text-red-500">*</span></label>
+        <select name="stream_id" required title="Please select a stream" class="w-full rounded-md border border-ink/20 px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50">
+          <option value="" disabled selected>-- Select Stream --</option>
+          {% for s in streams %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+      </div>
+      
+      <div>
+        <label class="block text-sm font-bold text-ink mb-1">Category <span class="text-red-500">*</span></label>
+        <select name="category_id" required title="Please select a category" class="w-full rounded-md border border-ink/20 px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50">
+          <option value="" disabled selected>-- Select Category --</option>
+          {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+        </select>
+      </div>
+      
+      <div class="col-span-2">
+        <label class="block text-sm font-bold text-ink mb-1">Test Name <span class="text-red-500">*</span></label>
+        <input type="text" name="title" required title="Please enter the test name" placeholder="e.g. NEET Full Mock #1" class="w-full rounded-md border border-ink/20 px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50">
+      </div>
+      
+      <div class="col-span-2">
+        <label class="block text-sm font-bold text-ink mb-1">Test Syllabus (Topics covered) <span class="text-red-500">*</span></label>
+        <textarea name="description" rows="2" required title="Please enter the syllabus details" placeholder="e.g. Full syllabus — Physics, Chemistry, Biology" class="w-full rounded-md border border-ink/20 px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50"></textarea>
+      </div>
+      
+      <div>
+        <label class="block text-sm font-bold text-ink mb-1">Duration (minutes) <span class="text-red-500">*</span></label>
+        <input type="number" name="duration_minutes" value="180" required title="Enter test duration" class="w-full rounded-md border border-ink/20 px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50">
+      </div>
+      
+      <div>
+        <label class="block text-sm font-bold text-ink mb-1">Total Marks <span class="text-red-500">*</span></label>
+        <!-- STRICT VALIDATION: HTML5 will prevent form submission if this is blank -->
+        <input type="number" name="total_marks" required placeholder="e.g. 720" title="Total marks cannot be blank" class="w-full rounded-md border border-ink/20 px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50">
+      </div>
+      
+      <div>
+        <label class="block text-sm font-bold text-ink mb-1">Negative Marking (per wrong answer)</label>
+        <input type="number" step="0.25" name="negative_marking" value="1" required class="w-full rounded-md border border-ink/20 px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50">
+      </div>
+      
+      <div>
+        <label class="block text-sm font-bold text-ink mb-1">Price (₹, if premium)</label>
+        <input type="number" step="1" name="price_inr" value="0" required class="w-full rounded-md border border-ink/20 px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50">
+      </div>
+      
+      <label class="col-span-2 flex items-center gap-2 text-sm font-bold text-ink mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md cursor-pointer hover:bg-yellow-100 transition-colors">
+        <input type="checkbox" name="is_premium" class="w-5 h-5 rounded border-ink/30 text-indigo-600 focus:ring-indigo-500 cursor-pointer"> 
+        Mark as Premium Test? (Students must pay to access)
+      </label>
+      
+      <button type="submit" class="col-span-2 bg-indigo-600 text-white font-bold text-lg py-3 mt-2 rounded-md hover:bg-indigo-700 transition-colors shadow-md">
+        Create Test
+      </button>
+    </form>
+  </div>
 
   <!-- LIST OF EXISTING TESTS IN FOLDER -->
-  <h3 class="font-bold text-lg text-ink mb-4">Tests inside "{{ series.name }}"</h3>
-  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10 shadow-sm">
+  <h3 class="font-bold text-lg text-ink mb-4 flex items-center gap-2">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="text-indigo-600" viewBox="0 0 16 16">
+      <path fill-rule="evenodd" d="M15.817.113A.5.5 0 0 1 16 .5v14a.5.5 0 0 1-.402.49l-5 1a.502.502 0 0 1-.196 0L5.5 15.01l-4.902.98A.5.5 0 0 1 0 15.5v-14a.5.5 0 0 1 .402-.49l5-1a.5.5 0 0 1 .196 0L10.5.99l4.902-.98a.5.5 0 0 1 .415.103zM10 1.94l-4-.8v12.92l4 .8V1.94zm-5-.8L1.102 1.334v12.726l3.898-.78V1.14zm6 12.726l3.898-.78V1.334l-3.898.78v12.726z"/>
+    </svg>
+    Existing Tests inside "{{ series.name }}"
+  </h3>
+  
+  <div class="bg-white border border-ink/10 rounded-lg shadow-sm">
     {% for t in tests %}
-    <div class="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
-      <div>
-        <span class="font-bold text-ink text-lg">{{ t.title }}</span>
-        <div class="text-ink/60 text-sm mt-1">
-            {{ t.streams.name if t.streams }} &bull; {{ t.duration_minutes }} min &bull; {{ t.total_marks or '—' }} marks
+    <div class="flex items-center justify-between px-6 py-5 border-b border-ink/10 hover:bg-gray-50 transition-colors last:border-0 relative group">
+      
+      <!-- TEST INFO -->
+      <div class="w-3/4">
+        <h4 class="font-bold text-ink text-xl mb-1">{{ t.title }}</h4>
+        
+        <!-- BUG FIX: SYLLABUS PRINTED EXACTLY ONCE -->
+        {% if t.description %}
+          <p class="text-sm text-gray-600 mb-3 truncate" title="{{ t.description }}">{{ t.description }}</p>
+        {% endif %}
+
+        <div class="flex items-center gap-3 text-xs font-bold">
+            <span class="bg-gray-200 text-gray-700 px-2 py-1 rounded">{{ t.streams.name if t.streams else 'No Stream' }}</span>
+            <span class="text-gray-500 border border-gray-300 px-2 py-1 rounded bg-white">⏱️ {{ t.duration_minutes }} min</span>
+            <span class="text-gray-500 border border-gray-300 px-2 py-1 rounded bg-white">🎯 {{ t.total_marks }} marks</span>
+            
             {% if t.is_premium %}
-                <span class="text-xs bg-gold/15 text-gold font-bold rounded px-2 py-0.5 ml-2 border border-gold/30">PREMIUM</span>
+                <span class="bg-yellow-100 text-yellow-800 border border-yellow-300 px-2 py-1 rounded">💎 PREMIUM</span>
             {% else %}
-                <span class="text-xs bg-green-50 text-green-700 font-bold rounded px-2 py-0.5 ml-2 border border-green-200">FREE</span>
+                <span class="bg-green-100 text-green-800 border border-green-300 px-2 py-1 rounded">✅ FREE</span>
             {% endif %}
         </div>
       </div>
-      <div class="flex items-center gap-4">
-        <!-- Go to Level 3 (Upload/Edit) -->
-        <a href="{{ url_for('admin.tests_manage', test_id=t.id) }}" class="text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-md transition-colors shadow-sm">
-            Map Questions &rarr;
-        </a>
-        
-        <form method="POST" action="{{ url_for('admin.tests_delete', test_id=t.id) }}"
-              onsubmit="return confirm('WARNING: Delete &quot;{{ t.title }}&quot;?\n\nThis will permanently wipe this test AND all its images from the storage bucket. This action cannot be undone.');">
-          <button type="submit" class="text-sm font-semibold text-red-600 hover:text-red-800 px-2 py-2 transition-colors">Delete</button>
-        </form>
+      
+      <!-- STYLISH SLIDE-DOWN MENU (ACTION BUTTON) -->
+      <div class="relative action-menu-container">
+        <!-- The 3 Dots Button -->
+        <button onclick="toggleDropdown('menu-{{ t.id }}')" class="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors focus:outline-none">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+            </svg>
+        </button>
+
+        <!-- The Hidden Dropdown Box -->
+        <div id="menu-{{ t.id }}" class="dropdown-box hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-100 z-50 overflow-hidden transform transition-all origin-top-right">
+            
+            <!-- OPTION 1: EDIT TEST -->
+            <a href="{{ url_for('admin.tests_manage', test_id=t.id) }}" class="flex items-center gap-2 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
+                </svg>
+                Edit Test
+            </a>
+            
+            <!-- OPTION 2: DELETE TEST -->
+            <form method="POST" action="{{ url_for('admin.tests_delete', test_id=t.id) }}" class="m-0" onsubmit="return confirm('WARNING: Delete &quot;{{ t.title }}&quot;?\n\nThis will permanently wipe this test AND all its images from the storage bucket.\n\nTHIS ACTION CANNOT BE UNDONE.');">
+              <button type="submit" class="flex items-center gap-2 w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                    <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                  </svg>
+                  Delete Test
+              </button>
+            </form>
+        </div>
       </div>
+      
     </div>
     {% else %}
-    <div class="px-5 py-10 text-center">
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-file-earmark-x text-gray-300 mx-auto mb-3" viewBox="0 0 16 16">
-          <path d="M6.854 7.146a.5.5 0 1 0-.708.708L7.293 9l-1.147 1.146a.5.5 0 0 0 .708.708L8 9.707l1.146 1.147a.5.5 0 0 0 .708-.708L8.707 9l1.147-1.146a.5.5 0 0 0-.708-.708L8 8.293 6.854 7.146z"/>
-          <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z"/>
+    <!-- EMPTY STATE -->
+    <div class="px-5 py-16 text-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" class="text-gray-200 mx-auto mb-4" viewBox="0 0 16 16">
+          <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 14A6 6 0 1 1 8 2a6 6 0 0 1 0 12z"/>
+          <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
         </svg>
-        <p class="text-ink/60 text-sm font-medium">No tests exist in this folder yet.<br>Use the form above to create your first test.</p>
+        <p class="text-ink/50 font-bold text-lg mb-2">No tests exist in this folder yet.</p>
+        <p class="text-ink/40 text-sm">Click the '+ Add New Test' button above to create one.</p>
     </div>
     {% endfor %}
   </div>
 </div>
+
+<!-- JAVASCRIPT FOR UI CONTROLS -->
+<script>
+    // 1. Toggles the Create Form Visibility
+    function toggleCreateForm() {
+        const formBox = document.getElementById('create-test-box');
+        formBox.classList.toggle('hidden');
+    }
+
+    // 2. Toggles the specific Dropdown Menu for a Test
+    function toggleDropdown(menuId) {
+        const targetMenu = document.getElementById(menuId);
+        const isCurrentlyHidden = targetMenu.classList.contains('hidden');
+        
+        // Hide ALL open menus first (to prevent multiple open at once)
+        document.querySelectorAll('.dropdown-box').forEach(el => {
+            el.classList.add('hidden');
+        });
+
+        // If the clicked menu was hidden, show it
+        if (isCurrentlyHidden) {
+            targetMenu.classList.remove('hidden');
+        }
+    }
+
+    // 3. Closes any open dropdown if Admin clicks anywhere else on the screen
+    window.addEventListener('click', function(e) {
+        if (!e.target.closest('.action-menu-container')) {
+            document.querySelectorAll('.dropdown-box').forEach(el => {
+                el.classList.add('hidden');
+            });
+        }
+    });
+</script>
 {% endblock %}
