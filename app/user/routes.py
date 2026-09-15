@@ -24,10 +24,6 @@ def landing():
             return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
         return redirect(url_for("user.stream_select"))
 
-    # Guests: only check streams for an EXISTING guest cookie — don't
-    # create a new guest_id here just to look something up. A brand
-    # new visitor with no cookie yet has no saved streams by
-    # definition, so there's nothing to check.
     guest_id = request.cookies.get(GUEST_COOKIE_NAME)
     if guest_id:
         existing = get_streams_for_user_or_guest(guest_id=guest_id)
@@ -42,13 +38,6 @@ def stream_select():
     streams = get_active_streams()
 
     if request.method == "GET":
-        # ?force=1 is set by switch_stream() below — it means the
-        # person deliberately asked to change their stream, so the
-        # form must show even though they already have one saved.
-        # Without this check, "Switch Stream" would be a dead button:
-        # it redirects here, this route would see existing streams,
-        # and bounce them straight back to the dashboard they just
-        # tried to leave.
         force = request.args.get("force") == "1"
 
         if not force:
@@ -82,13 +71,6 @@ def stream_select():
     first_stream = next((s for s in streams if s["id"] == selected_ids[0]), None)
     response = redirect(url_for("user.stream_dashboard", slug=first_stream["slug"]))
     if not is_logged_in() and is_new:
-        # New guest created in this request — the cookie needs to be
-        # set on the response, same as guest_start() does in
-        # app/auth/routes.py. Without this, the guest_id used above
-        # only exists in this one request; the next page load would
-        # generate a DIFFERENT random guest_id (no cookie to read it
-        # back from) and the just-saved streams would look like they
-        # never happened.
         response = set_guest_cookie(response, guest_id)
     return response
 
@@ -108,17 +90,6 @@ def switch_stream():
 
 @user_bp.route("/dashboard")
 def my_dashboard():
-    """
-    BUGFIX: the nav bar's "My Dashboard" link used to point straight at
-    /profile, which only shows past test attempts (often empty for a
-    new user) and has no way back to the actual stream dashboard (the
-    "Chapter-wise Practice" / "Mock Test Series" cards) — that page was
-    only ever reachable via /streams/<slug>, which nothing in the nav
-    linked to. This route re-derives the user's (or guest's) first
-    saved stream, same lookup as landing(), and sends them to the real
-    dashboard. If they haven't picked a stream yet, send them to pick
-    one instead of 404ing.
-    """
     if is_logged_in():
         existing = get_streams_for_user_or_guest(user_id=current_user_id())
     else:
@@ -179,13 +150,48 @@ def practice_run(slug, chapter_id, mode):
     return render_template("practice_run.html", questions=questions, topic_name=topic_name)
 
 
-# ---------- Menu 2: Mock Test Series ----------
+# ---------- Menu 2: Mock Test Series (PHASE 4: STRICT ISOLATION) ----------
 
 @user_bp.route("/streams/<slug>/tests")
 def tests_feed(slug):
+    """
+    PHASE 4: Shows Folders (Test Series) instead of flat bikhre hue tests.
+    """
     stream = get_stream_by_slug(slug)
-    tests = get_all_tests_for_stream(stream["id"])
-    return render_template("tests_feed.html", stream=stream, tests=tests)
+    # Fetch all VIP Folders created by admin
+    series_list = (
+        supabase_admin.table("mock_test_series")
+        .select("*")
+        .order("created_at", desc=True)
+        .execute()
+        .data
+    )
+    return render_template("tests_feed.html", stream=stream, series_list=series_list)
+
+
+@user_bp.route("/streams/<slug>/series/<series_id>/tests")
+def series_tests(slug, series_id):
+    """
+    PHASE 4: Strict Folder Hierarchy. 
+    Only shows tests belonging to this specific Folder AND this Student's Stream.
+    Zero Test Leaking.
+    """
+    stream = get_stream_by_slug(slug)
+    series = supabase_admin.table("mock_test_series").select("*").eq("id", series_id).single().execute().data
+    if not series:
+        abort(404)
+    
+    # Strict isolation: series_id + stream_id
+    tests = (
+        supabase_admin.table("tests")
+        .select("*")
+        .eq("series_id", series_id)
+        .eq("stream_id", stream["id"])
+        .order("created_at", desc=True)
+        .execute()
+        .data
+    )
+    return render_template("user_series_tests.html", stream=stream, series=series, tests=tests)
 
 
 @user_bp.route("/streams/<slug>/tests/<test_id>")
@@ -199,12 +205,6 @@ def test_overview(slug, test_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/start", methods=["POST"])
 def test_start(slug, test_id):
-    """
-    Creates a fresh test_attempts row and redirects into the attempt
-    screen. A POST (not GET) on purpose — starting an attempt is a
-    side-effecting action (it writes a row), so it shouldn't happen
-    on a plain link click/page reload/prefetch.
-    """
     test = get_test_by_id(test_id)
     if not test:
         abort(404)
@@ -232,12 +232,6 @@ def test_start(slug, test_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>")
 def test_attempt(slug, test_id, attempt_id):
-    """
-    The NTA-style attempt screen: questions grouped by subject for
-    tab-switching, with a client-side timer and a question-status
-    palette. All answer-saving happens via AJAX to
-    test_attempt_save_answer() below.
-    """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id:
         abort(404)
@@ -247,8 +241,6 @@ def test_attempt(slug, test_id, attempt_id):
     stream = get_stream_by_slug(slug)
     test = get_test_by_id(test_id)
     questions_by_subject = get_mock_questions_for_test(test_id)
-    
-    # HYDRATE PROGRESS: Pull from DB directly so page refresh doesn't lose state.
     saved_progress = get_attempt_answers_map(attempt_id)
 
     return render_template(
@@ -263,20 +255,15 @@ def test_attempt(slug, test_id, attempt_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>/answer", methods=["POST"])
 def test_attempt_save_answer(slug, test_id, attempt_id):
-    """
-    AJAX endpoint the attempt screen calls every time the student
-    picks/changes/clears an option. Upserts directly into attempt_answers
-    instead of writing into the cookie-backed Flask session. No cookie limits, no data loss.
-    """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id or attempt.get("submitted_at"):
         return jsonify({"ok": False, "error": "attempt not active"}), 400
 
     payload = request.get_json(silent=True) or {}
     question_id = payload.get("question_id")
-    selected_option = payload.get("selected_option")  # "A"/"B"/"C"/"D"/None (None = clear)
-    status = payload.get("status")  # "answered" / "marked" / "answered_marked" / "not_answered"
-    time_taken_sec = payload.get("time_taken_sec")  # running total
+    selected_option = payload.get("selected_option")
+    status = payload.get("status")
+    time_taken_sec = payload.get("time_taken_sec")
 
     if not question_id:
         return jsonify({"ok": False, "error": "question_id required"}), 400
@@ -286,24 +273,16 @@ def test_attempt_save_answer(slug, test_id, attempt_id):
     except (TypeError, ValueError):
         time_taken_sec = 0
 
-    # UPSERT directly to DB (Replaces the broken session[session_key] = progress code)
     save_attempt_progress(attempt_id, question_id, selected_option, status, time_taken_sec)
-
     return jsonify({"ok": True})
 
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>/submit", methods=["POST"])
 def test_attempt_submit(slug, test_id, attempt_id):
-    """
-    Finalizes the attempt. The client sends one final bulk payload
-    of everything held in its Alpine state right before this call
-    (JSON body). This guarantees no missed clicks if the network dropped.
-    """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id:
         abort(404)
         
-    # Agar already submit ho chuka hai, directly result pe redirect
     if attempt.get("submitted_at"):
         return jsonify({
             "ok": True,
@@ -315,7 +294,6 @@ def test_attempt_submit(slug, test_id, attempt_id):
     payload = request.get_json(silent=True) or {}
     final_answers = payload.get("answers") or {}
     
-    # 1. Bulk sync whatever frontend sent us right before submitting
     bulk_entries = [
         {
             "mock_question_id": qid,
@@ -328,7 +306,6 @@ def test_attempt_submit(slug, test_id, attempt_id):
     ]
     bulk_save_attempt_progress(attempt_id, bulk_entries)
 
-    # 2. Read the guaranteed truth from DB and proceed with scoring
     progress = get_attempt_answers_map(attempt_id)
     answers = {
         qid: entry["selected_option"]
@@ -370,10 +347,6 @@ def test_result(slug, test_id, attempt_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>/review")
 def test_attempt_review(slug, test_id, attempt_id):
-    """
-    Read-only review mode: reuses test_attempt.html with
-    is_review_mode=True. Only reachable once the attempt is submitted.
-    """
     attempt = get_attempt_by_id(attempt_id)
     if not attempt or attempt["test_id"] != test_id:
         abort(404)
@@ -407,9 +380,6 @@ def profile():
 
 @user_bp.route("/profile/clear-history", methods=["POST"])
 def clear_history():
-    """
-    Nuclear Option for Users: Instantly wipes all test attempts and answers.
-    """
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     
