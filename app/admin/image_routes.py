@@ -114,8 +114,6 @@ def question_upload_image(table_name, question_id):
     try:
         compressed = compress_image(raw_bytes)
     except Exception as exc:
-        # Most likely cause: not a real image file (corrupt upload,
-        # or a non-image file picked by mistake).
         return jsonify({"ok": False, "error": f"Could not process image — is it a valid photo? ({exc})"}), 400
 
     # ZERO-KACHRA: Check if an old image exists and safely delete it from storage before replacing
@@ -138,8 +136,7 @@ def question_upload_image(table_name, question_id):
         return jsonify({
             "ok": False,
             "error": f"Upload to storage failed: {exc}. "
-                     f"Make sure a public bucket named '{BUCKET_NAME}' exists "
-                     f"(see sql/migration_question_images.sql).",
+                     f"Make sure a public bucket named '{BUCKET_NAME}' exists.",
         }), 500
 
     public_url = supabase_admin.storage.from_(BUCKET_NAME).get_public_url(storage_path)
