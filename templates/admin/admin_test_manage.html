@@ -2,6 +2,10 @@
 {% block title %}Manage Questions — {{ test.title }}{% endblock %}
 
 {% block content %}
+<!-- SANGAM STUDY HUB: Critical CSS to prevent Modal Flashing (FOUC) on page loads -->
+<style>
+    [x-cloak] { display: none !important; }
+</style>
 
 <!-- Alpine.js for State Management (Tabs, Modals, Menus) -->
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -348,7 +352,7 @@
           const data = await res.json();
           
           if (data.ok) {
-            // Hard reload to reflect changes safely everywhere
+            // Hard reload is perfectly fine here now because x-cloak prevents the FOUC modal flash!
             window.location.reload(); 
           } else {
             this.editError = "DB Error: " + data.error;
@@ -362,7 +366,7 @@
     };
   }
 
-  // GLOBAL IMAGE UPLOAD & REMOVE LOGIC (Actual Functionality)
+  // GLOBAL IMAGE UPLOAD & REMOVE LOGIC (Ultra Smooth - AJAX DOM Updates, No Reloads)
   document.addEventListener('change', async (e) => {
     const input = e.target.closest('[data-image-input]');
     if (!input || !input.files[0]) return;
@@ -383,8 +387,22 @@
       });
       const data = await res.json();
       if (data.ok) {
-        // Reload to show the newly saved image in UI
-        window.location.reload();
+        // ULTRA SMOOTH FIX: Inject the new image into the DOM directly without reloading the page!
+        const imgZone = row.querySelector('[data-image-zone]');
+        imgZone.innerHTML = `
+            <div class="flex items-center gap-4" data-image-uploaded>
+                <img src="${data.image_url}" alt="Question Image" class="h-24 w-24 object-contain rounded-lg border border-gray-200 bg-white shadow-sm p-1">
+                <div class="flex flex-col gap-2">
+                    <p class="text-sm font-bold text-green-700 flex items-center gap-1">✅ Image Uploaded</p>
+                    <label class="text-xs font-bold bg-white border border-gray-300 px-4 py-2 rounded shadow-sm text-gray-700 hover:bg-gray-100 cursor-pointer w-fit transition-colors">
+                        🔄 Replace Image
+                        <input type="file" accept="image/*" class="hidden" data-image-input>
+                    </label>
+                    <button type="button" class="text-xs font-bold text-red-600 hover:text-red-800 text-left w-fit" data-remove-image>🗑️ Remove Image</button>
+                </div>
+            </div>
+        `;
+        showSangamToast('Image uploaded successfully! No page reload needed.');
       } else {
         showSangamToast('Upload failed: ' + data.error);
         if (statusEl) statusEl.textContent = 'No image uploaded yet.';
@@ -408,7 +426,21 @@
       const res = await fetch(`/admin/questions/${tableName}/${questionId}/remove-image`, { method: 'POST' });
       const data = await res.json();
       if (data.ok) {
-        window.location.reload();
+        // ULTRA SMOOTH FIX: Revert the UI back to pending state without reloading the page!
+        const imgZone = row.querySelector('[data-image-zone]');
+        imgZone.innerHTML = `
+            <div class="flex items-center justify-between gap-4" data-image-pending>
+                <div>
+                    <p class="text-sm font-bold text-gray-700">📷 Diagram Required</p>
+                    <p class="text-xs text-gray-500 mt-1" data-upload-status>No image uploaded yet.</p>
+                </div>
+                <label class="text-sm bg-indigo-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-indigo-700 cursor-pointer shadow-md transition-colors whitespace-nowrap">
+                    Upload Image
+                    <input type="file" accept="image/*" class="hidden" data-image-input>
+                </label>
+            </div>
+        `;
+        showSangamToast('Image permanently deleted. Ready for new upload.');
       } else {
         showSangamToast('Could not remove image: ' + data.error);
       }
