@@ -187,16 +187,12 @@ create table if not exists tests (
     created_at      timestamptz not null default now()
 );
 
--- ---------- TEST <-> QUESTION MAPPINGS ----------
--- For chapter-wise tests
-create table if not exists test_questions (
-    test_id         uuid not null references tests(id) on delete cascade,
-    question_id     uuid not null references questions(id) on delete cascade,
-    question_order  int not null default 0,
-    primary key (test_id, question_id)
-);
-
--- For mock tests
+-- ---------- TEST <-> QUESTION MAPPING ----------
+-- Mock tests only. There used to be a parallel `test_questions` table
+-- here for chapter-wise tests, but the app never built that feature —
+-- every real test (see app/admin/test_routes.py) is created and
+-- populated through mock_test_questions/mock_questions. Removed as
+-- dead leftover from that earlier, unused architecture.
 create table if not exists mock_test_questions (
     test_id           uuid not null references tests(id) on delete cascade,
     mock_question_id  uuid not null references mock_questions(id) on delete cascade,
