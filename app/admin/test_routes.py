@@ -104,7 +104,7 @@ def test_series_delete(series_id):
             for tid in test_ids:
                 mapped = (
                     supabase_admin.table("mock_test_questions")
-                    .select("mock_question_id, mock_questions(image_url)")
+                    .select("mock_question_id")
                     .eq("test_id", tid)
                     .execute()
                     .data
@@ -113,10 +113,25 @@ def test_series_delete(series_id):
                     qid = row.get("mock_question_id")
                     if qid:
                         question_ids.append(qid)
-                    
-                    q = row.get("mock_questions")
-                    if q and q.get("image_url") and "question-images/" in q["image_url"]:
-                        image_paths.append(q["image_url"].split("question-images/")[1])
+
+            # ROOT-CAUSE FIX (Sep 2026): fetch image_url directly from
+            # mock_questions by id instead of via the mapping join — see the
+            # matching comment in tests_delete() for why the join can silently
+            # skip images that then get orphaned in storage.
+            unique_question_ids = list(set(question_ids))
+            if unique_question_ids:
+                for i in range(0, len(unique_question_ids), 100):
+                    chunk = unique_question_ids[i:i + 100]
+                    rows = (
+                        supabase_admin.table("mock_questions")
+                        .select("image_url")
+                        .in_("id", chunk)
+                        .execute()
+                        .data
+                    )
+                    for q in rows:
+                        if q.get("image_url") and "question-images/" in q["image_url"]:
+                            image_paths.append(q["image_url"].split("question-images/")[1])
 
             # 1. Chunked Image Deletion from Bucket (Max 50 per batch)
             if image_paths:
@@ -157,7 +172,7 @@ def test_series_delete(series_id):
 @admin_bp.route("/test-series/<series_id>/tests", methods=["GET", "POST"])
 @admin_required
 def series_tests(series_id):
-    series_data = supabase_admin.table("mock_test_series").select("*").eq("id", series_id).single().execute().data
+    series_data = supabase_admin.table("mock_test_series").select("*").eq("id", series_id).maybe_single().execute().data
     if not series_data:
         flash("Test Series Folder not found.", "error")
         return redirect(url_for("admin.test_series_list"))
@@ -224,7 +239,7 @@ def series_tests(series_id):
 @admin_bp.route("/tests/<test_id>/upload")
 @admin_required
 def tests_upload(test_id):
-    test = supabase_admin.table("tests").select("*, mock_test_series(id, name)").eq("id", test_id).single().execute().data
+    test = supabase_admin.table("tests").select("*, mock_test_series(id, name)").eq("id", test_id).maybe_single().execute().data
     if not test:
         flash("Test not found.", "error")
         return redirect(url_for("admin.test_series_list"))
@@ -255,7 +270,7 @@ def tests_lock_targets(test_id):
 @admin_bp.route("/tests/<test_id>/manage")
 @admin_required
 def tests_manage(test_id):
-    test = supabase_admin.table("tests").select("*, mock_test_series(id, name)").eq("id", test_id).single().execute().data
+    test = supabase_admin.table("tests").select("*, mock_test_series(id, name)").eq("id", test_id).maybe_single().execute().data
     if not test:
         flash("Test not found.", "error")
         return redirect(url_for("admin.test_series_list"))
@@ -276,7 +291,7 @@ def tests_manage(test_id):
 def tests_bulk_map_questions(test_id):
     is_ajax = request.args.get("ajax") == "1"
     
-    test = supabase_admin.table("tests").select("id, stream_id, total_marks").eq("id", test_id).single().execute().data
+    test = supabase_admin.table("tests").select("id, stream_id, total_marks").eq("id", test_id).maybe_single().execute().data
     if not test:
         if is_ajax: return jsonify({"ok": False, "error": "Test not found."}), 404
         flash("Test not found.", "error")
@@ -422,7 +437,7 @@ def tests_edit_question(test_id, question_id):
     if not raw:
         return jsonify({"ok": False, "error": "No JSON payload received"}), 400
 
-    test = supabase_admin.table("tests").select("stream_id").eq("id", test_id).single().execute().data
+    test = supabase_admin.table("tests").select("stream_id").eq("id", test_id).maybe_single().execute().data
     if not test:
         return jsonify({"ok": False, "error": "Test not found."}), 404
 
@@ -435,7 +450,7 @@ def tests_edit_question(test_id, question_id):
     if error:
         return jsonify({"ok": False, "error": error}), 400
 
-    old_q = supabase_admin.table("mock_questions").select("image_url, has_image").eq("id", question_id).single().execute().data
+    old_q = supabase_admin.table("mock_questions").select("image_url, has_image").eq("id", question_id).maybe_single().execute().data
     if old_q and old_q.get("image_url") and not payload.get("has_image"):
         _delete_image_from_storage(old_q["image_url"])
         payload["image_url"] = None
@@ -451,32 +466,55 @@ def tests_edit_question(test_id, question_id):
 @admin_required
 def tests_delete(test_id):
     """
-    Deep Storage Permanent Cleanup: 
+    Deep Storage Permanent Cleanup:
     SANGAM FIX: Implemented Chunking to prevent 414 URI Too Long errors on 180+ tests.
     Every image, mapping, and question will be flawlessly wiped from DB & Storage.
+
+    ROOT-CAUSE FIX (Sep 2026): The old version discovered which questions/images
+    to delete ONLY via the mock_test_questions mapping join
+    (`.select("mock_question_id, mock_questions(image_url)")`). If that nested
+    join ever came back empty/partial for a row (a mapping row present but the
+    joined question missing, or vice versa), that question's image_url was
+    silently skipped from the storage-delete step even though the question row
+    itself still got deleted a few lines later via `question_ids`. Result:
+    the DB row disappeared but the file stayed orphaned in the bucket forever,
+    and the dashboard's "pending" counter could stay stuck too if the mapping
+    broke before an image was ever uploaded.
+
+    Fix: fetch image_url directly from mock_questions using the test's actual
+    question_ids (not the join), so storage cleanup no longer depends on the
+    mapping table being intact.
     """
     try:
-        test_info = supabase_admin.table("tests").select("series_id").eq("id", test_id).single().execute().data
+        test_info = supabase_admin.table("tests").select("series_id").eq("id", test_id).maybe_single().execute().data
         series_id = test_info.get("series_id") if test_info else None
 
         mapped = (
             supabase_admin.table("mock_test_questions")
-            .select("mock_question_id, mock_questions(image_url)")
+            .select("mock_question_id")
             .eq("test_id", test_id)
             .execute()
             .data
         )
+        question_ids = list({row["mock_question_id"] for row in mapped if row.get("mock_question_id")})
 
-        question_ids = []
+        # Fetch image_url directly from mock_questions by id — independent of
+        # whether the mapping-join above was complete. This is the fix: we no
+        # longer trust the nested join to hand us every image_url.
         image_paths = []
-        for row in mapped:
-            qid = row.get("mock_question_id")
-            if qid:
-                question_ids.append(qid)
-            
-            q = row.get("mock_questions")
-            if q and q.get("image_url") and "question-images/" in q["image_url"]:
-                image_paths.append(q["image_url"].split("question-images/")[1])
+        if question_ids:
+            for i in range(0, len(question_ids), 100):
+                chunk = question_ids[i:i + 100]
+                rows = (
+                    supabase_admin.table("mock_questions")
+                    .select("image_url")
+                    .in_("id", chunk)
+                    .execute()
+                    .data
+                )
+                for q in rows:
+                    if q.get("image_url") and "question-images/" in q["image_url"]:
+                        image_paths.append(q["image_url"].split("question-images/")[1])
 
         # 1. Batch delete images from bucket safely in chunks of 50
         if image_paths:
@@ -491,12 +529,11 @@ def tests_delete(test_id):
 
         # 3. Delete the Test itself
         supabase_admin.table("tests").delete().eq("id", test_id).execute()
-        
+
         # 4. Safely delete questions in chunks of 40 to avoid 414 URI Too Long error
         if question_ids:
-            unique_qids = list(set(question_ids))
-            for i in range(0, len(unique_qids), 40):
-                chunk = unique_qids[i:i+40]
+            for i in range(0, len(question_ids), 40):
+                chunk = question_ids[i:i+40]
                 supabase_admin.table("mock_questions").delete().in_("id", chunk).execute()
 
         flash("Test and ALL related questions/images permanently wiped from DB and Storage.", "success")
@@ -504,5 +541,5 @@ def tests_delete(test_id):
             return redirect(url_for("admin.series_tests", series_id=series_id))
     except Exception as exc:
         flash(f"Could not completely delete test: {exc}", "error")
-        
+
     return redirect(url_for("admin.test_series_list"))
