@@ -2,16 +2,21 @@
 {% block title %}Chapter-wise Questions — Admin{% endblock %}
 {% block content %}
 {% include "admin/_admin_nav.html" %}
+
+<!-- Alpine.js for State Management (Tabs, Chunking, Modals) -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
 <div class="max-w-5xl mx-auto px-6 py-10">
   <h1 class="font-display text-3xl text-ink mb-6">Chapter-wise Questions</h1>
 
-  <!-- Stream -> Subject (stream-locked: Subject select is disabled/empty -->
-  <!-- until a Stream is chosen, and only lists subjects for that stream). -->
-  <div class="bg-white border border-ink/10 rounded-lg p-6 mb-8 grid grid-cols-2 gap-4">
+  <!-- ==========================================
+       STREAM & SUBJECT SELECTION
+       ========================================== -->
+  <div class="bg-white border border-ink/10 rounded-lg p-6 mb-8 grid grid-cols-2 gap-4 shadow-sm">
     <form method="GET" class="contents">
       <div>
         <label class="block text-sm font-medium text-ink mb-1">Stream</label>
-        <select name="stream_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2">
+        <select name="stream_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-gold focus:outline-none transition-shadow">
           <option value="">— select —</option>
           {% for s in streams %}
           <option value="{{ s.id }}" {{ 'selected' if s.id == selected_stream_id }}>{{ s.name }}</option>
@@ -20,7 +25,7 @@
       </div>
       <div>
         <label class="block text-sm font-medium text-ink mb-1">Subject</label>
-        <select name="subject_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2" {{ 'disabled' if not subjects }}>
+        <select name="subject_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-gold focus:outline-none transition-shadow" {{ 'disabled' if not subjects }}>
           <option value="">— select —</option>
           {% for s in subjects %}
           <option value="{{ s.id }}" {{ 'selected' if s.id == selected_subject_id }}>{{ s.name }}</option>
@@ -32,326 +37,560 @@
   </div>
 
   {% if selected_subject_id %}
-  <form method="POST" action="{{ url_for('admin.questions_bulk_upload') }}" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 space-y-5">
-    <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
-    <input type="hidden" name="subject_id" value="{{ selected_subject_id }}">
-
-    <div>
-      <h2 class="font-medium text-ink">Bulk Chapter-wise Upload</h2>
+  
+  <!-- ==========================================
+       PILLAR 2: ROW BUILDER & 25-CHUNK UPLOADER
+       ========================================== -->
+  <div x-data="chapterUploader()" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 shadow-sm">
+    <div class="mb-5">
+      <h2 class="font-medium text-ink text-lg">Bulk Chapter-wise Upload (Chunk System)</h2>
       <p class="text-sm text-ink/60 mt-0.5">
-        Type the chapter name (created automatically if it doesn't exist), build rows with the
-        toggles below, then upload the JSON array.
+        Create custom books (like HC Verma), build your rows, and upload in batches of 25.
       </p>
     </div>
 
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Chapter Name</label>
-      <input type="text" name="chapter_name" required placeholder="e.g. Laws of Motion"
-             class="w-full rounded-md border border-ink/15 px-3 py-2">
-      <p class="text-xs text-ink/50 mt-1">Matched by slug against existing chapters in this subject — created silently only if no match is found.</p>
+    <!-- Chapter Selection (Strict mapping) -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-ink mb-1">Select Chapter</label>
+      <select x-model="selectedChapterId" @change="updateUrlWithChapter()" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-gold focus:outline-none">
+        <option value="">— Choose a pre-created chapter —</option>
+        {% for c in chapters %}
+        <option value="{{ c.id }}" {{ 'selected' if c.id == selected_chapter_id }}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <p class="text-xs text-ink/50 mt-1">Chapters must be created in the 'Subjects & Chapters' section first.</p>
     </div>
 
-    <!-- ================= 4-combination row builder ================= -->
-    <div class="bg-ink/5 border border-ink/10 rounded-md p-4 space-y-4">
-      <p class="text-sm font-medium text-ink">Build a question row</p>
+    <!-- 4-Combination Row Builder -->
+    <div class="bg-ink/5 border border-ink/10 rounded-md p-5 space-y-5 mb-6">
+      <div class="flex items-center justify-between border-b border-ink/10 pb-3">
+        <p class="text-sm font-bold text-ink">Build a question row</p>
+        <button type="button" @click="resetBuilder()" class="text-xs text-ink/50 hover:text-ink underline">Clear Form</button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-6">
+        <!-- Level 1: MCQ vs PYQ (Strict Parallel) -->
+        <div class="bg-white p-4 rounded border border-ink/10">
+          <p class="text-xs font-bold text-ink/70 mb-3 uppercase tracking-wider">Level 1 — Type</p>
+          <div class="flex gap-6 mb-3">
+            <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input type="radio" x-model="builder.qtype" value="mcq" class="text-gold focus:ring-gold cursor-pointer"> Standard MCQ
+            </label>
+            <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input type="radio" x-model="builder.qtype" value="pyq" class="text-gold focus:ring-gold cursor-pointer"> PYQ
+            </label>
+          </div>
+          <div x-show="builder.qtype === 'pyq'" x-cloak>
+            <label class="block text-xs font-medium text-ink/70 mb-1">Enter Exam Year</label>
+            <input type="number" x-model.number="builder.pyq_year" placeholder="e.g. 2023" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none">
+          </div>
+        </div>
+
+        <!-- Level 2: Topic-wise vs Custom Book (HC Verma etc) -->
+        <div class="bg-white p-4 rounded border border-ink/10">
+          <p class="text-xs font-bold text-ink/70 mb-3 uppercase tracking-wider">Level 2 — Grouping</p>
+          <div class="flex flex-col gap-2 mb-3">
+            <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input type="radio" x-model="builder.grouping" value="topic_wise" class="text-gold focus:ring-gold cursor-pointer"> Topic-wise
+            </label>
+            <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input type="radio" x-model="builder.grouping" value="custom_book" class="text-gold focus:ring-gold cursor-pointer"> Custom Book / Special
+            </label>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-ink/70 mb-1">
+              <span x-show="builder.grouping === 'topic_wise'">Enter Topic Name</span>
+              <span x-show="builder.grouping === 'custom_book'">Enter Custom Name (e.g. HC Verma)</span>
+            </label>
+            <input type="text" x-model="builder.topic_name" :placeholder="builder.grouping === 'topic_wise' ? 'e.g. Newton\'s Second Law' : 'e.g. HC Verma Specials'" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none">
+          </div>
+        </div>
+      </div>
 
       <div class="grid grid-cols-2 gap-4">
-        <!-- Level 1: MCQ vs PYQ -->
         <div>
-          <p class="text-xs font-medium text-ink/70 mb-2">Level 1 — Type</p>
-          <div class="flex gap-6">
-            <label class="flex items-center gap-2 text-sm text-ink">
-              <input type="radio" name="qtype" value="mcq" checked onchange="toggleLevel1()"> MCQ
-            </label>
-            <label class="flex items-center gap-2 text-sm text-ink">
-              <input type="radio" name="qtype" value="pyq" onchange="toggleLevel1()"> PYQ (Previous Year)
-            </label>
-          </div>
-          <div id="pyq_year_wrap" class="hidden mt-2">
-            <label class="block text-xs font-medium text-ink/70 mb-1">Enter Year</label>
-            <input type="number" id="pyq_year_input" placeholder="e.g. 2023"
-                   class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm">
-          </div>
+          <label class="block text-xs font-medium text-ink/70 mb-1">Question Text</label>
+          <textarea x-model="builder.question_text" rows="2" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></textarea>
         </div>
-
-        <!-- Level 2: Random vs Topic-wise -->
         <div>
-          <p class="text-xs font-medium text-ink/70 mb-2">Level 2 — Grouping</p>
-          <div class="flex gap-6">
-            <label class="flex items-center gap-2 text-sm text-ink">
-              <input type="radio" name="grouping" value="random" checked onchange="toggleLevel2()"> Random
-            </label>
-            <label class="flex items-center gap-2 text-sm text-ink">
-              <input type="radio" name="grouping" value="topic_wise" onchange="toggleLevel2()"> Topic-wise
-            </label>
-          </div>
-          <div id="topic_name_wrap" class="hidden mt-2">
-            <label class="block text-xs font-medium text-ink/70 mb-1">Enter Topic Name</label>
-            <input type="text" id="topic_name_input" placeholder="e.g. Newton's Second Law"
-                   class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm">
-          </div>
+          <label class="block text-xs font-medium text-ink/70 mb-1">Explanation (Optional)</label>
+          <textarea x-model="builder.explanation" rows="2" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></textarea>
         </div>
       </div>
 
-      <hr class="border-ink/10">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option A</label><input type="text" x-model="builder.option_a" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></div>
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option B</label><input type="text" x-model="builder.option_b" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></div>
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option C</label><input type="text" x-model="builder.option_c" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></div>
+        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option D</label><input type="text" x-model="builder.option_d" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></div>
+      </div>
 
-      <div class="grid grid-cols-2 gap-3">
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Question Text</label>
-          <textarea id="row_question_text" rows="2" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm"></textarea></div>
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Difficulty</label>
-          <select id="row_difficulty_id" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm">
-            {% for d in difficulty_levels %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
-          </select></div>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option A</label><input type="text" id="row_option_a" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option B</label><input type="text" id="row_option_b" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option C</label><input type="text" id="row_option_c" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option D</label><input type="text" id="row_option_d" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm"></div>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Correct Option</label>
-          <select id="row_correct_option" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm">
+      <div class="grid grid-cols-3 gap-4 items-end">
+        <div>
+          <label class="block text-xs font-medium text-ink/70 mb-1">Correct Option</label>
+          <select x-model="builder.correct_option" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none">
             <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
-          </select></div>
-        <div class="flex items-end gap-4">
-          <label class="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" id="row_is_premium" class="rounded border-ink/30"> Premium
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-ink/70 mb-1">Difficulty</label>
+          <select x-model.number="builder.difficulty_id" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none">
+            {% for d in difficulty_levels %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="flex items-center gap-5 pb-2">
+          <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
+            <input type="checkbox" x-model="builder.is_premium" class="rounded border-ink/30 text-gold focus:ring-gold"> Premium 🔒
           </label>
-          <label class="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" id="row_has_image" class="rounded border-ink/30"> Has diagram/image
+          <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
+            <input type="checkbox" x-model="builder.has_image" class="rounded border-ink/30 text-gold focus:ring-gold"> Has Diagram
           </label>
         </div>
       </div>
 
-      <button type="button" onclick="addRowToJson()"
-              class="bg-ink text-paper text-sm font-medium py-2 px-4 rounded-md hover:bg-ink-light">
-        + Add Row to JSON Below
-      </button>
-    </div>
-    <!-- ================= end row builder ================= -->
-
-    <div class="flex items-center justify-end">
-      <button type="button" onclick="document.getElementById('chapter_bulk_json_example').classList.toggle('hidden')"
-              class="text-sm text-ink/50 hover:text-ink underline whitespace-nowrap">
-        Show expected format
+      <button type="button" @click="addRowToJson()" class="w-full bg-ink text-paper text-sm font-medium py-2.5 px-4 rounded-md hover:bg-ink-light transition-colors mt-2">
+        + Add Row to JSON Batch Below
       </button>
     </div>
 
-    <pre id="chapter_bulk_json_example" class="hidden bg-ink/5 border border-ink/10 rounded-md p-4 text-xs text-ink/70 overflow-x-auto">[
+    <!-- JSON Upload Section -->
+    <div class="space-y-4 border-t border-ink/10 pt-6">
+      <div class="flex items-center justify-between">
+        <label class="block text-sm font-bold text-ink">JSON Array (Max 25 questions per batch)</label>
+        <button type="button" @click="showFormat = !showFormat" class="text-xs text-ink/50 hover:text-ink underline whitespace-nowrap">Toggle Format Example</button>
+      </div>
+
+      <pre x-show="showFormat" x-cloak class="bg-ink/5 border border-ink/10 rounded-md p-4 text-xs text-ink/70 overflow-x-auto">[
   {
     "question_type": "mcq",
-    "topic_name": "Newton's Second Law",
-    "question_text": "What is Newton's second law?",
-    "option_a": "F = ma", "option_b": "E = mc^2", "option_c": "V = IR", "option_d": "P = mv",
+    "topic_name": "HC Verma Specials",
+    "question_text": "A block of mass m...",
+    "option_a": "mg", "option_b": "2mg", "option_c": "mg/2", "option_d": "0",
     "correct_option": "A",
-    "difficulty_id": 2,
-    "is_premium": false,
-    "has_image": false
-  },
-  {
-    "question_type": "pyq",
-    "pyq_year": 2022,
-    "question_text": "The diagram shows a pulley system. Find the tension.",
-    "option_a": "...", "option_b": "...", "option_c": "...", "option_d": "...",
-    "correct_option": "B",
     "difficulty_id": 3,
-    "has_image": true
+    "is_premium": true,
+    "has_image": true,
+    "explanation": "Using Newton's Second Law..."
   }
 ]</pre>
-    <p class="text-xs text-ink/50 -mt-2">
-      Required per question: question_text, option_a–d, correct_option (A/B/C/D), difficulty_id.
-      question_type defaults to "mcq" if omitted; "pyq" requires pyq_year. topic_name defaults to "General" if omitted.
-      Set <code class="bg-ink/5 px-1 rounded">has_image: true</code> for any question with a diagram — an
-      "Upload Image" box will appear for it in the list below once this batch is uploaded.
-    </p>
+      
+      <textarea x-model="jsonText" @input="validateInput" rows="12" placeholder="[]"
+                class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-gold focus:outline-none"></textarea>
+      
+      <!-- Status Messages -->
+      <div class="text-sm flex justify-between items-center">
+        <p :class="qCount > 25 ? 'text-red-600 font-semibold' : 'text-ink/50'" x-show="jsonText.length > 0">
+          Detected: <span x-text="qCount"></span> questions (Max 25)
+        </p>
+        <p x-show="errorMsg" class="text-red-600 font-medium" x-text="errorMsg"></p>
+        <p x-show="successMsg" class="text-green-600 font-semibold animate-pulse" x-text="successMsg"></p>
+      </div>
 
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">JSON array (rows you add above land here — edit freely)</label>
-      <textarea name="bulk_json" id="bulk_json" rows="16" placeholder="[]"
-                class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm">[]</textarea>
+      <div class="flex items-center justify-between pt-4 border-t border-ink/10">
+        <p class="text-sm font-bold text-ink">
+          Total Uploaded this session: <span x-text="totalSaved" class="text-gold text-lg"></span>
+        </p>
+        <div class="flex gap-3">
+          <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25 || !selectedChapterId"
+                  class="bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light disabled:opacity-50 transition-colors">
+            <span x-text="isSaving ? 'Saving...' : 'Save & Add More'"></span>
+          </button>
+          <button type="button" @click="window.location.reload()"
+                  class="border-2 border-ink text-ink font-medium py-2.5 px-6 rounded-md hover:bg-ink/5 transition-colors">
+            Final Refresh
+          </button>
+        </div>
+      </div>
     </div>
-
-    <button type="submit" class="bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light">
-      Upload Batch
-    </button>
-  </form>
-
-  <script>
-    function toggleLevel1() {
-      const isPyq = document.querySelector('input[name="qtype"]:checked').value === 'pyq';
-      document.getElementById('pyq_year_wrap').classList.toggle('hidden', !isPyq);
-    }
-    function toggleLevel2() {
-      const isTopicWise = document.querySelector('input[name="grouping"]:checked').value === 'topic_wise';
-      document.getElementById('topic_name_wrap').classList.toggle('hidden', !isTopicWise);
-    }
-
-    function addRowToJson() {
-      const qtype = document.querySelector('input[name="qtype"]:checked').value;
-      const grouping = document.querySelector('input[name="grouping"]:checked').value;
-
-      const row = {
-        question_type: qtype,
-        question_text: document.getElementById('row_question_text').value.trim(),
-        option_a: document.getElementById('row_option_a').value.trim(),
-        option_b: document.getElementById('row_option_b').value.trim(),
-        option_c: document.getElementById('row_option_c').value.trim(),
-        option_d: document.getElementById('row_option_d').value.trim(),
-        correct_option: document.getElementById('row_correct_option').value,
-        difficulty_id: parseInt(document.getElementById('row_difficulty_id').value, 10),
-        is_premium: document.getElementById('row_is_premium').checked,
-        has_image: document.getElementById('row_has_image').checked,
-      };
-
-      if (qtype === 'pyq') {
-        row.pyq_year = parseInt(document.getElementById('pyq_year_input').value, 10) || null;
-      }
-      if (grouping === 'topic_wise') {
-        row.topic_name = document.getElementById('topic_name_input').value.trim() || 'General';
-      }
-      // Random -> topic_name intentionally omitted; backend defaults it to "General".
-
-      const textarea = document.getElementById('bulk_json');
-      let current = [];
-      try {
-        const parsed = JSON.parse(textarea.value);
-        if (Array.isArray(parsed)) current = parsed;
-      } catch (e) {
-        // If the textarea has invalid/hand-edited JSON, don't silently
-        // discard it — start a fresh array only if it was truly empty.
-        if (textarea.value.trim() !== '' && textarea.value.trim() !== '[]') {
-          alert('Current JSON in the textarea is invalid — fix it before adding another row.');
-          return;
-        }
-      }
-      current.push(row);
-      textarea.value = JSON.stringify(current, null, 2);
-    }
-  </script>
+  </div>
   {% else %}
-  <p class="text-ink/50 text-sm">Select a Stream and Subject above to upload chapter-wise questions.</p>
+  <p class="text-ink/50 text-sm">Select a Stream and Subject above to manage chapter-wise questions.</p>
   {% endif %}
 
+  <!-- ==========================================
+       CHAPTER QUESTIONS LIST & LIVE EDIT
+       ========================================== -->
   {% if chapter %}
-  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10">
-    <div class="px-5 py-3 bg-ink/5 flex items-center justify-between">
-      <p class="text-sm font-medium text-ink">Questions in {{ chapter.name }}</p>
+  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10 shadow-sm mt-8">
+    <div class="px-5 py-3 bg-ink/5 flex items-center justify-between rounded-t-lg">
+      <p class="text-sm font-bold text-ink">Questions in {{ chapter.name }}</p>
       {% set pending = questions|selectattr('has_image')|rejectattr('image_url')|list %}
       {% if pending %}
       <span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5">{{ pending|length }} image(s) pending upload</span>
       {% endif %}
     </div>
+    
     {% for q in questions %}
-    <div class="px-5 py-3 gap-4" data-question-row data-table="questions" data-question-id="{{ q.id }}">
-      <div class="flex items-center justify-between gap-4">
-        <div class="min-w-0">
-          <p class="text-ink truncate">{{ q.question_text }}</p>
-          <p class="text-xs text-ink/50 mt-0.5">
-            {{ 'PYQ ' ~ q.pyq_year if q.is_pyq else 'MCQ' }} · Topic: {{ q.topic_name }}
-            {% if q.is_premium %}<span class="text-gold font-medium">· Premium 🔒</span>{% endif %}
+    <div class="px-5 py-4 gap-4 transition-colors hover:bg-ink/5" data-question-row data-table="questions" data-question-id="{{ q.id }}">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium text-ink">{{ q.question_text }}</p>
+          <p class="text-xs text-ink/50 mt-1">
+            <span class="font-bold {{ 'text-blue-600' if q.is_pyq else 'text-ink/70' }}">{{ 'PYQ ' ~ q.pyq_year if q.is_pyq else 'MCQ' }}</span> 
+            · Folder/Book: <span class="font-semibold">{{ q.topic_name }}</span>
+            {% if q.is_premium %}<span class="text-gold font-bold ml-1">· Premium 🔒</span>{% endif %}
           </p>
         </div>
-        <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}"
-              onsubmit="return confirm('Delete this question?');">
-          <button class="text-sm text-red-600 hover:underline whitespace-nowrap">Delete</button>
-        </form>
+        
+        <!-- Action Buttons -->
+        <div class="flex flex-col items-end gap-2 shrink-0">
+          <button type="button" @click="$dispatch('open-edit-modal', { id: '{{ q.id }}' })"
+                  class="text-xs font-semibold bg-gold/20 text-gold-light px-3 py-1 rounded hover:bg-gold hover:text-ink transition-colors">
+            Edit JSON
+          </button>
+          <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}"
+                onsubmit="return confirm('⚠️ DANGER: Remove this question? Its image will be permanently wiped from the Storage Bucket.');">
+            <button class="text-xs text-red-600 hover:underline whitespace-nowrap font-medium">Delete</button>
+          </form>
+        </div>
       </div>
 
-      <!-- Per-question image slot: shown whenever has_image is true.
-           Three states: uploaded (thumbnail + Replace/Remove),
-           pending (upload box), or — has_image false — nothing shown. -->
-      {% if q.has_image %}
-      <div class="mt-2 pl-0">
-        {% if q.image_url %}
-        <div class="flex items-center gap-3" data-image-uploaded>
-          <img src="{{ q.image_url }}" alt="" class="h-16 w-16 object-cover rounded border border-ink/10">
-          <div class="flex flex-col gap-1">
-            <label class="text-xs text-ink/60 hover:text-ink underline cursor-pointer w-fit">
-              Replace image
+      <!-- Image Zone -->
+      <div class="mt-3" data-image-zone="true">
+        {% if q.has_image %}
+          {% if q.image_url %}
+          <div class="flex items-center gap-3" data-image-uploaded>
+            <img src="{{ q.image_url }}" alt="" class="h-16 w-16 object-cover rounded border border-ink/10">
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-ink/60 hover:text-ink underline cursor-pointer w-fit">
+                Replace image
+                <input type="file" accept="image/*" class="hidden" data-image-input>
+              </label>
+              <button type="button" class="text-xs text-red-600 hover:underline text-left" data-remove-image>Remove image</button>
+            </div>
+          </div>
+          {% else %}
+          <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3" data-image-pending>
+            <p class="text-xs text-ink/70">📷 Image required — <span data-upload-status>no image uploaded yet</span></p>
+            <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
+              Upload Image
               <input type="file" accept="image/*" class="hidden" data-image-input>
             </label>
-            <button type="button" class="text-xs text-red-600 hover:underline text-left" data-remove-image>Remove image</button>
           </div>
-        </div>
-        {% else %}
-        <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3" data-image-pending>
-          <p class="text-xs text-ink/70">📷 This question needs a diagram — <span data-upload-status>no image uploaded yet</span></p>
-          <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
-            Upload Image
-            <input type="file" accept="image/*" class="hidden" data-image-input>
-          </label>
-        </div>
+          {% endif %}
         {% endif %}
       </div>
-      {% endif %}
     </div>
     {% else %}
-    <p class="px-5 py-6 text-ink/50 text-sm">No questions in this chapter yet.</p>
+    <p class="px-5 py-8 text-ink/50 text-sm text-center">No questions in this chapter yet.</p>
     {% endfor %}
   </div>
-
-  <script>
-    // Handles every per-question image upload box on this page via
-    // event delegation (one listener, works for however many question
-    // rows are rendered — a big chapter can have hundreds).
-    document.addEventListener('change', async (e) => {
-      const input = e.target.closest('[data-image-input]');
-      if (!input || !input.files[0]) return;
-
-      const row = input.closest('[data-question-row]');
-      const tableName = row.dataset.table;
-      const questionId = row.dataset.questionId;
-      const statusEl = row.querySelector('[data-upload-status]');
-      if (statusEl) statusEl.textContent = 'Uploading…';
-
-      const formData = new FormData();
-      formData.append('image', input.files[0]);
-
-      try {
-        const res = await fetch(`/admin/questions/${tableName}/${questionId}/upload-image`, {
-          method: 'POST',
-          body: formData,
-        });
-        const data = await res.json();
-        if (data.ok) {
-          // Swap the pending box for the uploaded thumbnail without a
-          // full page reload — simplest way to do that here is a
-          // targeted reload of just this page (keeps filters intact
-          // via the current URL) since there can be many rows open.
-          window.location.reload();
-        } else {
-          alert('Upload failed: ' + data.error);
-          if (statusEl) statusEl.textContent = 'no image uploaded yet';
-        }
-      } catch (err) {
-        alert('Upload failed: ' + err);
-        if (statusEl) statusEl.textContent = 'no image uploaded yet';
-      }
-    });
-
-    document.addEventListener('click', async (e) => {
-      const btn = e.target.closest('[data-remove-image]');
-      if (!btn) return;
-      if (!confirm('Remove this image? The question will show the upload box again.')) return;
-
-      const row = btn.closest('[data-question-row]');
-      const tableName = row.dataset.table;
-      const questionId = row.dataset.questionId;
-
-      try {
-        const res = await fetch(`/admin/questions/${tableName}/${questionId}/remove-image`, { method: 'POST' });
-        const data = await res.json();
-        if (data.ok) {
-          window.location.reload();
-        } else {
-          alert('Could not remove image: ' + data.error);
-        }
-      } catch (err) {
-        alert('Could not remove image: ' + err);
-      }
-    });
-  </script>
   {% endif %}
 </div>
+
+<!-- ==========================================
+     LIVE JSON EDIT MODAL (Chapter-wise)
+     ========================================== -->
+<div x-data="editModalApp()" @open-edit-modal.window="openModal($event.detail)" x-show="isOpen" x-cloak class="fixed inset-0 bg-ink/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+  <div class="bg-paper border border-ink/10 rounded-xl p-6 w-full max-w-2xl shadow-2xl relative" @click.outside="closeModal()">
+    <button @click="closeModal()" class="absolute top-4 right-4 text-ink/40 hover:text-ink">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+    </button>
+    
+    <h3 class="font-display text-2xl font-semibold text-ink mb-2">Edit Chapter Question JSON</h3>
+    <p class="text-sm text-ink/60 mb-4">You can update text, switch MCQ/PYQ, or rename the Custom Book/Topic name here.</p>
+    
+    <textarea x-model="editJsonText" rows="12" placeholder='{\n  "question_type": "mcq",\n  "topic_name": "HC Verma Specials",\n  "question_text": "Updated text...",\n  "has_image": true\n}'
+              class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-gold focus:outline-none mb-4"></textarea>
+    
+    <p x-show="editError" class="text-red-600 text-sm mb-4 font-medium" x-text="editError"></p>
+    
+    <div class="flex justify-end gap-3">
+      <button @click="closeModal()" class="px-5 py-2 rounded-md text-ink font-medium border border-ink/20 hover:bg-ink/5">Cancel</button>
+      <button @click="submitEdit()" :disabled="isSaving" class="px-5 py-2 rounded-md bg-gold text-ink font-semibold hover:bg-gold-light disabled:opacity-50 flex items-center gap-2">
+        <span x-text="isSaving ? 'Updating...' : 'Update Question'"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================
+     SCRIPTS & ALPINE.JS LOGIC
+     ========================================== -->
+<script>
+  function chapterUploader() {
+    return {
+      selectedChapterId: '{{ selected_chapter_id or "" }}',
+      showFormat: false,
+      jsonText: '[]',
+      qCount: 0,
+      totalSaved: 0,
+      isSaving: false,
+      errorMsg: '',
+      successMsg: '',
+      
+      builder: {
+        qtype: 'mcq',
+        grouping: 'topic_wise',
+        pyq_year: '',
+        topic_name: '',
+        question_text: '',
+        explanation: '',
+        option_a: '', option_b: '', option_c: '', option_d: '',
+        correct_option: 'A',
+        difficulty_id: 1,
+        is_premium: false,
+        has_image: false
+      },
+
+      init() {
+        this.validateInput();
+      },
+
+      updateUrlWithChapter() {
+        if (!this.selectedChapterId) return;
+        const url = new URL(window.location);
+        url.searchParams.set('chapter_id', this.selectedChapterId);
+        window.location = url.toString();
+      },
+
+      resetBuilder() {
+        this.builder = {
+          qtype: 'mcq', grouping: 'topic_wise', pyq_year: '', topic_name: '',
+          question_text: '', explanation: '', option_a: '', option_b: '', option_c: '', option_d: '',
+          correct_option: 'A', difficulty_id: 1, is_premium: false, has_image: false
+        };
+      },
+
+      addRowToJson() {
+        if (!this.builder.question_text.trim()) {
+          alert('Question text is required to build a row.');
+          return;
+        }
+
+        const row = {
+          question_type: this.builder.qtype,
+          topic_name: this.builder.topic_name.trim() || 'General',
+          question_text: this.builder.question_text.trim(),
+          option_a: this.builder.option_a.trim(),
+          option_b: this.builder.option_b.trim(),
+          option_c: this.builder.option_c.trim(),
+          option_d: this.builder.option_d.trim(),
+          correct_option: this.builder.correct_option,
+          difficulty_id: parseInt(this.builder.difficulty_id, 10),
+          is_premium: this.builder.is_premium,
+          has_image: this.builder.has_image
+        };
+
+        if (this.builder.qtype === 'pyq') {
+          row.pyq_year = parseInt(this.builder.pyq_year, 10) || null;
+        }
+        if (this.builder.explanation.trim()) {
+          row.explanation = this.builder.explanation.trim();
+        }
+
+        let current = [];
+        try {
+          const parsed = JSON.parse(this.jsonText);
+          if (Array.isArray(parsed)) current = parsed;
+        } catch (e) {
+          if (this.jsonText.trim() !== '' && this.jsonText.trim() !== '[]') {
+            alert('Current JSON in textarea is invalid. Fix it first.');
+            return;
+          }
+        }
+        current.push(row);
+        this.jsonText = JSON.stringify(current, null, 2);
+        this.validateInput();
+        this.resetBuilder();
+      },
+
+      validateInput() {
+        this.errorMsg = '';
+        this.successMsg = '';
+        try {
+          if (this.jsonText.trim() === '' || this.jsonText.trim() === '[]') {
+            this.qCount = 0;
+            return;
+          }
+          const parsed = JSON.parse(this.jsonText);
+          if (!Array.isArray(parsed)) {
+            this.errorMsg = 'Must be a valid JSON array []';
+            this.qCount = 0;
+            return;
+          }
+          this.qCount = parsed.length;
+        } catch (e) {
+          this.errorMsg = 'Invalid JSON format';
+          this.qCount = 0;
+        }
+      },
+
+      async saveChunk() {
+        if (!this.selectedChapterId) {
+          this.errorMsg = 'Select a Chapter first.';
+          return;
+        }
+        if (this.qCount === 0 || this.qCount > 25) return;
+        
+        this.isSaving = true;
+        this.errorMsg = '';
+        this.successMsg = '';
+        
+        try {
+          const parsedData = JSON.parse(this.jsonText);
+          
+          const payload = {
+            stream_id: '{{ selected_stream_id }}',
+            subject_id: '{{ selected_subject_id }}',
+            chapter_id: this.selectedChapterId,
+            bulk_json: parsedData
+          };
+          
+          const res = await fetch("{{ url_for('admin.questions_bulk_upload') }}?ajax=1", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          
+          const data = await res.json();
+          if (data.ok) {
+            this.totalSaved += data.inserted;
+            this.jsonText = '[]';
+            this.qCount = 0;
+            this.successMsg = `Success! ${data.inserted} questions saved. Ready for next chunk.`;
+            setTimeout(() => this.successMsg = '', 4000);
+          } else {
+            this.errorMsg = data.error || 'Server error occurred.';
+          }
+        } catch (err) {
+          this.errorMsg = 'Connection error. Check your network.';
+        } finally {
+          this.isSaving = false;
+        }
+      }
+    };
+  }
+
+  // Live JSON Edit Modal Component Logic (Chapter-wise)
+  function editModalApp() {
+    return {
+      isOpen: false,
+      qId: null,
+      editJsonText: '',
+      isSaving: false,
+      editError: '',
+
+      openModal(detail) {
+        this.qId = detail.id;
+        this.editJsonText = '';
+        this.editError = '';
+        this.isOpen = true;
+      },
+      closeModal() {
+        this.isOpen = false;
+      },
+      async submitEdit() {
+        this.editError = '';
+        let parsedData;
+        
+        try {
+          parsedData = JSON.parse(this.editJsonText);
+        } catch(e) {
+          this.editError = 'Invalid JSON syntax.';
+          return;
+        }
+        
+        this.isSaving = true;
+        try {
+          const res = await fetch(`/admin/questions/${this.qId}/edit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parsedData)
+          });
+          const data = await res.json();
+          
+          if (data.ok) {
+            // MAGIC DOM INJECTION: Add/remove image box
+            const row = document.querySelector(`[data-question-id="${this.qId}"]`);
+            let imgZone = row.querySelector('[data-image-zone]');
+            
+            // Visual text update
+            if (parsedData.question_text) {
+               const textNode = row.querySelector('p.font-medium');
+               if (textNode) textNode.textContent = parsedData.question_text;
+            }
+
+            if (data.has_image) {
+              const existingImg = imgZone.querySelector('[data-image-uploaded], [data-image-pending]');
+              if (!existingImg) {
+                imgZone.innerHTML = `
+                  <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3 animate-pulse" data-image-pending>
+                    <p class="text-xs text-ink/70">📷 Image required — <span data-upload-status>no image uploaded yet</span></p>
+                    <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
+                      Upload Image
+                      <input type="file" accept="image/*" class="hidden" data-image-input>
+                    </label>
+                  </div>`;
+              }
+            } else {
+              imgZone.innerHTML = '';
+            }
+            this.closeModal();
+          } else {
+            this.editError = data.error;
+          }
+        } catch (err) {
+          this.editError = 'Failed to communicate with server.';
+        } finally {
+          this.isSaving = false;
+        }
+      }
+    };
+  }
+
+  // Preserve global image upload/remove handlers
+  document.addEventListener('change', async (e) => {
+    const input = e.target.closest('[data-image-input]');
+    if (!input || !input.files[0]) return;
+
+    const row = input.closest('[data-question-row]');
+    const tableName = row.dataset.table;
+    const questionId = row.dataset.questionId;
+    const statusEl = row.querySelector('[data-upload-status]');
+    if (statusEl) statusEl.textContent = 'Uploading…';
+
+    const formData = new FormData();
+    formData.append('image', input.files[0]);
+
+    try {
+      const res = await fetch(`/admin/questions/${tableName}/${questionId}/upload-image`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        alert('Upload failed: ' + data.error);
+        if (statusEl) statusEl.textContent = 'no image uploaded yet';
+      }
+    } catch (err) {
+      alert('Upload failed: ' + err);
+      if (statusEl) statusEl.textContent = 'no image uploaded yet';
+    }
+  });
+
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-remove-image]');
+    if (!btn) return;
+    if (!confirm('Remove this image? The question will show the upload box again.')) return;
+
+    const row = btn.closest('[data-question-row]');
+    const tableName = row.dataset.table;
+    const questionId = row.dataset.questionId;
+
+    try {
+      const res = await fetch(`/admin/questions/${tableName}/${questionId}/remove-image`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        alert('Could not remove image: ' + data.error);
+      }
+    } catch (err) {
+      alert('Could not remove image: ' + err);
+    }
+  });
+</script>
 {% endblock %}
