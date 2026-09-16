@@ -11,11 +11,15 @@
       <input type="text" name="full_name" required
              class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
     </div>
+    
+    <!-- SANGAM FIX: Changed from Email to Strict Username -->
     <div>
-      <label class="block text-sm font-medium text-ink mb-1">Email</label>
-      <input type="email" name="email" required
+      <label class="block text-sm font-medium text-ink mb-1">Choose a Username <span class="text-red-500">*</span></label>
+      <input type="text" name="username" required pattern="[a-zA-Z0-9_]+" title="Only letters, numbers, and underscores allowed" placeholder="e.g. rohit_123"
              class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
+      <p class="text-xs text-ink/50 mt-1">Make it unique. No spaces or special characters allowed.</p>
     </div>
+
     <div>
       <label class="block text-sm font-medium text-ink mb-1">Password</label>
       <input type="password" name="password" required minlength="6"
