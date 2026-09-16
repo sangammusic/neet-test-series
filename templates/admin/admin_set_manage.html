@@ -1,0 +1,383 @@
+{% extends "shared/base.html" %}
+{% block title %}Manage Quiz: {{ selected_set }} — Admin{% endblock %}
+{% block content %}
+{% include "admin/_admin_nav.html" %}
+
+<!-- Alpine.js for State Management (Tabs, Modals, Menus) -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+<!-- SANGAM STUDY HUB: Critical CSS to prevent Modal Flashing -->
+<style>
+    [x-cloak] { display: none !important; }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+
+<div class="max-w-6xl mx-auto px-6 py-10 relative font-body">
+
+  <!-- SANGAM STUDY HUB CUSTOM TOAST NOTIFICATION -->
+  <div id="sangam-toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-4 rounded-xl shadow-2xl z-[100] flex items-center gap-3 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] max-w-md w-full">
+      <div class="bg-indigo-500 rounded-full p-1 shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M10.97 4.97a.235.235 0 0 0-.02.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-1.071-1.05z"/></svg>
+      </div>
+      <p id="sangam-toast-msg" class="text-sm font-medium leading-tight"></p>
+  </div>
+
+  <!-- ==========================================
+       BREADCRUMB & HEADER
+       ========================================== -->
+  <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-5 mb-8 border-b border-gray-200 pb-6">
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+          <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type=selected_type, category=selected_category, folder=selected_folder) }}" class="text-sm font-bold text-gray-400 hover:text-indigo-600 transition-colors flex items-center gap-1">
+              &larr; Back to Quiz List
+          </a>
+      </div>
+      <h1 class="font-display text-4xl text-ink font-bold mb-1">📝 {{ selected_set }}</h1>
+      <p class="text-ink/60 text-sm font-medium">Deep Edit View: Manage questions, upload JSON chunks, and handle diagrams.</p>
+    </div>
+    <div class="text-right">
+        <span class="text-xs bg-indigo-100 text-indigo-800 border border-indigo-200 px-3 py-1.5 rounded-lg font-bold shadow-sm">
+            Folder: 📁 {{ selected_folder }}
+        </span>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       UPLOAD ENGINE (25-CHUNK)
+       ========================================== -->
+  <div x-data="setUploader()" class="mb-14">
+    <div class="bg-white border-2 border-indigo-100 rounded-2xl shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b-2 border-indigo-100 px-8 py-5 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">⚡</span>
+                <div>
+                    <h3 class="font-black text-xl text-indigo-900 leading-tight">Upload More Questions</h3>
+                    <p class="text-xs font-bold text-indigo-600 uppercase tracking-widest mt-0.5">Target: {{ selected_set }}</p>
+                </div>
+            </div>
+            <button @click="showFormat = !showFormat" class="text-sm font-bold text-indigo-600 hover:underline">Show Format Guide</button>
+        </div>
+
+        <div x-show="showFormat" x-collapse x-cloak class="px-8 py-4 bg-gray-900 text-green-400 font-mono text-xs border-b border-indigo-100">
+<pre>[
+  {
+    "question_text": "What is the unit of Force?",
+    "option_a": "Newton", "option_b": "Joule", "option_c": "Watt", "option_d": "Pascal",
+    "correct_option": "A",
+    "difficulty_id": 1,
+    "has_image": false
+    {% if selected_type == 'pyq' %}, "pyq_year": 2023{% endif %}
+  }
+]</pre>
+        </div>
+
+        <div class="p-8 bg-gray-50/50">
+            <div class="flex justify-between items-center mb-3">
+                <label class="font-bold text-ink text-lg">Paste JSON Array <span class="text-xs font-bold text-white bg-indigo-500 px-2 py-1 rounded shadow-sm ml-2">Max 25 Questions</span></label>
+            </div>
+
+            <textarea x-model="jsonText" @input="validateInput" rows="8" placeholder="[{ ... }]"
+                      class="w-full rounded-xl border-2 border-gray-300 p-5 font-mono text-sm mb-4 outline-none focus:border-indigo-500 bg-white shadow-inner resize-y"></textarea>
+            
+            <div class="text-sm flex justify-between items-center mb-6 px-2">
+                <p :class="qCount > 25 ? 'text-red-600 font-bold' : 'text-gray-500 font-bold'" x-show="jsonText.length > 0">
+                    Detected: <span x-text="qCount"></span> questions
+                </p>
+                <p x-show="errorMsg" class="text-red-600 font-bold bg-red-50 px-3 py-1 rounded shadow-sm border border-red-100" x-text="errorMsg"></p>
+            </div>
+
+            <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25"
+                    class="w-full md:w-auto bg-indigo-600 text-white font-bold py-3.5 px-10 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-3 text-lg ml-auto">
+                <svg x-show="isSaving" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span x-text="isSaving ? 'Uploading to DB...' : 'Upload & Save'"></span>
+            </button>
+        </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       QUESTIONS LIST & LIVE EDIT
+       ========================================== -->
+  <div class="mb-10">
+      <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="font-display text-3xl font-bold text-ink">Manage Uploaded Questions</h2>
+            <p class="text-sm font-bold text-gray-500 mt-1">Total Questions: {{ questions|length }}</p>
+          </div>
+          {% set pending = questions|selectattr('has_image')|rejectattr('image_url')|list %}
+          {% if pending %}
+          <div class="bg-red-50 border border-red-200 px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm">
+            <span class="text-xl">⚠️</span>
+            <div>
+              <p class="text-sm font-bold text-red-800 leading-none">Action Required</p>
+              <p class="text-xs font-semibold text-red-600">{{ pending|length }} image(s) pending upload</p>
+            </div>
+          </div>
+          {% endif %}
+      </div>
+
+      {% if questions %}
+      <div class="bg-white border-2 border-gray-200 rounded-2xl shadow-sm divide-y divide-gray-100 overflow-hidden">
+          {% for q in questions %}
+          <div class="p-6 transition-colors hover:bg-gray-50 group flex flex-col md:flex-row md:items-start justify-between gap-5" data-question-row data-table="questions" data-question-id="{{ q.id }}">
+              
+              <div class="flex-1 min-w-0 pr-4">
+                  <div class="flex items-center gap-3 mb-2">
+                      <span class="text-xs font-bold px-2.5 py-1 rounded-md bg-gray-100 border border-gray-200 text-gray-600 shadow-inner">Q.{{ loop.index }}</span>
+                      {% if q.is_pyq %}<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-purple-100 text-purple-800 border border-purple-200 shadow-sm">PYQ {{ q.pyq_year }}</span>{% endif %}
+                      {% if q.is_premium %}<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-yellow-100 text-yellow-800 border border-yellow-300 shadow-sm">💎 Premium</span>{% endif %}
+                  </div>
+                  <p class="text-base font-medium text-ink leading-relaxed">{{ q.question_text }}</p>
+                  
+                  <!-- Image Zone -->
+                  <div class="mt-4" data-image-zone="true">
+                    {% if q.has_image %}
+                      {% if q.image_url %}
+                      <div class="flex items-center gap-4 bg-white p-3 rounded-xl border-2 border-gray-100 shadow-sm w-fit" data-image-uploaded>
+                        <img src="{{ q.image_url }}" alt="" class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1">
+                        <div class="flex flex-col gap-2">
+                          <label class="text-xs font-bold bg-gray-50 border border-gray-300 shadow-sm text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 cursor-pointer transition-colors text-center">
+                            🔄 Replace Image
+                            <input type="file" accept="image/*" class="hidden" data-image-input>
+                          </label>
+                          <button type="button" class="text-xs font-bold text-red-600 hover:text-red-800 text-left px-1" data-remove-image>🗑️ Remove Image</button>
+                        </div>
+                      </div>
+                      {% else %}
+                      <div class="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4 max-w-md shadow-sm" data-image-pending>
+                        <div>
+                            <p class="text-sm font-bold text-amber-900">📷 Diagram Required</p>
+                            <p class="text-xs text-amber-700 mt-0.5" data-upload-status>No image uploaded yet.</p>
+                        </div>
+                        <label class="text-xs bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 shadow-md cursor-pointer whitespace-nowrap transition-colors">
+                          Upload Image
+                          <input type="file" accept="image/*" class="hidden" data-image-input>
+                        </label>
+                      </div>
+                      {% endif %}
+                    {% endif %}
+                  </div>
+              </div>
+              
+              <!-- Row Actions -->
+              <div class="flex flex-row md:flex-col items-center md:items-end gap-2 shrink-0 mt-4 md:mt-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button type="button" @click="$dispatch('open-edit-modal', { id: '{{ q.id }}' })"
+                          class="text-xs font-bold bg-white text-indigo-600 border border-gray-200 shadow-sm px-4 py-2 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition-colors w-full text-center">
+                    ✏️ Edit JSON
+                  </button>
+                  <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type=selected_type, category=selected_category, folder=selected_folder, set=selected_set) }}"
+                        onsubmit="return confirm('⚠️ DANGER: Remove this question? Its image will be permanently wiped from storage.');" class="w-full m-0">
+                    <button class="text-xs font-bold bg-red-50 text-red-600 border border-red-100 shadow-sm px-4 py-2 rounded-lg hover:bg-red-100 hover:border-red-200 transition-colors w-full text-center">
+                        🗑️ Delete
+                    </button>
+                  </form>
+              </div>
+
+          </div>
+          {% endfor %}
+      </div>
+      {% else %}
+      <div class="px-6 py-20 text-center bg-white border-2 border-dashed border-gray-200 rounded-2xl shadow-sm">
+          <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-200 text-3xl">📝</div>
+          <p class="text-2xl font-display font-bold text-ink mb-2">Quiz is Empty</p>
+          <p class="text-base font-medium text-gray-500">Paste a JSON array in the box above to add questions.</p>
+      </div>
+      {% endif %}
+  </div>
+
+  <!-- ==========================================
+       LIVE JSON EDIT MODAL (Raw Power Box)
+       ========================================== -->
+  <div x-data="editModalApp()" @open-edit-modal.window="openModal($event.detail)" x-show="isOpen" x-cloak class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-700" @click.outside="closeModal()">
+      <div class="px-8 py-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+          <div>
+              <h3 class="font-display text-2xl font-black text-indigo-900 tracking-wide uppercase">Replace Question JSON</h3>
+              <p class="text-sm font-bold text-gray-500 mt-1">Updates the existing record directly without creating duplicates.</p>
+          </div>
+          <button @click="closeModal()" class="text-gray-400 hover:text-white transition-colors bg-gray-200 hover:bg-red-500 rounded-full p-2 focus:outline-none">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+      </div>
+      <div class="p-8 flex-1 overflow-y-auto bg-gray-900 flex flex-col">
+          <textarea x-model="editJsonText" rows="18" placeholder='{\n  "question_text": "Enter new text...",\n  "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",\n  "correct_option": "A",\n  "difficulty_id": 1,\n  "has_image": true\n}'
+                    class="w-full bg-gray-900 text-green-400 font-mono text-sm border-2 border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-0 resize-none outline-none p-5 flex-1 shadow-inner"></textarea>
+      </div>
+      <div class="px-8 py-5 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+          <p x-show="editError" class="text-red-700 text-sm font-bold bg-red-100 border border-red-200 px-4 py-2 rounded-lg shadow-sm" x-text="editError"></p>
+          <div class="flex gap-4 ml-auto">
+              <button @click="closeModal()" class="px-8 py-3 rounded-xl text-gray-700 font-bold border-2 border-gray-300 hover:bg-gray-100 transition-colors">Cancel</button>
+              <button @click="submitEdit()" :disabled="isSaving" class="px-10 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg flex items-center justify-center gap-2 border-2 border-indigo-700 text-lg">
+                  <svg x-show="isSaving" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  <span x-text="isSaving ? 'Overwriting DB...' : 'Overwrite & Save'"></span>
+              </button>
+          </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==========================================
+     SCRIPTS & ALPINE.JS LOGIC
+     ========================================== -->
+<script>
+  function showSangamToast(message) {
+      const toast = document.getElementById('sangam-toast');
+      const msgEl = document.getElementById('sangam-toast-msg');
+      msgEl.textContent = message;
+      toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-[-20px]');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      setTimeout(() => {
+          toast.classList.remove('opacity-100', 'translate-y-0');
+          toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-[-20px]');
+      }, 4000);
+  }
+
+  // APP 1: UPLOAD ENGINE
+  function setUploader() {
+    return {
+      jsonText: '', qCount: 0, showFormat: false, isSaving: false, errorMsg: '',
+      
+      validateInput() {
+        this.errorMsg = '';
+        try {
+          if (this.jsonText.trim() === '' || this.jsonText.trim() === '[]') { this.qCount = 0; return; }
+          const parsed = JSON.parse(this.jsonText);
+          if (!Array.isArray(parsed)) { this.errorMsg = 'Must be a JSON array []'; this.qCount = 0; return; }
+          this.qCount = parsed.length;
+        } catch (e) { this.errorMsg = 'Invalid JSON Syntax'; this.qCount = 0; }
+      },
+
+      async saveChunk() {
+        if (this.qCount === 0 || this.qCount > 25) return;
+        this.isSaving = true; this.errorMsg = '';
+        try {
+          const parsedData = JSON.parse(this.jsonText);
+          
+          // No need to inject subject_name here. The backend routes now explicitly
+          // handle chapter_id, folder_name, set_name dynamically.
+          const payload = {
+              chapter_id: '{{ selected_chapter_id }}',
+              folder_name: '{{ selected_folder }}',
+              set_name: '{{ selected_set }}',
+              bulk_json: parsedData
+          };
+
+          const res = await fetch("{{ url_for('admin.questions_bulk_upload') }}?ajax=1", {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          
+          if (data.ok) {
+            window.location.reload(); 
+          } else { 
+            this.errorMsg = data.error || 'Server error occurred.'; 
+          }
+        } catch (err) { 
+            this.errorMsg = 'Connection error. Check your network.'; 
+        } finally { 
+            this.isSaving = false; 
+        }
+      }
+    };
+  }
+
+  // APP 2: SINGLE QUESTION JSON EDIT MODAL
+  function editModalApp() {
+    return {
+      isOpen: false, qId: null, editJsonText: '', isSaving: false, editError: '',
+      openModal(detail) { this.qId = detail.id; this.editJsonText = ''; this.editError = ''; this.isOpen = true; },
+      closeModal() { this.isOpen = false; },
+      async submitEdit() {
+        this.editError = ''; let parsedData;
+        try { parsedData = JSON.parse(this.editJsonText); } catch(e) { this.editError = 'Invalid JSON syntax.'; return; }
+        this.isSaving = true;
+        try {
+          const res = await fetch(`/admin/questions/${this.qId}/edit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsedData) });
+          const data = await res.json();
+          if (data.ok) { window.location.reload(); } else { this.editError = data.error; }
+        } catch (err) { this.editError = 'Network failure.'; } finally { this.isSaving = false; }
+      }
+    };
+  }
+
+  // GLOBAL IMAGE UPLOAD & REMOVE LOGIC (Seamless AJAX, No Full Reloads)
+  document.addEventListener('change', async (e) => {
+    const input = e.target.closest('[data-image-input]');
+    if (!input || !input.files[0]) return;
+    
+    e.stopPropagation();
+    const row = input.closest('[data-question-row]');
+    const statusEl = row.querySelector('[data-upload-status]');
+    if (statusEl) statusEl.textContent = 'Uploading to Storage Bucket…';
+    showSangamToast('Uploading image... Please wait.');
+
+    const formData = new FormData(); formData.append('image', input.files[0]);
+
+    try {
+      const res = await fetch(`/admin/questions/${row.dataset.table}/${row.dataset.questionId}/upload-image`, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.ok) {
+        const cacheBuster = new Date().getTime();
+        const newImgUrl = data.image_url.includes('?') ? `${data.image_url}&t=${cacheBuster}` : `${data.image_url}?t=${cacheBuster}`;
+        const imgZone = row.querySelector('[data-image-zone]');
+        imgZone.innerHTML = `
+            <div class="flex items-center gap-4 bg-white p-3 rounded-xl border-2 border-gray-100 shadow-sm w-fit" data-image-uploaded>
+                <img src="${newImgUrl}" alt="Question Image" class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1">
+                <div class="flex flex-col gap-2">
+                    <label class="text-xs font-bold bg-gray-50 border border-gray-300 shadow-sm text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 cursor-pointer transition-colors text-center">
+                        🔄 Replace Image
+                        <input type="file" accept="image/*" class="hidden" data-image-input>
+                    </label>
+                    <button type="button" class="text-xs font-bold text-red-600 hover:text-red-800 text-left px-1" data-remove-image>🗑️ Remove Image</button>
+                </div>
+            </div>
+        `;
+        showSangamToast('✅ Image successfully uploaded!');
+      } else {
+        showSangamToast('❌ Upload failed: ' + data.error);
+        if (statusEl) statusEl.textContent = 'No image uploaded yet.';
+      }
+    } catch (err) { showSangamToast('❌ Connection error.'); }
+    input.value = '';
+  });
+
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-remove-image]');
+    if (!btn) return;
+    
+    e.stopPropagation();
+    if (!confirm('Permanently wipe this image from the Storage Bucket?')) return;
+    
+    const row = btn.closest('[data-question-row]');
+    showSangamToast('Deleting image...');
+    
+    try {
+      const res = await fetch(`/admin/questions/${row.dataset.table}/${row.dataset.questionId}/remove-image`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        const imgZone = row.querySelector('[data-image-zone]');
+        imgZone.innerHTML = `
+            <div class="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4 max-w-md shadow-sm" data-image-pending>
+                <div>
+                    <p class="text-sm font-bold text-amber-900">📷 Diagram Required</p>
+                    <p class="text-xs text-amber-700 mt-0.5" data-upload-status>No image uploaded yet.</p>
+                </div>
+                <label class="text-xs bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 shadow-md cursor-pointer whitespace-nowrap transition-colors">
+                    Upload Image
+                    <input type="file" accept="image/*" class="hidden" data-image-input>
+                </label>
+            </div>
+        `;
+        showSangamToast('✅ Image permanently deleted.');
+      } else {
+        showSangamToast('❌ Failed: ' + data.error);
+      }
+    } catch (err) { showSangamToast('❌ Network error.'); }
+  });
+</script>
+{% endblock %}
