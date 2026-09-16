@@ -173,11 +173,11 @@
   <div x-data="chapterEngine()">
       
       <!-- ALPINE BREADCRUMB (Dynamic inside Chapter) -->
-      <nav class="flex items-center gap-2 text-sm font-bold text-gray-400 mb-6 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200 w-fit">
-          <button @click="activeFolder = null; activeQuiz = null; uploadMode = false" class="hover:text-indigo-600 transition-colors">All Folders</button>
-          <span x-show="activeFolder">/</span>
+      <nav class="flex items-center gap-2 text-sm font-bold text-gray-400 mb-6 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200 w-fit shadow-sm">
+          <button @click="activeFolder = null; activeQuiz = null; uploadMode = false" class="hover:text-indigo-600 transition-colors flex items-center gap-1">📂 All Folders</button>
+          <span x-show="activeFolder" class="text-gray-300">/</span>
           <button x-show="activeFolder" @click="activeQuiz = null; uploadMode = false" class="text-indigo-600 hover:text-indigo-800 transition-colors" x-text="activeFolder"></button>
-          <span x-show="activeQuiz">/</span>
+          <span x-show="activeQuiz" class="text-gray-300">/</span>
           <span x-show="activeQuiz" class="text-ink bg-white px-2 py-0.5 rounded shadow-sm border border-gray-200" x-text="activeQuiz"></span>
       </nav>
 
@@ -244,8 +244,7 @@
                       <div class="flex-1">
                           <h3 class="font-bold text-xl text-ink leading-tight mb-1">{{ qname }}</h3>
                           <div class="flex items-center gap-3 mt-2">
-                              <span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded">{{ qs|length }} Questions</span>
-                              {% if qs[0].is_pyq %}<span class="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded">PYQ Set</span>{% endif %}
+                              <span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded border border-gray-200 shadow-sm">{{ qs|length }} Questions</span>
                           </div>
                       </div>
                       
@@ -348,48 +347,22 @@
           {% endfor %}
       </div>
 
-      <!-- VIEW 4: THE UPLOAD ENGINE (Forms) -->
+      <!-- VIEW 4: THE UPLOAD ENGINE (Cleaned from 4-boxes & Exam Year) -->
       <div x-show="uploadMode" x-cloak x-transition class="animate-fade-in bg-white border-2 border-gray-200 rounded-2xl shadow-xl overflow-hidden mb-14">
           
-          <!-- STEP 1: THE 4 DIBBE (Only if creating a New Test) -->
-          <div x-show="uploadType === 'new' && step === 'mode'" class="p-8">
-              <h2 class="text-2xl font-bold text-ink mb-6 flex items-center gap-3">
-                  <span class="text-indigo-600">⚡</span> Step 1: Select Format
-              </h2>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <button @click="selectMode('mcq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-indigo-600 hover:shadow-md transition-all text-left flex items-center gap-4">
-                      <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-xl shrink-0">📄</div>
-                      <div><h3 class="text-lg font-bold text-ink">Topic-Wise MCQ</h3><p class="text-xs text-gray-500 font-bold">Standard chapter questions.</p></div>
-                  </button>
-                  <button @click="selectMode('mcq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-blue-500 hover:shadow-md transition-all text-left flex items-center gap-4">
-                      <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-xl shrink-0">📘</div>
-                      <div><h3 class="text-lg font-bold text-ink">Custom Book / Random</h3><p class="text-xs text-gray-500 font-bold">e.g., HC Verma Part 1.</p></div>
-                  </button>
-                  <button @click="selectMode('pyq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-amber-500 hover:shadow-md transition-all text-left flex items-center gap-4">
-                      <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-xl shrink-0">🕰️</div>
-                      <div><h3 class="text-lg font-bold text-ink">Topic-Wise PYQ</h3><p class="text-xs text-gray-500 font-bold">Previous year questions grouped.</p></div>
-                  </button>
-                  <button @click="selectMode('pyq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-emerald-500 hover:shadow-md transition-all text-left flex items-center gap-4">
-                      <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-xl shrink-0">🎲</div>
-                      <div><h3 class="text-lg font-bold text-ink">Random PYQ</h3><p class="text-xs text-gray-500 font-bold">Mixed PYQs for the chapter.</p></div>
-                  </button>
-              </div>
-              <button @click="uploadMode = false" class="mt-8 text-sm font-bold text-gray-500 hover:text-gray-800">Cancel Upload</button>
-          </div>
-
-          <!-- STEP 2: NAME & MARKS SETUP -->
+          <!-- DIRECT SETUP STEP (Skipping format selection) -->
           <div x-show="step === 'setup'" class="p-8">
-              <h3 class="font-display font-bold text-2xl text-ink mb-1">Set Test Details</h3>
+              <h3 class="font-display font-bold text-2xl text-ink mb-1">Set Quiz Details</h3>
               <p class="text-sm font-bold text-gray-500 mb-6 border-b pb-4">Inside Folder: <span class="text-indigo-600" x-text="activeFolder"></span></p>
               
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                   <div class="md:col-span-2">
                       <label class="block text-sm font-bold text-indigo-900 mb-2">
-                          <span x-text="modeParams.type === 'pyq' ? 'PYQ Name / Title' : 'MCQ Name / Title'"></span> <span class="text-red-500">*</span>
+                          MCQ / PYQ Name <span class="text-red-500">*</span>
                       </label>
-                      <input type="text" x-model="quizSetup.name" placeholder="e.g., Basic math - 1" class="w-full rounded-xl border-2 border-gray-200 px-5 py-4 focus:border-indigo-600 focus:ring-0 outline-none text-xl font-bold bg-gray-50 shadow-inner">
+                      <input type="text" x-model="quizSetup.name" placeholder="e.g., Basic math - 1 or DISH Book PYQ" class="w-full rounded-xl border-2 border-gray-200 px-5 py-4 focus:border-indigo-600 focus:ring-0 outline-none text-xl font-bold bg-gray-50 shadow-inner">
                   </div>
-                  <!-- EXAM YEAR COMPLETELY REMOVED HERE AS REQUESTED -->
+                  <!-- EXAM YEAR COMPLETELY REMOVED FROM HERE -->
                   <div>
                       <label class="block text-sm font-bold text-indigo-900 mb-2">Correct Marks</label>
                       <input type="number" x-model.number="quizSetup.marks" class="w-full rounded-xl border-2 border-gray-200 px-5 py-3 focus:border-indigo-600 outline-none font-bold bg-gray-50">
@@ -400,12 +373,12 @@
                   </div>
               </div>
               <div class="flex gap-4">
-                  <button @click="step = 'mode'" x-show="uploadType === 'new'" class="px-6 py-4 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors border-2 border-gray-200">Back</button>
+                  <button @click="uploadMode = false" x-show="uploadType === 'new'" class="px-6 py-4 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors border-2 border-gray-200">Cancel</button>
                   <button @click="step = 'upload'" :disabled="!quizSetup.name" class="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">Proceed to Paste JSON &rarr;</button>
               </div>
           </div>
 
-          <!-- STEP 3: JSON UPLOAD -->
+          <!-- JSON UPLOAD STEP -->
           <div x-show="step === 'upload'" class="p-8 bg-gray-50/50">
               <div class="flex justify-between items-center mb-4">
                   <div>
@@ -425,6 +398,7 @@
               <div class="flex gap-3 justify-end pt-4 border-t-2 border-gray-200">
                   <button type="button" @click="uploadMode = false" class="px-8 py-3.5 font-bold text-gray-500 hover:bg-gray-100 border-2 border-gray-200 rounded-xl transition-colors">Cancel</button>
                   <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25" class="bg-indigo-600 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md flex items-center gap-2">
+                      <svg x-show="isSaving" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                       <span x-text="isSaving ? 'Uploading...' : 'Save Questions'"></span>
                   </button>
                   <button type="button" @click="doneUploading()" class="bg-emerald-500 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-emerald-600 transition-all shadow-md border-2 border-emerald-600">DONE</button>
@@ -481,12 +455,12 @@
       </div>
   </div>
 
-  <!-- Rename Quiz Modal (Reused for the new Quiz structure) -->
+  <!-- Rename Quiz Modal -->
   <div x-show="quizManage.renameOpen" x-cloak @open-rename-quiz.window="quizManage.oldFolder = $event.detail.oldFolder; quizManage.oldQuiz = $event.detail.oldQuiz; quizManage.newName = $event.detail.oldQuiz; quizManage.renameOpen = true;" class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="quizManage.renameOpen = false">
       <div class="bg-white rounded-3xl border border-gray-200 p-8 w-full max-w-md shadow-2xl relative">
           <button @click="quizManage.renameOpen = false" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
           <h3 class="font-display text-2xl font-bold text-ink mb-1">Rename Quiz</h3>
-          <p class="text-sm font-medium text-gray-500 mb-6">This will update the MCQ Name for all questions inside.</p>
+          <p class="text-sm font-medium text-gray-500 mb-6">This will update the Name for all questions inside.</p>
           <input type="text" x-model="quizManage.newName" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 outline-none font-bold bg-gray-50 mb-6 text-lg">
           <button @click="submitQuizRename()" :disabled="!quizManage.newName.trim() || quizManage.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">
               <span x-text="quizManage.isSaving ? 'Saving...' : 'Save New Name'"></span>
@@ -516,7 +490,7 @@
       <div class="bg-white rounded-3xl border border-gray-700 p-8 w-full max-w-3xl shadow-2xl relative" @click.outside="closeModal()">
         <button @click="closeModal()" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
         <h3 class="font-display text-2xl font-black text-indigo-900 tracking-wide uppercase mb-1">Edit JSON Data</h3>
-        <p class="text-sm text-gray-500 font-bold mb-6">Modify text, options, or switch to PYQ safely without creating duplicates.</p>
+        <p class="text-sm text-gray-500 font-bold mb-6">Modify text, options, or fix formatting safely without creating duplicates.</p>
         <textarea x-model="editJsonText" rows="12" class="w-full rounded-xl border-2 border-gray-300 px-5 py-4 font-mono text-sm focus:ring-0 focus:border-indigo-600 bg-gray-900 text-green-400 shadow-inner outline-none mb-4 resize-none"></textarea>
         <p x-show="editError" class="text-red-700 text-sm mb-4 font-bold bg-red-100 border border-red-200 px-4 py-2 rounded-lg" x-text="editError"></p>
         <div class="flex justify-end gap-3">
@@ -549,6 +523,10 @@
           toast.classList.remove('opacity-100', 'translate-y-0');
           toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-[-20px]');
       }, 4000);
+  }
+
+  function slugify(text) {
+      return text.toString().toLowerCase().trim().split(/\s+/).join('-');
   }
 
   // APP 1: GLOBALS (Modals for Quick Add & Item Manage)
@@ -617,9 +595,7 @@
           uploadMode: false,
           uploadType: 'new', // 'new' or 'add_more'
           
-          step: 'mode',
-          mainMode: null,
-          modeParams: { type: 'mcq', category: 'topic' },
+          step: 'setup',
           quizSetup: { name: '', marks: 4, negative: 1 },
           
           jsonText: '[]', qCount: 0, totalSaved: 0, isSaving: false, errorMsg: '', successMsg: '',
@@ -640,8 +616,7 @@
           openQuizCreate() {
               this.uploadMode = true;
               this.uploadType = 'new';
-              this.step = 'mode';
-              this.mainMode = null;
+              this.step = 'setup'; // Directly to Setup. Removed 4 dibbe mode.
               this.quizSetup.name = '';
           },
 
@@ -649,15 +624,8 @@
               this.uploadMode = true;
               this.uploadType = 'add_more';
               this.quizSetup.name = this.activeQuiz;
-              this.modeParams.type = 'mcq'; // default fallback
               this.step = 'upload';
               window.scrollTo({ top: 0, behavior: 'smooth' });
-          },
-
-          selectMode(type, category) {
-              this.modeParams.type = type; 
-              this.modeParams.category = category;
-              this.step = 'setup';
           },
 
           validateInput() {
@@ -679,7 +647,7 @@
                   const combinedTopicName = `${this.activeFolder}::${this.quizSetup.name}`;
                   
                   parsedData.forEach(item => {
-                      item.question_type = this.modeParams.type;
+                      item.question_type = 'mcq'; // Default to MCQ since format selection is removed
                       item.topic_name = combinedTopicName; 
                       // Notice: pyq_year is completely removed!
                   });
@@ -706,7 +674,6 @@
           async submitQuizRename() {
               this.quizManage.isSaving = true;
               try {
-                  // Construct old and new combined names for backend
                   const oldTopic = `${this.quizManage.oldFolder}::${this.quizManage.oldQuiz}`;
                   const newTopic = `${this.quizManage.oldFolder}::${this.quizManage.newName}`;
                   
