@@ -56,36 +56,47 @@
           </span>
         </p>
 
-        <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg">
-          <div class="text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion.question_text"></div>
-
-          <img :src="currentQuestion.image_url" x-show="currentQuestion.image_url"
-               class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-md p-2 border-2 border-gray-400 mx-auto my-6 shadow-sm" alt="Diagram"
-               style="background-color: #ffffff;">
-
-          <div class="space-y-3.5">
-            <template x-for="opt in ['A','B','C','D']" :key="opt">
-              <button type="button" @click="selectOption(opt)"
-                class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-200"
-                :class="optionClass(opt)">
-                <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
-                  :class="optionBadgeClass(opt)" x-text="opt"></span>
-                <span class="text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion['option_' + opt.toLowerCase()]"></span>
-              </button>
-            </template>
+        <div class="relative">
+          <!-- lightweight placeholder shown only for the brief instant before MathJax finishes typesetting -->
+          <div x-show="!mathReady" x-cloak class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg animate-pulse">
+            <div class="h-4 bg-white/10 rounded w-3/4 mb-3"></div>
+            <div class="h-4 bg-white/10 rounded w-1/2 mb-3"></div>
+            <div class="h-4 bg-white/10 rounded w-2/3"></div>
           </div>
 
-          <!-- Instant feedback after answering -->
-          <div x-show="answers[currentQuestion.id] != null" x-cloak class="mt-5 pt-5 border-t border-white/10">
-            <p class="text-sm font-semibold" :class="answers[currentQuestion.id] === currentQuestion.correct_option ? 'text-green-400' : 'text-red-400'">
-              <span x-text="answers[currentQuestion.id] === currentQuestion.correct_option ? '✓ Correct!' : '✗ Incorrect.'"></span>
-              <span x-show="answers[currentQuestion.id] !== currentQuestion.correct_option">
-                Correct answer: <span x-text="currentQuestion.correct_option"></span>
-              </span>
-            </p>
-            <p x-show="currentQuestion.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
-              <span class="text-gray-500 font-semibold">Explanation: </span><span x-html="currentQuestion.explanation"></span>
-            </p>
+          <div x-show="mathReady" class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg">
+            <div class="text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion.question_text"></div>
+
+            <div x-show="currentQuestion.image_url" class="my-6 mx-auto max-w-full flex justify-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
+              <img :src="currentQuestion.image_url"
+                   class="max-h-[300px] w-auto max-w-full object-contain"
+                   alt="Diagram" style="background-color: #ffffff !important;">
+            </div>
+
+            <div class="space-y-3.5">
+              <template x-for="opt in ['A','B','C','D']" :key="opt">
+                <button type="button" @click="selectOption(opt)"
+                  class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-200"
+                  :class="optionClass(opt)">
+                  <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
+                    :class="optionBadgeClass(opt)" x-text="opt"></span>
+                  <span class="text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion['option_' + opt.toLowerCase()]"></span>
+                </button>
+              </template>
+            </div>
+
+            <!-- Instant feedback after answering -->
+            <div x-show="answers[currentQuestion.id] != null" x-cloak class="mt-5 pt-5 border-t border-white/10">
+              <p class="text-sm font-semibold" :class="answers[currentQuestion.id] === currentQuestion.correct_option ? 'text-green-400' : 'text-red-400'">
+                <span x-text="answers[currentQuestion.id] === currentQuestion.correct_option ? '✓ Correct!' : '✗ Incorrect.'"></span>
+                <span x-show="answers[currentQuestion.id] !== currentQuestion.correct_option">
+                  Correct answer: <span x-text="currentQuestion.correct_option"></span>
+                </span>
+              </p>
+              <p x-show="currentQuestion.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
+                <span class="text-gray-500 font-semibold">Explanation: </span><span x-html="currentQuestion.explanation"></span>
+              </p>
+            </div>
           </div>
         </div>
 
@@ -150,6 +161,9 @@ function practiceRunner() {
     totalSeconds: 0,
     totalTimerHandle: null,
 
+    // --- render state (avoids flashing raw \( \) LaTeX before MathJax typesets it) ---
+    mathReady: false,
+
     init() {
       this.startTotalTimer();
       this.startQuestionTimer();
@@ -157,11 +171,27 @@ function practiceRunner() {
     },
 
     typesetMath() {
+      this.mathReady = false;
       this.$nextTick(() => {
-        if (window.MathJax && window.MathJax.typesetPromise) {
-          window.MathJax.typesetPromise();
-        }
+        this._waitForMathJaxAndTypeset(0);
       });
+    },
+
+    _waitForMathJaxAndTypeset(attempt) {
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise().then(() => {
+          this.mathReady = true;
+        }).catch(() => {
+          this.mathReady = true; // never leave content hidden if MathJax errors
+        });
+      } else if (attempt < 40) {
+        // MathJax script is loaded with `async` in base.html, so on the very
+        // first question it may not be ready yet — poll briefly instead of
+        // giving up and flashing the raw \( \) text.
+        setTimeout(() => this._waitForMathJaxAndTypeset(attempt + 1), 50);
+      } else {
+        this.mathReady = true; // give up after ~2s and just show the text
+      }
     },
 
     startTotalTimer() {
