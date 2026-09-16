@@ -119,11 +119,11 @@ def practice_chapters(slug, subject_id):
 
 
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>")
-def practice_type(slug, chapter_id):
+def practice_chapter_detail(slug, chapter_id):
     """Level 4: Select MCQ or PYQ"""
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
-    return render_template("practice_type.html", stream=stream, chapter=chapter)
+    return render_template("practice_chapter_detail.html", stream=stream, chapter=chapter)
 
 
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>")
