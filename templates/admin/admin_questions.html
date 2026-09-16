@@ -6,7 +6,8 @@
 <!-- Alpine.js for State Management (Tabs, Chunking, Modals) -->
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
-<div class="max-w-6xl mx-auto px-6 py-10">
+<!-- WRAPPING ENTIRE PAGE IN MASTER ALPINE APP FOR GLOBAL MODALS -->
+<div x-data="adminQuestionsApp()" class="max-w-6xl mx-auto px-6 py-10 relative">
   
   <!-- SANGAM STUDY HUB CUSTOM TOAST NOTIFICATION -->
   <div id="sangam-toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-4 rounded-xl shadow-2xl z-[100] flex items-center gap-3 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] max-w-md w-full">
@@ -16,17 +17,17 @@
       <p id="sangam-toast-msg" class="text-sm font-medium leading-tight"></p>
   </div>
 
-  <div class="flex items-center justify-between mb-6">
+  <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
       <div>
-          <h1 class="font-display text-4xl font-bold text-ink mb-2">Chapter-wise Practice</h1>
-          <p class="text-gray-500 font-medium">Create Worksheets, Custom Books (e.g., HC Verma), and PYQ Collections.</p>
+          <h1 class="font-display text-4xl font-bold text-ink mb-2">Chapter-wise Practice Engine</h1>
+          <p class="text-gray-500 font-medium">Create Folders (HC Verma, Worksheets, Class Notes) & Manage Question Banks.</p>
       </div>
   </div>
 
   <!-- ==========================================
        BREADCRUMB NAVIGATION
        ========================================== -->
-  <nav class="flex items-center gap-3 text-sm font-bold text-gray-500 mb-8 bg-white px-5 py-4 rounded-xl shadow-sm border-2 border-gray-100">
+  <nav class="flex items-center gap-3 text-sm font-bold text-gray-500 mb-10 bg-white px-5 py-4 rounded-xl shadow-sm border-2 border-gray-100 overflow-x-auto whitespace-nowrap">
       <a href="{{ url_for('admin.questions_list') }}" class="hover:text-indigo-600 transition-colors flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
           Streams
@@ -34,7 +35,6 @@
       
       {% if selected_stream_id %}
       <span class="text-gray-300">/</span>
-      <!-- Find stream name from the passed list -->
       {% set active_stream = streams | selectattr('id', 'equalto', selected_stream_id|int) | first %}
       <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id) }}" class="hover:text-indigo-600 transition-colors">
           {{ active_stream.name if active_stream else 'Selected Stream' }}
@@ -51,7 +51,7 @@
 
       {% if selected_chapter_id %}
       <span class="text-gray-300">/</span>
-      <span class="text-indigo-600 bg-indigo-50 px-2 py-1 rounded">{{ chapter.name }}</span>
+      <span class="text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 shadow-sm">{{ chapter.name }}</span>
       {% endif %}
   </nav>
 
@@ -59,43 +59,54 @@
        VISUAL GOOGLE-DRIVE STYLE DRILLDOWN
        ========================================== -->
   {% if not selected_stream_id %}
-      <h2 class="text-xl font-bold text-ink mb-4">Select a Stream</h2>
+      <div class="flex justify-between items-center mb-5">
+          <h2 class="text-xl font-bold text-ink">Select a Stream</h2>
+          <button @click="openQuickAdd('stream')" class="text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors border border-indigo-200 shadow-sm flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Add New Stream
+          </button>
+      </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
           {% for s in streams %}
-          <a href="{{ url_for('admin.questions_list', stream_id=s.id) }}" class="bg-white border-2 border-gray-100 rounded-xl p-6 hover:border-indigo-500 hover:shadow-lg transition-all group flex items-center gap-4">
-              <div class="w-12 h-12 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+          <a href="{{ url_for('admin.questions_list', stream_id=s.id) }}" class="bg-white border-2 border-gray-100 rounded-2xl p-6 hover:border-indigo-500 hover:shadow-lg transition-all group flex items-center gap-4 relative overflow-hidden">
+              <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16"><path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/></svg></div>
+              <div class="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors shadow-sm relative z-10">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
               </div>
-              <span class="font-bold text-lg text-ink">{{ s.name }}</span>
+              <span class="font-bold text-xl text-ink relative z-10">{{ s.name }}</span>
           </a>
           {% endfor %}
       </div>
 
   {% elif not selected_subject_id %}
-      <div class="flex justify-between items-center mb-4">
+      <div class="flex justify-between items-center mb-5">
           <h2 class="text-xl font-bold text-ink">Select a Subject</h2>
+          <button @click="openQuickAdd('subject')" class="text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors border border-indigo-200 shadow-sm flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Add New Subject
+          </button>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
           {% for s in subjects %}
-          <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=s.id) }}" class="bg-white border-2 border-gray-100 rounded-xl p-6 hover:border-indigo-500 hover:shadow-lg transition-all group flex items-center gap-4">
-              <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+          <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=s.id) }}" class="bg-white border-2 border-gray-100 rounded-2xl p-6 hover:border-blue-500 hover:shadow-lg transition-all group flex items-center gap-4 relative overflow-hidden">
+              <div class="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-sm relative z-10">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477-4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
               </div>
-              <span class="font-bold text-lg text-ink">{{ s.name }}</span>
+              <span class="font-bold text-xl text-ink relative z-10">{{ s.name }}</span>
           </a>
           {% endfor %}
       </div>
 
   {% elif not selected_chapter_id %}
-      <div class="flex justify-between items-center mb-4">
+      <div class="flex justify-between items-center mb-5">
           <h2 class="text-xl font-bold text-ink">Select a Chapter</h2>
-          <a href="{{ url_for('admin.chapters_list') }}" class="text-sm font-bold text-indigo-600 hover:underline">+ Add New Chapter</a>
+          <button @click="openQuickAdd('chapter')" class="text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors border border-indigo-200 shadow-sm flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Add New Chapter
+          </button>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {% for c in chapters %}
           <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=c.id) }}" class="bg-white border-2 border-gray-100 rounded-xl p-5 hover:border-indigo-500 hover:shadow-md transition-all group flex items-center justify-between">
-              <span class="font-bold text-ink">{{ c.name }}</span>
-              <span class="text-indigo-400 group-hover:text-indigo-600 transition-colors">&rarr;</span>
+              <span class="font-bold text-lg text-ink">{{ c.name }}</span>
+              <span class="text-indigo-400 group-hover:text-indigo-600 transition-colors bg-indigo-50 w-8 h-8 rounded-full flex items-center justify-center">&rarr;</span>
           </a>
           {% endfor %}
       </div>
@@ -103,176 +114,137 @@
   {% else %}
   
   <!-- ==========================================
-       THE DPP/WORKSHEET UPLOAD ENGINE (ALPINE)
+       THE DPP/WORKSHEET UPLOAD ENGINE
        ========================================== -->
-  <div x-data="chapterUploader()" class="mb-12">
+  <div x-data="chapterUploader()" class="mb-14">
     
     <!-- STEP 1: THE 4-WAY SPLIT -->
     <div x-show="step === 'mode'" x-transition class="animate-fade-in">
-        <h2 class="text-xl font-bold text-ink mb-4">Choose Upload Type for {{ chapter.name }}</h2>
+        <h2 class="text-2xl font-bold text-ink mb-6 flex items-center gap-3">
+            <span class="text-indigo-600">⚡</span> Action: Create New Folder/Set
+        </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
             <!-- Card 1 -->
             <button @click="selectMode('mcq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-indigo-600 hover:shadow-xl transition-all text-left group">
-                <div class="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-4 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                <div class="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-5 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                 </div>
-                <h3 class="text-xl font-bold text-ink mb-1">Topic-Wise MCQ</h3>
-                <p class="text-sm text-gray-500 font-medium">Create a practice set for a specific topic (e.g., Kinematics Equations).</p>
+                <h3 class="text-xl font-bold text-ink mb-2">Topic-Wise MCQ</h3>
+                <p class="text-sm text-gray-500 font-medium">Create a folder for specific notes (e.g., Electric Flux MCQs).</p>
             </button>
 
             <!-- Card 2 -->
             <button @click="selectMode('mcq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-blue-500 hover:shadow-xl transition-all text-left group">
-                <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                <div class="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-5 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
                 </div>
-                <h3 class="text-xl font-bold text-ink mb-1">Custom Book / Complete Chapter</h3>
-                <p class="text-sm text-gray-500 font-medium">Create a folder for modules (e.g., HC Verma Part 1) or mixed MCQs.</p>
+                <h3 class="text-xl font-bold text-ink mb-2">Custom Book / Random MCQ</h3>
+                <p class="text-sm text-gray-500 font-medium">Create a custom module folder (e.g., HC Verma Part 1).</p>
             </button>
 
             <!-- Card 3 -->
             <button @click="selectMode('pyq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-amber-500 hover:shadow-xl transition-all text-left group">
-                <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 mb-4 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <div class="w-14 h-14 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 mb-5 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
-                <h3 class="text-xl font-bold text-ink mb-1">Topic-Wise PYQ</h3>
-                <p class="text-sm text-gray-500 font-medium">Upload Previous Year Questions grouped by specific sub-topics.</p>
+                <h3 class="text-xl font-bold text-ink mb-2">Topic-Wise PYQ</h3>
+                <p class="text-sm text-gray-500 font-medium">Group Previous Year Questions by specific sub-topics.</p>
             </button>
 
             <!-- Card 4 -->
             <button @click="selectMode('pyq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-emerald-500 hover:shadow-xl transition-all text-left group">
-                <div class="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 mb-4 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                <div class="w-14 h-14 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 mb-5 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                 </div>
-                <h3 class="text-xl font-bold text-ink mb-1">Random PYQ</h3>
+                <h3 class="text-xl font-bold text-ink mb-2">Random PYQ</h3>
                 <p class="text-sm text-gray-500 font-medium">Upload mixed PYQs covering the entire chapter randomly.</p>
             </button>
         </div>
     </div>
 
-    <!-- STEP 2: THE WORKSHEET / DPP FOLDER SETUP -->
-    <div x-show="step === 'setup'" x-cloak class="animate-fade-in bg-white border-2 border-indigo-100 rounded-2xl p-8 shadow-lg">
-        <div class="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+    <!-- STEP 2: THE FOLDER SETUP -->
+    <div x-show="step === 'setup'" x-cloak class="animate-fade-in bg-white border-2 border-indigo-100 rounded-2xl p-8 shadow-xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-4 opacity-5"><svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" fill="currentColor" viewBox="0 0 16 16"><path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3zm-8.322.12C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139z"/></svg></div>
+        
+        <div class="flex justify-between items-center mb-6 border-b border-gray-100 pb-4 relative z-10">
             <div>
-                <h3 class="font-bold text-2xl text-ink">Create Practice Set</h3>
-                <p class="text-sm text-gray-500 font-medium mt-1">Define folder details. These will automatically override the JSON array.</p>
+                <h3 class="font-bold text-2xl text-ink">Set Folder Details</h3>
+                <p class="text-sm text-gray-500 font-medium mt-1">This configures all questions uploaded inside this folder.</p>
             </div>
-            <button @click="step = 'mode'" class="text-sm font-bold text-gray-400 hover:text-indigo-600 px-4 py-2 border border-gray-200 rounded-lg">Cancel</button>
+            <button @click="step = 'mode'" class="text-sm font-bold text-gray-400 hover:text-indigo-600 px-4 py-2 border border-gray-200 rounded-lg bg-white shadow-sm">Cancel</button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 relative z-10">
             <div class="md:col-span-2">
                 <label class="block text-sm font-bold text-indigo-900 mb-2">
-                    <span x-show="modeParams.category === 'topic'">Enter Specific Topic Name</span>
-                    <span x-show="modeParams.category === 'random'">Enter Custom Book / Set Name</span>
-                    <span class="text-red-500">*</span>
+                    Folder Name / Topic Title <span class="text-red-500">*</span>
                 </label>
-                <input type="text" x-model="folderSetup.name" :placeholder="modeParams.category === 'topic' ? 'e.g., Kinematics Equations' : 'e.g., HC Verma Part 1'" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none text-lg font-bold bg-gray-50">
+                <input type="text" x-model="folderSetup.name" :placeholder="modeParams.category === 'topic' ? 'e.g., Charges and Field' : 'e.g., HC Verma Part 1'" class="w-full rounded-xl border-2 border-gray-200 px-5 py-4 focus:border-indigo-600 focus:ring-0 outline-none text-xl font-bold bg-gray-50 shadow-inner">
             </div>
 
             <div x-show="modeParams.type === 'pyq'">
                 <label class="block text-sm font-bold text-indigo-900 mb-2">Exam Year <span class="text-red-500">*</span></label>
-                <input type="number" x-model="folderSetup.year" placeholder="e.g. 2023" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
+                <input type="number" x-model="folderSetup.year" placeholder="e.g. 2023" class="w-full rounded-xl border-2 border-gray-200 px-5 py-3.5 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
             </div>
 
             <div>
                 <label class="block text-sm font-bold text-indigo-900 mb-2">Correct Marks (Per Q)</label>
-                <input type="number" x-model.number="folderSetup.marks" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
+                <input type="number" x-model.number="folderSetup.marks" class="w-full rounded-xl border-2 border-gray-200 px-5 py-3.5 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
             </div>
             <div>
                 <label class="block text-sm font-bold text-indigo-900 mb-2">Negative Marks</label>
-                <input type="number" step="0.25" x-model.number="folderSetup.negative" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
+                <input type="number" step="0.25" x-model.number="folderSetup.negative" class="w-full rounded-xl border-2 border-gray-200 px-5 py-3.5 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
             </div>
         </div>
 
-        <button @click="finalizeSetup()" :disabled="!folderSetup.name" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">
-            Create Folder & Continue
+        <button @click="finalizeSetup()" :disabled="!folderSetup.name" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg relative z-10 flex justify-center items-center gap-2">
+            Proceed to Upload Engine &rarr;
         </button>
     </div>
 
-    <!-- STEP 3: THE JSON UPLOADER -->
-    <div x-show="step === 'upload'" x-cloak class="animate-fade-in bg-white border-2 border-gray-200 rounded-2xl shadow-lg overflow-hidden">
+    <!-- STEP 3: THE JSON UPLOADER ENGINE -->
+    <div x-show="step === 'upload'" x-cloak class="animate-fade-in bg-white border-2 border-gray-200 rounded-2xl shadow-xl overflow-hidden">
         
-        <div class="bg-gray-50 border-b border-gray-200 px-8 py-5 flex justify-between items-center">
-            <div>
-                <h3 class="font-bold text-xl text-ink">Upload Questions</h3>
-                <p class="text-sm font-bold text-indigo-600 mt-1">Folder: <span x-text="folderSetup.name"></span> | Type: <span class="uppercase" x-text="modeParams.type"></span></p>
+        <div class="bg-indigo-50 border-b-2 border-indigo-100 px-8 py-5 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">📂</span>
+                <div>
+                    <h3 class="font-black text-xl text-indigo-900 leading-tight" x-text="folderSetup.name"></h3>
+                    <p class="text-xs font-bold text-indigo-600 uppercase tracking-widest mt-0.5">Active Folder <span x-show="modeParams.type === 'pyq'" x-text="'· PYQ ' + folderSetup.year"></span></p>
+                </div>
             </div>
-            <button @click="step = 'setup'" class="text-sm font-bold text-gray-500 hover:text-indigo-600 px-4 py-2 border border-gray-200 bg-white rounded-lg shadow-sm">Edit Folder Info</button>
+            <button @click="step = 'setup'" class="text-sm font-bold text-indigo-600 bg-white hover:bg-indigo-100 px-4 py-2 border border-indigo-200 rounded-lg shadow-sm transition-colors">Edit Settings</button>
         </div>
 
-        <div class="p-8">
+        <div class="p-8 bg-gray-50/50">
             <div class="flex justify-between items-center mb-3">
-                <label class="font-bold text-ink text-lg">Paste JSON Array <span class="text-sm font-medium text-gray-500 ml-2">(Max 25 questions per batch)</span></label>
+                <label class="font-bold text-ink text-lg">Paste JSON Array <span class="text-xs font-bold text-white bg-indigo-500 px-2 py-1 rounded shadow-sm ml-2">Max 25 Questions</span></label>
             </div>
 
-            <textarea x-model="jsonText" @input="validateInput" rows="10" placeholder="[{ ... }]"
-                      class="w-full rounded-xl border-2 border-gray-300 p-5 font-mono text-sm mb-4 outline-none focus:border-indigo-500 bg-gray-50 shadow-inner resize-y"></textarea>
+            <textarea x-model="jsonText" @input="validateInput" rows="12" placeholder="[{ ... }]"
+                      class="w-full rounded-xl border-2 border-gray-300 p-5 font-mono text-sm mb-4 outline-none focus:border-indigo-500 bg-white shadow-inner resize-y"></textarea>
             
             <div class="text-sm flex justify-between items-center mb-6 px-2">
                 <p :class="qCount > 25 ? 'text-red-600 font-bold' : 'text-gray-500 font-bold'" x-show="jsonText.length > 0">
                     Detected: <span x-text="qCount"></span> questions
                 </p>
-                <p x-show="errorMsg" class="text-red-600 font-bold bg-red-50 px-3 py-1 rounded" x-text="errorMsg"></p>
-                <p x-show="successMsg" class="text-green-600 font-bold bg-green-50 px-3 py-1 rounded" x-text="successMsg"></p>
+                <p x-show="errorMsg" class="text-red-600 font-bold bg-red-50 px-3 py-1 rounded shadow-sm border border-red-100" x-text="errorMsg"></p>
+                <p x-show="successMsg" class="text-green-600 font-bold bg-green-50 px-3 py-1 rounded shadow-sm border border-green-100" x-text="successMsg"></p>
             </div>
 
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-100">
-                <p class="text-sm font-bold text-gray-600">Total Uploaded to this Folder: <span x-text="totalSaved" class="text-indigo-600 text-xl ml-1"></span></p>
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t-2 border-gray-200">
+                <p class="text-sm font-bold text-gray-500">Total Uploaded to this Folder: <span x-text="totalSaved" class="text-indigo-600 text-2xl ml-2 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100"></span></p>
                 
                 <div class="flex gap-3 w-full sm:w-auto">
                     <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25"
-                            class="flex-1 sm:flex-none bg-indigo-600 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-2">
+                            class="flex-1 sm:flex-none bg-indigo-600 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-2 text-lg">
                         <svg x-show="isSaving" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         <span x-text="isSaving ? 'Uploading...' : 'Save Chunk'"></span>
                     </button>
-                    <!-- Redirects down to the Manage Questions list automatically -->
+                    <!-- Redirects down to the EXACT FOLDER in Manage Questions list -->
                     <button type="button" @click="doneUploading()"
-                            class="flex-1 sm:flex-none border-2 border-gray-300 text-gray-700 font-bold py-3.5 px-8 rounded-xl hover:bg-gray-100 transition-colors">
-                        DONE &rarr; Manage Images
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- The Hidden Emergency Form Toggle -->
-        <div class="bg-gray-50 px-8 py-4 border-t border-gray-200 text-center">
-            <button @click="showManual = !showManual" class="text-xs font-bold text-gray-400 hover:text-indigo-600 uppercase tracking-widest transition-colors">
-                + Want to add a single question manually? Click here
-            </button>
-            
-            <div x-show="showManual" x-collapse class="mt-6 text-left">
-                <!-- Restoring the Original Manual Form specifically inside the toggle -->
-                <div class="bg-white border border-gray-200 rounded-xl p-6 space-y-5 shadow-inner">
-                    <p class="text-sm font-bold text-indigo-900 border-b border-gray-100 pb-2">Emergency Single Row Builder</p>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">Question Text</label>
-                        <textarea x-model="builder.question_text" rows="2" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 outline-none"></textarea>
-                        </div>
-                        <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">Explanation</label>
-                        <textarea x-model="builder.explanation" rows="2" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 outline-none"></textarea>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-4 gap-3">
-                        <div><input type="text" x-model="builder.option_a" placeholder="Opt A" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"></div>
-                        <div><input type="text" x-model="builder.option_b" placeholder="Opt B" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"></div>
-                        <div><input type="text" x-model="builder.option_c" placeholder="Opt C" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"></div>
-                        <div><input type="text" x-model="builder.option_d" placeholder="Opt D" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"></div>
-                    </div>
-                    <div class="flex items-center gap-4">
-                        <select x-model="builder.correct_option" class="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none font-bold">
-                            <option value="A">Answer: A</option><option value="B">Answer: B</option><option value="C">Answer: C</option><option value="D">Answer: D</option>
-                        </select>
-                        <select x-model.number="builder.difficulty_id" class="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none font-bold">
-                            {% for d in difficulty_levels %}<option value="{{ d.id }}">Level: {{ d.name }}</option>{% endfor %}
-                        </select>
-                        <label class="flex items-center gap-2 text-sm font-bold text-gray-600"><input type="checkbox" x-model="builder.is_premium" class="rounded text-indigo-600"> Premium</label>
-                        <label class="flex items-center gap-2 text-sm font-bold text-gray-600"><input type="checkbox" x-model="builder.has_image" class="rounded text-indigo-600"> Has Image</label>
-                    </div>
-                    <button type="button" @click="addManualRow()" class="w-full bg-indigo-50 text-indigo-700 font-bold py-2.5 rounded-lg border border-indigo-200 hover:bg-indigo-100">
-                        Add to JSON Batch Above &uarr;
+                            class="flex-1 sm:flex-none bg-emerald-500 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-emerald-600 transition-all shadow-md text-lg border-2 border-emerald-600">
+                        DONE
                     </button>
                 </div>
             </div>
@@ -281,123 +253,218 @@
   </div>
 
   <!-- ==========================================
-       CHAPTER QUESTIONS LIST & LIVE EDIT (Manage)
+       CHAPTER QUESTIONS LIST & LIVE EDIT (FOLDERS UI)
        ========================================== -->
-  <div id="manage-questions" class="scroll-mt-8">
-      <div class="bg-white border-2 border-gray-200 rounded-2xl divide-y divide-gray-100 shadow-sm mt-8 overflow-hidden">
-        <div class="px-6 py-4 bg-gray-50 flex items-center justify-between border-b-2 border-gray-200">
-          <p class="text-base font-bold text-ink">Manage Uploaded Questions: {{ chapter.name }}</p>
+  <div id="manage-questions" class="scroll-mt-10">
+      <div class="flex items-center justify-between mb-8 pb-4 border-b-2 border-gray-200">
+          <div>
+            <h2 class="font-display text-3xl font-bold text-ink">Manage Folders & Questions</h2>
+            <p class="text-sm font-bold text-gray-500 mt-1">Upload images, edit JSON, or manage specific topic folders.</p>
+          </div>
           {% set pending = questions|selectattr('has_image')|rejectattr('image_url')|list %}
           {% if pending %}
-          <span class="text-xs bg-red-100 text-red-700 border border-red-200 font-bold rounded-md px-3 py-1 shadow-sm">{{ pending|length }} image(s) pending upload</span>
+          <div class="bg-red-50 border border-red-200 px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm">
+            <span class="text-xl">⚠️</span>
+            <div>
+              <p class="text-sm font-bold text-red-800 leading-none">Action Required</p>
+              <p class="text-xs font-semibold text-red-600">{{ pending|length }} image(s) pending upload</p>
+            </div>
+          </div>
           {% endif %}
-        </div>
-        
-        {% for q in questions %}
-        <div class="px-6 py-5 gap-4 transition-colors hover:bg-gray-50 group" data-question-row data-table="questions" data-question-id="{{ q.id }}">
-          <div class="flex items-start justify-between gap-6">
-            <div class="min-w-0 flex-1">
-              <p class="text-base font-medium text-ink leading-relaxed">{{ q.question_text }}</p>
-              <div class="flex items-center gap-2 mt-3">
-                <span class="text-xs font-bold px-2.5 py-1 rounded-md {{ 'bg-purple-100 text-purple-800 border border-purple-200' if q.is_pyq else 'bg-gray-100 text-gray-700 border border-gray-200' }}">
-                    {{ 'PYQ ' ~ q.pyq_year if q.is_pyq else 'MCQ' }}
-                </span> 
-                <span class="text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-1 rounded-md shadow-sm">
-                    📁 {{ q.topic_name }}
-                </span>
-                {% if q.is_premium %}<span class="text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-300 px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1">🔒 Premium</span>{% endif %}
-              </div>
-            </div>
-            
-            <!-- Action Buttons -->
-            <div class="flex flex-col items-end gap-2 shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-              <button type="button" @click="$dispatch('open-edit-modal', { id: '{{ q.id }}' })"
-                      class="text-xs font-bold bg-white text-indigo-600 border border-gray-200 shadow-sm px-4 py-2 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition-colors w-full text-center">
-                ✏️ Edit JSON
-              </button>
-              <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}"
-                    onsubmit="return confirm('⚠️ DANGER: Remove this question? Its image will be permanently wiped from the Storage Bucket.');" class="w-full">
-                <button class="text-xs font-bold bg-red-50 text-red-600 border border-red-100 shadow-sm px-4 py-2 rounded-lg hover:bg-red-100 hover:border-red-200 transition-colors w-full text-center">
-                    🗑️ Delete
-                </button>
-              </form>
-            </div>
-          </div>
-
-          <!-- Image Zone -->
-          <div class="mt-4" data-image-zone="true">
-            {% if q.has_image %}
-              {% if q.image_url %}
-              <div class="flex items-center gap-4 bg-gray-50 p-3 rounded-xl border border-gray-200 w-fit" data-image-uploaded>
-                <img src="{{ q.image_url }}" alt="" class="h-20 w-20 object-contain rounded-lg border border-gray-300 bg-white shadow-sm p-1">
-                <div class="flex flex-col gap-2">
-                  <label class="text-xs font-bold bg-white border border-gray-300 shadow-sm text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 cursor-pointer transition-colors text-center">
-                    🔄 Replace Image
-                    <input type="file" accept="image/*" class="hidden" data-image-input>
-                  </label>
-                  <button type="button" class="text-xs font-bold text-red-600 hover:text-red-800 text-left px-1" data-remove-image>🗑️ Remove Image</button>
-                </div>
-              </div>
-              {% else %}
-              <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4 max-w-md" data-image-pending>
-                <div>
-                    <p class="text-sm font-bold text-amber-900">📷 Diagram Required</p>
-                    <p class="text-xs text-amber-700 mt-0.5" data-upload-status>No image uploaded yet.</p>
-                </div>
-                <label class="text-xs bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 shadow-md cursor-pointer whitespace-nowrap transition-colors">
-                  Upload Image
-                  <input type="file" accept="image/*" class="hidden" data-image-input>
-                </label>
-              </div>
-              {% endif %}
-            {% endif %}
-          </div>
-        </div>
-        {% else %}
-        <div class="px-6 py-16 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-            <p class="text-xl font-bold text-gray-400 mb-1">No Questions Yet</p>
-            <p class="text-sm font-medium text-gray-400">Use the uploader above to create folders and add questions.</p>
-        </div>
-        {% endfor %}
       </div>
+
+      <!-- JINJA LOGIC: Grouping Questions by Folder (topic_name) -->
+      {% set folders = {} %}
+      {% for q in questions %}
+          {% set f_name = q.topic_name if q.topic_name else 'General / Uncategorized' %}
+          {% if f_name not in folders %}
+              {% set _ = folders.update({f_name: []}) %}
+          {% endif %}
+          {% set _ = folders[f_name].append(q) %}
+      {% endfor %}
+
+      {% if folders %}
+      <div class="space-y-10">
+          {% for folder_name, qs in folders.items() %}
+          <!-- FOLDER CARD -->
+          <div class="bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden" id="folder-{{ folder_name|slugify }}">
+              
+              <!-- FOLDER HEADER with Actions -->
+              <div class="bg-indigo-50/50 px-6 py-4 flex justify-between items-center border-b-2 border-indigo-100 group">
+                  <div class="flex items-center gap-4">
+                      <div class="w-12 h-12 bg-white rounded-xl shadow-sm border border-indigo-100 flex items-center justify-center text-indigo-500 text-2xl">📁</div>
+                      <div>
+                          <h3 class="font-display text-xl font-bold text-indigo-900 leading-tight">{{ folder_name }}</h3>
+                          <p class="text-xs font-bold text-indigo-600 uppercase tracking-widest mt-0.5">{{ qs|length }} Questions Uploaded</p>
+                      </div>
+                  </div>
+                  
+                  <!-- Folder Management Menu (Alpine) -->
+                  <div class="relative" x-data="{ menuOpen: false }">
+                      <button @click="menuOpen = !menuOpen" @click.outside="menuOpen = false" class="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors focus:outline-none">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
+                      </button>
+                      <div x-show="menuOpen" x-transition x-cloak class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-20 overflow-hidden">
+                          <button @click="$dispatch('open-rename-folder', { oldName: '{{ folder_name }}', chapterId: '{{ selected_chapter_id }}' }); menuOpen = false" class="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50 transition-colors text-left">
+                              ✏️ Rename Folder
+                          </button>
+                          <button @click="$dispatch('open-delete-folder', { folderName: '{{ folder_name }}', chapterId: '{{ selected_chapter_id }}' }); menuOpen = false" class="w-full flex items-center gap-2 text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors">
+                              🗑️ Delete Folder
+                          </button>
+                      </div>
+                  </div>
+              </div>
+
+              <!-- FOLDER CONTENT (Questions List) -->
+              <div class="divide-y divide-gray-100">
+                  {% for q in qs %}
+                  <div class="px-6 py-5 gap-4 transition-colors hover:bg-gray-50 group/row flex flex-col md:flex-row md:items-start justify-between" data-question-row data-table="questions" data-question-id="{{ q.id }}">
+                    <div class="flex-1 min-w-0 pr-4">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="text-xs font-bold px-2.5 py-1 rounded-md bg-gray-100 border border-gray-200 text-gray-600 shadow-inner">Q.{{ loop.index }}</span>
+                            {% if q.is_pyq %}<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-purple-100 text-purple-800 border border-purple-200 shadow-sm">PYQ {{ q.pyq_year }}</span>{% endif %}
+                            {% if q.is_premium %}<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-yellow-100 text-yellow-800 border border-yellow-300 shadow-sm">💎 Premium</span>{% endif %}
+                        </div>
+                        <p class="text-base font-medium text-ink leading-relaxed">{{ q.question_text }}</p>
+                        
+                        <!-- Image Zone -->
+                        <div class="mt-4" data-image-zone="true">
+                          {% if q.has_image %}
+                            {% if q.image_url %}
+                            <div class="flex items-center gap-4 bg-white p-3 rounded-xl border-2 border-gray-100 shadow-sm w-fit" data-image-uploaded>
+                              <img src="{{ q.image_url }}" alt="" class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1">
+                              <div class="flex flex-col gap-2">
+                                <label class="text-xs font-bold bg-gray-50 border border-gray-300 shadow-sm text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 cursor-pointer transition-colors text-center">
+                                  🔄 Replace Image
+                                  <input type="file" accept="image/*" class="hidden" data-image-input>
+                                </label>
+                                <button type="button" class="text-xs font-bold text-red-600 hover:text-red-800 text-left px-1" data-remove-image>🗑️ Remove Image</button>
+                              </div>
+                            </div>
+                            {% else %}
+                            <div class="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4 max-w-md shadow-sm" data-image-pending>
+                              <div>
+                                  <p class="text-sm font-bold text-amber-900">📷 Diagram Required</p>
+                                  <p class="text-xs text-amber-700 mt-0.5" data-upload-status>No image uploaded yet.</p>
+                              </div>
+                              <label class="text-xs bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 shadow-md cursor-pointer whitespace-nowrap transition-colors">
+                                Upload Image
+                                <input type="file" accept="image/*" class="hidden" data-image-input>
+                              </label>
+                            </div>
+                            {% endif %}
+                          {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Row Actions -->
+                    <div class="flex flex-row md:flex-col items-center md:items-end gap-2 shrink-0 mt-4 md:mt-0 opacity-100 md:opacity-0 group-hover/row:opacity-100 transition-opacity">
+                        <button type="button" @click="$dispatch('open-edit-modal', { id: '{{ q.id }}' })"
+                                class="text-xs font-bold bg-white text-indigo-600 border border-gray-200 shadow-sm px-4 py-2 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition-colors w-full text-center">
+                          ✏️ Edit JSON
+                        </button>
+                        <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}"
+                              onsubmit="return confirm('⚠️ DANGER: Remove this question? Its image will be permanently wiped from storage.');" class="w-full m-0">
+                          <button class="text-xs font-bold bg-red-50 text-red-600 border border-red-100 shadow-sm px-4 py-2 rounded-lg hover:bg-red-100 hover:border-red-200 transition-colors w-full text-center">
+                              🗑️ Delete
+                          </button>
+                        </form>
+                    </div>
+                  </div>
+                  {% endfor %}
+              </div>
+          </div>
+          {% endfor %}
+      </div>
+      {% else %}
+      <!-- Empty State -->
+      <div class="px-6 py-20 text-center bg-white border-2 border-gray-100 rounded-2xl shadow-sm">
+          <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-200">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+          </div>
+          <p class="text-2xl font-display font-bold text-ink mb-2">No Folders Yet</p>
+          <p class="text-base font-medium text-gray-500 max-w-sm mx-auto">Use the Action panel above to create your first Topic Folder or Custom Book for this chapter.</p>
+      </div>
+      {% endif %}
   </div>
   {% endif %}
-</div>
 
-<!-- ==========================================
-     LIVE JSON EDIT MODAL
-     ========================================== -->
-<div x-data="editModalApp()" @open-edit-modal.window="openModal($event.detail)" x-show="isOpen" x-cloak class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm">
-  <div class="bg-white rounded-3xl border border-gray-700 p-8 w-full max-w-3xl shadow-2xl relative" @click.outside="closeModal()">
-    <button @click="closeModal()" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
-    </button>
-    
-    <h3 class="font-display text-2xl font-black text-indigo-900 tracking-wide uppercase mb-1">Edit JSON Data</h3>
-    <p class="text-sm text-gray-500 font-bold mb-6">Modify topic names, text, or switch to PYQ safely.</p>
-    
-    <textarea x-model="editJsonText" rows="14" placeholder='{\n  "question_type": "mcq",\n  "topic_name": "HC Verma Specials",\n  "question_text": "Updated text...",\n  "has_image": true\n}'
-              class="w-full rounded-xl border-2 border-gray-300 px-4 py-4 font-mono text-sm focus:ring-0 focus:border-indigo-600 bg-gray-900 text-green-400 shadow-inner outline-none mb-4 resize-none"></textarea>
-    
-    <p x-show="editError" class="text-red-700 text-sm mb-4 font-bold bg-red-100 border border-red-200 px-4 py-2 rounded-lg" x-text="editError"></p>
-    
-    <div class="flex justify-end gap-3">
-      <button @click="closeModal()" class="px-6 py-3 rounded-xl text-gray-700 font-bold border-2 border-gray-300 hover:bg-gray-100 transition-colors">Cancel</button>
-      <button @click="submitEdit()" :disabled="isSaving" class="px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 border-2 border-indigo-700 shadow-md transition-colors text-lg">
-        <svg x-show="isSaving" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-        <span x-text="isSaving ? 'Updating DB...' : 'Save Changes'"></span>
-      </button>
-    </div>
+  <!-- ==========================================
+       GLOBAL MODALS (Inline Creation & Edits)
+       ========================================== -->
+       
+  <!-- Quick Add Modal (Stream/Subject/Chapter) -->
+  <div x-show="quickAdd.isOpen" x-cloak class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="closeQuickAdd()">
+      <div class="bg-white rounded-3xl border border-gray-200 p-8 w-full max-w-md shadow-2xl relative">
+          <button @click="closeQuickAdd()" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+          <h3 class="font-display text-2xl font-bold text-ink mb-1">Add New <span class="capitalize text-indigo-600" x-text="quickAdd.type"></span></h3>
+          <p class="text-sm font-medium text-gray-500 mb-6">Create instantly without leaving this page.</p>
+          
+          <input type="text" x-model="quickAdd.name" :placeholder="'Enter ' + quickAdd.type + ' name...'" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-6 text-lg">
+          
+          <button @click="submitQuickAdd()" :disabled="!quickAdd.name.trim() || quickAdd.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg flex items-center justify-center gap-2">
+              <span x-text="quickAdd.isSaving ? 'Creating...' : 'Create ' + quickAdd.type"></span>
+          </button>
+      </div>
   </div>
+
+  <!-- Rename Folder Modal -->
+  <div x-show="folderManage.renameOpen" x-cloak @open-rename-folder.window="folderManage.oldName = $event.detail.oldName; folderManage.newName = $event.detail.oldName; folderManage.chapterId = $event.detail.chapterId; folderManage.renameOpen = true;" class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="folderManage.renameOpen = false">
+      <div class="bg-white rounded-3xl border border-gray-200 p-8 w-full max-w-md shadow-2xl relative">
+          <button @click="folderManage.renameOpen = false" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+          <h3 class="font-display text-2xl font-bold text-ink mb-1">Rename Folder</h3>
+          <p class="text-sm font-medium text-gray-500 mb-6">This will update the topic name for all questions inside.</p>
+          
+          <input type="text" x-model="folderManage.newName" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-6 text-lg">
+          
+          <button @click="submitFolderRename()" :disabled="!folderManage.newName.trim() || folderManage.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg flex items-center justify-center gap-2">
+              <span x-text="folderManage.isSaving ? 'Saving...' : 'Save New Name'"></span>
+          </button>
+      </div>
+  </div>
+
+  <!-- Delete Folder Modal (Strict Warning) -->
+  <div x-show="folderManage.deleteOpen" x-cloak @open-delete-folder.window="folderManage.oldName = $event.detail.folderName; folderManage.chapterId = $event.detail.chapterId; folderManage.deleteOpen = true;" class="fixed inset-0 bg-red-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="folderManage.deleteOpen = false">
+      <div class="bg-white rounded-3xl border-2 border-red-500 p-8 w-full max-w-md shadow-2xl relative">
+          <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200 text-red-600 text-3xl">⚠️</div>
+          <h3 class="font-display text-2xl font-bold text-red-600 mb-2 text-center">Delete Folder?</h3>
+          <p class="text-sm font-bold text-gray-600 mb-6 text-center leading-relaxed">
+              You are about to delete <span class="text-ink font-black bg-gray-100 px-2 rounded">"<span x-text="folderManage.oldName"></span>"</span>.<br>This will permanently wipe ALL questions and bucket images inside it. <span class="text-red-600">This cannot be undone.</span>
+          </p>
+          <div class="flex gap-3">
+              <button @click="folderManage.deleteOpen = false" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
+              <button @click="submitFolderDelete()" :disabled="folderManage.isSaving" class="flex-1 bg-red-600 text-white font-bold py-3.5 rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors shadow-md">
+                  <span x-text="folderManage.isSaving ? 'Wiping...' : 'Yes, Delete All'"></span>
+              </button>
+          </div>
+      </div>
+  </div>
+
+  <!-- LIVE JSON EDIT MODAL (Per Question) -->
+  <div x-data="editModalApp()" @open-edit-modal.window="openModal($event.detail)" x-show="isOpen" x-cloak class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm">
+      <div class="bg-white rounded-3xl border border-gray-700 p-8 w-full max-w-3xl shadow-2xl relative" @click.outside="closeModal()">
+        <button @click="closeModal()" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        <h3 class="font-display text-2xl font-black text-indigo-900 tracking-wide uppercase mb-1">Edit JSON Data</h3>
+        <p class="text-sm text-gray-500 font-bold mb-6">Modify text, options, or switch to PYQ safely without creating duplicates.</p>
+        <textarea x-model="editJsonText" rows="12" class="w-full rounded-xl border-2 border-gray-300 px-5 py-4 font-mono text-sm focus:ring-0 focus:border-indigo-600 bg-gray-900 text-green-400 shadow-inner outline-none mb-4 resize-none"></textarea>
+        <p x-show="editError" class="text-red-700 text-sm mb-4 font-bold bg-red-100 border border-red-200 px-4 py-2 rounded-lg" x-text="editError"></p>
+        <div class="flex justify-end gap-3">
+          <button @click="closeModal()" class="px-6 py-3 rounded-xl text-gray-700 font-bold border-2 border-gray-300 hover:bg-gray-100 transition-colors">Cancel</button>
+          <button @click="submitEdit()" :disabled="isSaving" class="px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 border-2 border-indigo-700 shadow-md transition-colors text-lg">
+            <span x-text="isSaving ? 'Updating DB...' : 'Save Changes'"></span>
+          </button>
+        </div>
+      </div>
+  </div>
+
 </div>
 
 <!-- ==========================================
-     SCRIPTS & ALPINE.JS LOGIC
+     SCRIPTS & MASTER ALPINE.JS APP
      ========================================== -->
 <style>
     .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 </style>
 
 <script>
@@ -413,89 +480,110 @@
       }, 4000);
   }
 
+  // Helper to convert string to slug for HTML IDs
+  function slugify(text) {
+      return text.toString().toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '').replace(/\-\-+/g, '-');
+  }
+
+  // THE MASTER APP (Handles Global Modals for Inline Creation & Folder Management)
+  function adminQuestionsApp() {
+      return {
+          currentStreamId: '{{ selected_stream_id or "" }}',
+          currentSubjectId: '{{ selected_subject_id or "" }}',
+          
+          quickAdd: {
+              isOpen: false, type: '', name: '', isSaving: false
+          },
+          folderManage: {
+              renameOpen: false, deleteOpen: false, oldName: '', newName: '', chapterId: '', isSaving: false
+          },
+
+          openQuickAdd(type) {
+              this.quickAdd.type = type;
+              this.quickAdd.name = '';
+              this.quickAdd.isOpen = true;
+          },
+          closeQuickAdd() {
+              this.quickAdd.isOpen = false;
+          },
+          async submitQuickAdd() {
+              this.quickAdd.isSaving = true;
+              const type = this.quickAdd.type;
+              let endpoint = '';
+              let payload = { name: this.quickAdd.name };
+              
+              // We will build these AJAX routes in question_routes.py next.
+              // For now, we simulate the logic: hit endpoint, then reload to see changes instantly.
+              if (type === 'stream') endpoint = '/admin/api/streams/create';
+              else if (type === 'subject') { endpoint = '/admin/api/subjects/create'; payload.stream_id = this.currentStreamId; }
+              else if (type === 'chapter') { endpoint = '/admin/api/chapters/create'; payload.subject_id = this.currentSubjectId; }
+
+              try {
+                  const res = await fetch(endpoint, { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                  const data = await res.json();
+                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Feature endpoint pending in backend (Next Step).'); }
+              } catch(e) { alert('Endpoint pending implementation in python routes.'); }
+              this.quickAdd.isSaving = false;
+          },
+
+          async submitFolderRename() {
+              this.folderManage.isSaving = true;
+              try {
+                  const res = await fetch('/admin/questions/folder/rename', {
+                      method: 'POST', headers:{'Content-Type': 'application/json'},
+                      body: JSON.stringify({ old_name: this.folderManage.oldName, new_name: this.folderManage.newName, chapter_id: this.folderManage.chapterId })
+                  });
+                  const data = await res.json();
+                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Endpoint pending in backend (Next Step).'); }
+              } catch(e) { alert('Endpoint pending implementation in python routes.'); }
+              this.folderManage.isSaving = false;
+          },
+
+          async submitFolderDelete() {
+              this.folderManage.isSaving = true;
+              try {
+                  const res = await fetch('/admin/questions/folder/delete', {
+                      method: 'POST', headers:{'Content-Type': 'application/json'},
+                      body: JSON.stringify({ folder_name: this.folderManage.oldName, chapter_id: this.folderManage.chapterId })
+                  });
+                  const data = await res.json();
+                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Endpoint pending in backend (Next Step).'); }
+              } catch(e) { alert('Endpoint pending implementation in python routes.'); }
+              this.folderManage.isSaving = false;
+          }
+      };
+  }
+
+  // UPLOAD ENGINE APP
   function chapterUploader() {
     return {
       selectedChapterId: '{{ selected_chapter_id or "" }}',
       step: 'mode', // 'mode' -> 'setup' -> 'upload'
       modeParams: { type: 'mcq', category: 'topic' },
       folderSetup: { name: '', year: '', marks: 4, negative: 1 },
+      jsonText: '[]', qCount: 0, totalSaved: 0, isSaving: false, errorMsg: '', successMsg: '',
       
-      jsonText: '[]',
-      qCount: 0,
-      totalSaved: 0,
-      isSaving: false,
-      errorMsg: '',
-      successMsg: '',
-      showManual: false,
-      
-      builder: {
-        question_text: '', explanation: '', option_a: '', option_b: '', option_c: '', option_d: '',
-        correct_option: 'A', difficulty_id: 1, is_premium: false, has_image: false
-      },
-
       init() {
         this.validateInput();
-        // Check if we arrived here via a redirect after completing an upload
-        if (window.location.search.includes('uploaded=1')) {
-            showSangamToast('✅ Questions uploaded! Manage images below.');
+        if (window.location.hash.includes('folder-')) {
+            showSangamToast('✅ Successfully uploaded! Manage images below.');
         }
       },
 
       selectMode(type, category) {
-          this.modeParams.type = type;
-          this.modeParams.category = category;
-          this.folderSetup.name = '';
-          this.folderSetup.year = '';
+          this.modeParams.type = type; this.modeParams.category = category;
+          this.folderSetup.name = ''; this.folderSetup.year = '';
           this.step = 'setup';
       },
-
-      finalizeSetup() {
-          if (!this.folderSetup.name.trim()) return;
-          this.step = 'upload';
-      },
+      finalizeSetup() { if (!this.folderSetup.name.trim()) return; this.step = 'upload'; },
 
       doneUploading() {
-          // Add uploaded parameter to trigger the success toast on reload, and smooth scroll to manage section
+          // REDIRECT FIX: Smooth scrolls directly to the Folder we just created!
+          const folderId = 'folder-' + slugify(this.folderSetup.name);
           const currentUrl = new URL(window.location.href);
-          currentUrl.searchParams.set('uploaded', '1');
-          currentUrl.hash = 'manage-questions';
+          currentUrl.hash = folderId;
           window.location.href = currentUrl.toString();
-      },
-
-      addManualRow() {
-        if (!this.builder.question_text.trim()) { alert('Question text is required.'); return; }
-
-        const row = {
-          question_type: this.modeParams.type,
-          topic_name: this.folderSetup.name.trim(),
-          question_text: this.builder.question_text.trim(),
-          option_a: this.builder.option_a.trim(), option_b: this.builder.option_b.trim(),
-          option_c: this.builder.option_c.trim(), option_d: this.builder.option_d.trim(),
-          correct_option: this.builder.correct_option,
-          difficulty_id: parseInt(this.builder.difficulty_id, 10),
-          is_premium: this.builder.is_premium,
-          has_image: this.builder.has_image
-        };
-
-        if (this.modeParams.type === 'pyq') { row.pyq_year = parseInt(this.folderSetup.year, 10) || null; }
-        if (this.builder.explanation.trim()) { row.explanation = this.builder.explanation.trim(); }
-
-        let current = [];
-        try {
-          const parsed = JSON.parse(this.jsonText);
-          if (Array.isArray(parsed)) current = parsed;
-        } catch (e) {}
-        
-        current.push(row);
-        this.jsonText = JSON.stringify(current, null, 2);
-        this.validateInput();
-        
-        // Reset manual builder visually
-        this.builder.question_text = ''; this.builder.explanation = '';
-        this.builder.option_a = ''; this.builder.option_b = ''; this.builder.option_c = ''; this.builder.option_d = '';
-        this.builder.has_image = false;
-        
-        showSangamToast('✅ Manual row added to JSON box above!');
+          window.location.reload(); // Force reload to show newly rendered folder from server
       },
 
       validateInput() {
@@ -503,78 +591,54 @@
         try {
           if (this.jsonText.trim() === '' || this.jsonText.trim() === '[]') { this.qCount = 0; return; }
           const parsed = JSON.parse(this.jsonText);
-          if (!Array.isArray(parsed)) { this.errorMsg = 'Must be a valid JSON array []'; this.qCount = 0; return; }
+          if (!Array.isArray(parsed)) { this.errorMsg = 'Must be a JSON array []'; this.qCount = 0; return; }
           this.qCount = parsed.length;
-        } catch (e) {
-          this.errorMsg = 'Invalid JSON format'; this.qCount = 0;
-        }
+        } catch (e) { this.errorMsg = 'Invalid JSON Syntax'; this.qCount = 0; }
       },
 
       async saveChunk() {
         if (!this.selectedChapterId || this.qCount === 0 || this.qCount > 25) return;
-        
         this.isSaving = true; this.errorMsg = ''; this.successMsg = '';
-        
         try {
           const parsedData = JSON.parse(this.jsonText);
           
-          // STRICT SANGAM DATA OVERRIDE
-          // Ensures AI Hallucinations in JSON don't override the Admin's Folder Setup
+          // STRICT SANGAM LOCK: Force Folder settings onto JSON before sending
           parsedData.forEach(item => {
               item.question_type = this.modeParams.type;
-              item.topic_name = this.folderSetup.name;
-              if (this.modeParams.type === 'pyq') {
-                  item.pyq_year = this.folderSetup.year ? parseInt(this.folderSetup.year, 10) : null;
-              }
+              item.topic_name = this.folderSetup.name; // Folder Mapping
+              if (this.modeParams.type === 'pyq') { item.pyq_year = this.folderSetup.year ? parseInt(this.folderSetup.year, 10) : null; }
           });
           
-          // --- THE FIX: ADDED MARKS AND NEGATIVE_MARKS TO PAYLOAD ---
           const payload = {
-            stream_id: '{{ selected_stream_id }}',
-            subject_id: '{{ selected_subject_id }}',
-            chapter_id: this.selectedChapterId,
-            bulk_json: parsedData,
-            marks: parseFloat(this.folderSetup.marks) || 4,
-            negative_marks: parseFloat(this.folderSetup.negative) || 1
+            stream_id: '{{ selected_stream_id }}', subject_id: '{{ selected_subject_id }}', chapter_id: this.selectedChapterId,
+            bulk_json: parsedData, marks: parseFloat(this.folderSetup.marks) || 4, negative_marks: parseFloat(this.folderSetup.negative) || 1
           };
           
           const res = await fetch("{{ url_for('admin.questions_bulk_upload') }}?ajax=1", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
           });
           
           const data = await res.json();
           if (data.ok) {
             this.totalSaved += data.inserted;
-            this.jsonText = '[]';
-            this.qCount = 0;
-            showSangamToast(`🔥 SANGAM STUDY HUB: ${data.inserted} questions mapped to folder '${this.folderSetup.name}'!`);
-          } else {
-            this.errorMsg = data.error || 'Server error occurred.';
-          }
-        } catch (err) {
-          this.errorMsg = 'Connection error. Check your network.';
-        } finally {
-            this.isSaving = false;
-        }
+            this.jsonText = '[]'; this.qCount = 0;
+            showSangamToast(`🔥 ${data.inserted} questions locked into folder '${this.folderSetup.name}'!`);
+          } else { this.errorMsg = data.error || 'Server error occurred.'; }
+        } catch (err) { this.errorMsg = 'Connection error. Check your network.'; } finally { this.isSaving = false; }
       }
     };
   }
 
+  // SINGLE QUESTION JSON EDIT MODAL
   function editModalApp() {
     return {
       isOpen: false, qId: null, editJsonText: '', isSaving: false, editError: '',
-
-      openModal(detail) {
-        this.qId = detail.id; this.editJsonText = ''; this.editError = ''; this.isOpen = true;
-      },
+      openModal(detail) { this.qId = detail.id; this.editJsonText = ''; this.editError = ''; this.isOpen = true; },
       closeModal() { this.isOpen = false; },
       async submitEdit() {
         this.editError = '';
         let parsedData;
         try { parsedData = JSON.parse(this.editJsonText); } catch(e) { this.editError = 'Invalid JSON syntax.'; return; }
-        
         this.isSaving = true;
         try {
           const res = await fetch(`/admin/questions/${this.qId}/edit`, {
@@ -582,9 +646,7 @@
           });
           const data = await res.json();
           if (data.ok) { window.location.reload(); } else { this.editError = data.error; }
-        } catch (err) {
-          this.editError = 'Network failure.';
-        } finally { this.isSaving = false; }
+        } catch (err) { this.editError = 'Network failure.'; } finally { this.isSaving = false; }
       }
     };
   }
@@ -606,7 +668,7 @@
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-remove-image]');
     if (!btn) return;
-    if (!confirm('Are you sure you want to permanently wipe this image from the Storage Bucket?')) return;
+    if (!confirm('Permanently wipe this image from the Storage Bucket?')) return;
     const row = btn.closest('[data-question-row]');
     showSangamToast('Deleting image...');
     try {
