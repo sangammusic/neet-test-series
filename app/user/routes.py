@@ -1,3 +1,4 @@
+import re
 from flask import render_template, request, redirect, url_for, session, jsonify, abort, flash
 
 from app.user import user_bp
@@ -430,7 +431,7 @@ def test_attempt_review(slug, test_id, attempt_id):
     )
 
 
-# ---------- Profile / Dashboard ----------
+# ---------- Profile & Account Settings ----------
 
 @user_bp.route("/profile")
 def profile():
@@ -449,3 +450,52 @@ def clear_history():
     
     flash("All your test history and attempts have been permanently deleted.", "success")
     return redirect(url_for("user.profile"))
+
+
+@user_bp.route("/settings", methods=["GET", "POST"])
+def settings():
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
+        
+    user_id = current_user_id()
+    
+    # Render Settings Page
+    if request.method == "GET":
+        profile_res = supabase_admin.table("profiles").select("username, full_name").eq("id", user_id).execute()
+        profile = profile_res.data[0] if profile_res.data else None
+        return render_template("settings.html", profile=profile)
+
+    # Handle Form Submission
+    new_username = request.form.get("username", "").strip().lower()
+    new_password = request.form.get("password", "")
+    
+    # 1. Update Username logic
+    if new_username:
+        if not re.match(r"^[a-zA-Z0-9_]+$", new_username):
+            flash("Invalid username format. No spaces or special characters allowed.", "error")
+            return redirect(url_for("user.settings"))
+        
+        dummy_email = f"{new_username}@sangam.local"
+        try:
+            # Tell Supabase Auth to change the internal mapping
+            supabase_admin.auth.admin.update_user_by_id(user_id, {"email": dummy_email})
+            # Also save it in our visual profiles table
+            supabase_admin.table("profiles").update({"username": new_username}).eq("id", user_id).execute()
+            flash("Username updated successfully!", "success")
+        except Exception as e:
+            error_msg = str(e)
+            if "already" in error_msg.lower() or "unique" in error_msg.lower():
+                flash(f"Username '{new_username}' is already taken! Please choose another.", "error")
+            else:
+                flash(f"Error updating username: {error_msg}", "error")
+            return redirect(url_for("user.settings"))
+            
+    # 2. Update Password logic
+    if new_password:
+        try:
+            supabase_admin.auth.admin.update_user_by_id(user_id, {"password": new_password})
+            flash("Password updated successfully!", "success")
+        except Exception as e:
+            flash(f"Error updating password: {e}", "error")
+
+    return redirect(url_for("user.settings"))
