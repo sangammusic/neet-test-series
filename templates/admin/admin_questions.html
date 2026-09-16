@@ -175,10 +175,9 @@
                 <input type="number" x-model="folderSetup.year" placeholder="e.g. 2023" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
             </div>
 
-            <!-- UI Placeholders for Future Backend Update -->
             <div>
                 <label class="block text-sm font-bold text-indigo-900 mb-2">Correct Marks (Per Q)</label>
-                <input type="number" x-model.number="folderSetup.marks" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50" title="Will be mapped in next DB update">
+                <input type="number" x-model.number="folderSetup.marks" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
             </div>
             <div>
                 <label class="block text-sm font-bold text-indigo-900 mb-2">Negative Marks</label>
@@ -529,11 +528,14 @@
               }
           });
           
+          // --- THE FIX: ADDED MARKS AND NEGATIVE_MARKS TO PAYLOAD ---
           const payload = {
             stream_id: '{{ selected_stream_id }}',
             subject_id: '{{ selected_subject_id }}',
             chapter_id: this.selectedChapterId,
-            bulk_json: parsedData
+            bulk_json: parsedData,
+            marks: parseFloat(this.folderSetup.marks) || 4,
+            negative_marks: parseFloat(this.folderSetup.negative) || 1
           };
           
           const res = await fetch("{{ url_for('admin.questions_bulk_upload') }}?ajax=1", {
