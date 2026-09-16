@@ -497,6 +497,36 @@ def tests_undo_chunk(test_id):
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
+@admin_bp.route("/tests/<test_id>/questions/<question_id>/remove", methods=["POST"])
+@admin_required
+def tests_remove_question(test_id, question_id):
+    """
+    Permanently removes a single mapped question from a test: wipes the
+    test mapping, deletes the question from the bank, and cleans up any
+    attached image from Storage. Same logic as tests_undo_chunk, scoped
+    to one question.
+    """
+    try:
+        q = supabase_admin.table("mock_questions").select("image_url").eq("id", question_id).maybe_single().execute().data
+        if q and q.get("image_url"):
+            _delete_image_from_storage(q["image_url"])
+
+        supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).eq("mock_question_id", question_id).execute()
+        supabase_admin.table("mock_questions").delete().eq("id", question_id).execute()
+
+        is_ajax = request.args.get("ajax") == "1" or request.is_json
+        if is_ajax:
+            return jsonify({"ok": True})
+        flash("Question removed from test.", "success")
+        return redirect(url_for("admin.tests_manage", test_id=test_id))
+    except Exception as exc:
+        is_ajax = request.args.get("ajax") == "1" or request.is_json
+        if is_ajax:
+            return jsonify({"ok": False, "error": str(exc)}), 500
+        flash(f"Failed to remove question: {exc}", "error")
+        return redirect(url_for("admin.tests_manage", test_id=test_id))
+
+
 @admin_bp.route("/tests/<test_id>/questions/<question_id>/edit", methods=["POST"])
 @admin_required
 def tests_edit_question(test_id, question_id):
