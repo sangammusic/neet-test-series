@@ -6,7 +6,8 @@
   <h1 class="font-display text-2xl font-semibold text-ink mb-8">Choose a Chapter</h1>
   <div class="grid sm:grid-cols-2 gap-4">
     {% for c in chapters %}
-    <a href="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=c.id) }}"
+    <!-- SANGAM FIX: Updated endpoint from practice_chapter_detail to practice_type to fix 500 BuildError -->
+    <a href="{{ url_for('user.practice_type', slug=stream.slug, chapter_id=c.id) }}"
        class="block p-5 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-sm transition-all bg-white font-medium text-ink">
       {{ c.name }}
     </a>
