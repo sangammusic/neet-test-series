@@ -74,13 +74,20 @@ def compress_image(file_bytes: bytes) -> bytes:
     img = Image.open(io.BytesIO(file_bytes))
     img = ImageOps.exif_transpose(img)  # fix phone-camera rotation
 
-    if img.mode in ("RGBA", "P"):
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
         # Flatten transparency onto white — JPEG has no alpha channel.
         # Without this, transparent PNG diagrams (common from
         # scanning apps) come out with black backgrounds.
-        background = Image.new("RGB", img.size, (255, 255, 255))
+        # BUGFIX: this used to only check for ("RGBA", "P"), which missed
+        # "LA" (grayscale + alpha) — a very common mode for black-and-white
+        # line-art diagrams exported from drawing apps. Those images fell
+        # into the plain convert("RGB") branch below, which drops the alpha
+        # channel by filling it with black instead of white, silently
+        # turning "transparent background, black lines" into "black
+        # background, black lines" — an invisible diagram.
         img = img.convert("RGBA")
-        background.paste(img, mask=img.split()[3])
+        background = Image.new("RGB", img.size, (255, 255, 255))
+        background.paste(img, mask=img.split()[-1])
         img = background
     else:
         img = img.convert("RGB")
