@@ -11,7 +11,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
 <!-- WRAPPING ENTIRE PAGE IN MASTER ALPINE APP FOR GLOBAL MODALS -->
-<div x-data="adminQuestionsApp()" class="max-w-6xl mx-auto px-6 py-10 relative font-body">
+<div x-data="adminQuestionsApp()" @open-item-manage.window="openItemManage($event.detail)" class="max-w-6xl mx-auto px-6 py-10 relative font-body">
   
   <!-- SANGAM STUDY HUB CUSTOM TOAST NOTIFICATION -->
   <div id="sangam-toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-4 rounded-xl shadow-2xl z-[100] flex items-center gap-3 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] max-w-md w-full">
