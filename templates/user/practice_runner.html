@@ -10,6 +10,27 @@
   body:has(#practice-runner) [data-footer] {
     display: none !important;
   }
+
+  /* Diagrams/graphs are sometimes embedded directly inside question_text,
+     option text, or explanation HTML (not via the separate image_url field),
+     so this can't rely on a wrapper div around a known <img> tag. Force a
+     solid white backdrop + visible frame on every <img> anywhere inside the
+     question card, wherever it came from, so line-art diagrams (often just
+     black strokes on a transparent background) never blend into the page's
+     dark background again. */
+  #practice-runner .question-text img,
+  #practice-runner .option-text img,
+  #practice-runner .explanation-text img {
+    background-color: #ffffff !important;
+    border: 2px solid #9ca3af;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    display: block;
+    margin: 1rem auto;
+    max-height: 300px;
+    max-width: 100%;
+    height: auto;
+  }
 </style>
 {% endblock %}
 
@@ -65,7 +86,7 @@
           </div>
 
           <div x-show="mathReady" class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg">
-            <div class="text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion.question_text"></div>
+            <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion.question_text"></div>
 
             <div x-show="currentQuestion.image_url" class="my-6 mx-auto max-w-full flex justify-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
               <img :src="currentQuestion.image_url"
@@ -80,7 +101,7 @@
                   :class="optionClass(opt)">
                   <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
                     :class="optionBadgeClass(opt)" x-text="opt"></span>
-                  <span class="text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion['option_' + opt.toLowerCase()]"></span>
+                  <span class="option-text text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion['option_' + opt.toLowerCase()]"></span>
                 </button>
               </template>
             </div>
@@ -94,7 +115,7 @@
                 </span>
               </p>
               <p x-show="currentQuestion.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
-                <span class="text-gray-500 font-semibold">Explanation: </span><span x-html="currentQuestion.explanation"></span>
+                <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="currentQuestion.explanation"></span>
               </p>
             </div>
           </div>
