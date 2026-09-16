@@ -1,0 +1,183 @@
+{% extends "shared/base.html" %}
+{% block title %}{{ set_name }} — {{ chapter.name }}{% endblock %}
+{% block nav %}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  body:has(#practice-runner) > footer,
+  body:has(#practice-runner) [data-footer] {
+    display: none !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="practice-runner" x-data="practiceRunner()" x-init="init()" class="min-h-screen bg-[#0a0a0a] text-gray-100 flex flex-col font-body">
+
+  <!-- Top bar -->
+  <div class="bg-[#111111] border-b border-white/10 px-3 md:px-6 py-2.5 flex items-center justify-between gap-3 sticky top-0 z-20 shadow-sm">
+    <div class="min-w-0">
+      <p class="text-xs text-gray-400 truncate">{{ chapter.name }} · {{ 'PYQ' if mode == 'pyq' else 'MCQ' }} · 📁 {{ folder }}</p>
+      <p class="text-sm font-semibold text-white truncate">{{ set_name }}</p>
+    </div>
+    <a href="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=chapter.id) }}"
+       class="shrink-0 py-1.5 px-4 rounded-md text-xs md:text-sm font-semibold bg-white/10 text-white hover:bg-white/20 transition-colors">
+      Exit
+    </a>
+  </div>
+
+  <!-- Question palette strip -->
+  <div class="bg-[#0f0f0f] border-b border-white/5 px-3 md:px-6 py-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar sticky top-[49px] z-10 shadow-sm">
+    <template x-for="(q, idx) in questions" :key="'strip-' + q.id">
+      <button @click="jumpTo(idx)"
+        class="w-8 h-8 shrink-0 rounded text-xs font-semibold flex items-center justify-center transition-transform hover:scale-105"
+        :class="[paletteClass(idx), currentIndex === idx ? 'ring-2 ring-gold ring-offset-1 ring-offset-[#0f0f0f]' : '']"
+        x-text="idx + 1"></button>
+    </template>
+  </div>
+
+  <!-- Main question area -->
+  <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
+    <template x-if="currentQuestion">
+      <div>
+        <p class="text-sm font-semibold text-gray-300 mb-5">
+          Question <span x-text="currentIndex + 1"></span> of <span x-text="questions.length"></span>
+        </p>
+
+        <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg">
+          <div class="text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion.question_text"></div>
+
+          <img :src="currentQuestion.image_url" x-show="currentQuestion.image_url"
+               class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-6 shadow-sm" alt="Diagram">
+
+          <div class="space-y-3.5">
+            <template x-for="opt in ['A','B','C','D']" :key="opt">
+              <button type="button" @click="selectOption(opt)"
+                class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-200"
+                :class="optionClass(opt)">
+                <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
+                  :class="optionBadgeClass(opt)" x-text="opt"></span>
+                <span class="text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion['option_' + opt.toLowerCase()]"></span>
+              </button>
+            </template>
+          </div>
+
+          <!-- Instant feedback after answering -->
+          <div x-show="answers[currentQuestion.id] != null" x-cloak class="mt-5 pt-5 border-t border-white/10">
+            <p class="text-sm font-semibold" :class="answers[currentQuestion.id] === currentQuestion.correct_option ? 'text-green-400' : 'text-red-400'">
+              <span x-text="answers[currentQuestion.id] === currentQuestion.correct_option ? '✓ Correct!' : '✗ Incorrect.'"></span>
+              <span x-show="answers[currentQuestion.id] !== currentQuestion.correct_option">
+                Correct answer: <span x-text="currentQuestion.correct_option"></span>
+              </span>
+            </p>
+            <p x-show="currentQuestion.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
+              <span class="text-gray-500 font-semibold">Explanation: </span><span x-html="currentQuestion.explanation"></span>
+            </p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <button @click="goPrev()" :disabled="currentIndex === 0"
+            class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            ← Previous
+          </button>
+          <template x-if="currentIndex < questions.length - 1">
+            <button @click="goNext()"
+              class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
+              Next →
+            </button>
+          </template>
+          <template x-if="currentIndex === questions.length - 1">
+            <button @click="showSummary = true"
+              class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
+              Finish
+            </button>
+          </template>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Summary modal -->
+  <div x-show="showSummary" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4">
+    <div class="bg-[#161616] border border-white/10 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
+      <h3 class="font-display text-2xl font-bold text-white mb-2">Practice Complete</h3>
+      <p class="text-4xl font-display font-bold text-gold my-4" x-text="score + ' / ' + questions.length"></p>
+      <p class="text-sm text-gray-400 mb-6">questions answered correctly</p>
+      <div class="grid grid-cols-2 gap-3">
+        <button @click="showSummary = false" class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
+          Review
+        </button>
+        <a href="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=chapter.id) }}"
+           class="py-3 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
+          Exit
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function practiceRunner() {
+  return {
+    questions: {{ questions | tojson }},
+    currentIndex: 0,
+    answers: {},
+    showSummary: false,
+
+    init() {},
+
+    get currentQuestion() {
+      return this.questions[this.currentIndex] || null;
+    },
+
+    get score() {
+      let s = 0;
+      for (const q of this.questions) {
+        if (this.answers[q.id] === q.correct_option) s++;
+      }
+      return s;
+    },
+
+    selectOption(opt) {
+      const q = this.currentQuestion;
+      if (!q || this.answers[q.id] != null) return; // lock after first pick
+      this.answers[q.id] = opt;
+    },
+
+    jumpTo(idx) { this.currentIndex = idx; },
+    goNext() { if (this.currentIndex < this.questions.length - 1) this.currentIndex++; },
+    goPrev() { if (this.currentIndex > 0) this.currentIndex--; },
+
+    paletteClass(idx) {
+      const q = this.questions[idx];
+      const a = this.answers[q.id];
+      if (a == null) return 'bg-[#2A2A2A] text-gray-400';
+      return a === q.correct_option ? 'bg-green-600 text-white' : 'bg-red-600 text-white';
+    },
+
+    optionClass(opt) {
+      const q = this.currentQuestion;
+      const a = this.answers[q.id];
+      if (a == null) {
+        return 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 hover:bg-[#222] cursor-pointer';
+      }
+      if (opt === q.correct_option) return 'border-green-500/50 bg-green-500/10 text-white cursor-default ring-1 ring-green-500/50';
+      if (opt === a) return 'border-red-500/50 bg-red-500/10 text-white cursor-default ring-1 ring-red-500/50';
+      return 'border-white/5 bg-[#1a1a1a] text-gray-400 cursor-default opacity-50';
+    },
+
+    optionBadgeClass(opt) {
+      const q = this.currentQuestion;
+      const a = this.answers[q.id];
+      if (a == null) return 'border-white/30 text-gray-400';
+      if (opt === q.correct_option) return 'border-green-500 bg-green-500 text-ink';
+      if (opt === a) return 'border-red-500 bg-red-500 text-white';
+      return 'border-white/20 text-gray-500';
+    },
+  };
+}
+</script>
+{% endblock %}
