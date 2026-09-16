@@ -1,3 +1,4 @@
+import re
 from flask import render_template, request, redirect, url_for, session, flash
 
 from app.auth import auth_bp
@@ -5,32 +6,43 @@ from app.extensions import supabase_public, supabase_admin
 from app.shared.utils import get_or_create_guest_id, set_guest_cookie
 
 
+def is_valid_username(username):
+    """
+    Security check: Only allows alphanumeric characters and underscores.
+    Blocks spaces, @, dots, and other special characters to prevent injection.
+    """
+    return bool(re.match(r"^[a-zA-Z0-9_]+$", username))
+
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
         return render_template("login.html")
 
-    email = request.form.get("email", "").strip()
+    username = request.form.get("username", "").strip().lower()
     password = request.form.get("password", "")
+
+    # 1. Backend Validation
+    if not username or not is_valid_username(username):
+        flash("Invalid username format. Only letters, numbers, and underscores allowed.", "error")
+        return render_template("login.html"), 400
+
+    # 2. Convert to Dummy Email
+    dummy_email = f"{username}@sangam.local"
 
     try:
         result = supabase_public.auth.sign_in_with_password(
-            {"email": email, "password": password}
+            {"email": dummy_email, "password": password}
         )
     except Exception:
-        flash("Invalid email or password.", "error")
+        flash("Invalid username or password.", "error")
         return render_template("login.html"), 401
 
     if not result.session:
-        # This happens when "Confirm email" is enabled in Supabase Auth
-        # settings and the user hasn't clicked the confirmation link yet.
-        # sign_in_with_password doesn't raise in this case — it just
-        # returns a user with session=None — so this has to be checked
-        # explicitly or the next two lines crash with an AttributeError.
-        flash("Please confirm your email before logging in — check your inbox.", "error")
+        flash("Something went wrong. Please try again.", "error")
         return render_template("login.html"), 401
 
-    session.permanent = True  # BUGFIX: without this the login cookie dies on browser close / redirect
+    session.permanent = True
     session["user_id"] = result.user.id
     session["access_token"] = result.session.access_token
     return redirect(url_for("user.stream_select"))
@@ -41,74 +53,59 @@ def register():
     if request.method == "GET":
         return render_template("register.html")
 
-    email = request.form.get("email", "").strip()
+    username = request.form.get("username", "").strip().lower()
     password = request.form.get("password", "")
     full_name = request.form.get("full_name", "").strip()
 
-    # --- TEMP: email verification bypass (see Task A note below) ---
-    # We use supabase_admin.auth.admin.create_user() instead of the
-    # normal supabase_public.auth.sign_up(). The admin create_user
-    # endpoint accepts email_confirm=True, which marks the user as
-    # already confirmed at creation time — no confirmation email is
-    # sent, and sign_in_with_password works on the very next request.
-    #
-    # This does NOT depend on the "Confirm email" toggle in the
-    # Supabase Dashboard (Authentication -> Providers -> Email). It
-    # works whether that toggle is on or off, because email_confirm
-    # is being set explicitly per-user here, not inherited from the
-    # project-wide setting. That's deliberate: if the dashboard
-    # toggle gets flipped back on later for some other reason, this
-    # route keeps working without anyone having to remember why.
-    #
-    # TO RE-ENABLE EMAIL VERIFICATION LATER: replace the
-    # supabase_admin.auth.admin.create_user(...) call below with the
-    # original supabase_public.auth.sign_up(...) call (kept in a
-    # comment further down), and change the flash message back to
-    # "check your email to confirm."
+    # 1. Backend Validation (Injection Prevention)
+    if not username or not is_valid_username(username):
+        flash("Invalid username. Only letters, numbers, and underscores are allowed (no spaces or @).", "error")
+        return render_template("register.html"), 400
+
+    # 2. Convert to Dummy Email
+    dummy_email = f"{username}@sangam.local"
+
     try:
         result = supabase_admin.auth.admin.create_user(
             {
-                "email": email,
+                "email": dummy_email,
                 "password": password,
-                "email_confirm": True,  # <-- the actual bypass
+                "email_confirm": True,
             }
         )
     except Exception as exc:
-        flash(f"Registration failed: {exc}", "error")
+        error_msg = str(exc)
+        # Catch duplicate dummy email error from Supabase
+        if "already registered" in error_msg.lower() or "unique" in error_msg.lower():
+            flash(f"Username '{username}' is already taken! Please choose another one.", "error")
+        else:
+            flash(f"Registration failed: {error_msg}", "error")
         return render_template("register.html"), 400
 
-    # ORIGINAL (email-verification-required) call, for reference:
-    # result = supabase_public.auth.sign_up(
-    #     {"email": email, "password": password}
-    # )
-
-    # Create the matching profiles row (role_id defaults to student=1).
-    # Uses supabase_admin here (not supabase_public) because RLS on
-    # `profiles` only allows a row to be inserted by an authenticated
-    # session matching auth.uid() — and at this point in the request
-    # there IS no session yet (that's created by sign_in_with_password
-    # a few lines down). supabase_admin bypasses RLS so the profile
-    # can be created before the session exists.
     if result.user:
-        supabase_admin.table("profiles").insert(
-            {"id": result.user.id, "full_name": full_name}
-        ).execute()
+        try:
+            # Save the unique username to the profiles table
+            supabase_admin.table("profiles").insert(
+                {
+                    "id": result.user.id, 
+                    "full_name": full_name,
+                    "username": username
+                }
+            ).execute()
+        except Exception as db_exc:
+            # Failsafe: If profiles insert fails, delete the auth user so they aren't stuck in limbo
+            supabase_admin.auth.admin.delete_user(result.user.id)
+            flash(f"Username '{username}' is already taken! Please choose another.", "error")
+            return render_template("register.html"), 400
     else:
-        # create_user succeeded but returned no user — shouldn't
-        # normally happen, but don't silently continue if it does.
         flash("Registration failed: no user returned.", "error")
         return render_template("register.html"), 400
 
-    # Immediately sign in, since the user is already confirmed — no
-    # need to send them to the login page and make them log in twice.
     try:
         sign_in_result = supabase_public.auth.sign_in_with_password(
-            {"email": email, "password": password}
+            {"email": dummy_email, "password": password}
         )
     except Exception:
-        # Account was created fine; auto-login just didn't go through
-        # (rare, but don't block registration on it). Fall back to
-        # sending them to the login page instead of erroring out.
         flash("Account created — please log in.", "success")
         return redirect(url_for("auth.login"))
 
@@ -116,7 +113,7 @@ def register():
         flash("Account created — please log in.", "success")
         return redirect(url_for("auth.login"))
 
-    session.permanent = True  # BUGFIX: same as login() — keep the auto-login session alive past this request
+    session.permanent = True
     session["user_id"] = sign_in_result.user.id
     session["access_token"] = sign_in_result.session.access_token
     flash("Account created — you're all set.", "success")
