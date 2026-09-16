@@ -14,10 +14,7 @@ def _count_orphaned_mock_questions():
     """
     A mock_questions row is orphaned once it has no row left pointing to it in
     mock_test_questions — this happens when a test's delete route removed the
-    mapping/test but (due to the join-based bug fixed in test_routes.py) left
-    the question row itself behind. Cheap existence check via a NOT-IN keyset
-    would be expensive at scale, so we pull both id sets and diff in Python —
-    fine for a NEET-scale question bank (thousands, not millions, of rows).
+    mapping/test but left the question row itself behind.
     """
     try:
         all_ids = {r["id"] for r in supabase_admin.table("mock_questions").select("id").execute().data}
@@ -33,13 +30,14 @@ def _count_orphaned_mock_questions():
         logger.error(f"Error counting orphaned mock_questions: {e}")
         return 0
 
+
 @admin_bp.route("/dashboard")
 @admin_required
 def dashboard():
     """
     Landing page after admin login. Shows quick content counts.
-    Optimized: Added strict error handling and .limit(1) to make 
-    count queries drastically faster via PostgREST.
+    CRITICAL FIX: Removed nested Storage API calls that caused massive timeouts.
+    Now uses O(1) Database queries to count uploaded images instantly.
     """
     def _count(table):
         try:
@@ -63,6 +61,21 @@ def dashboard():
             return res.count or 0
         except Exception as e:
             logger.error(f"Error counting pending images in {table}: {e}")
+            return 0
+
+    def _count_uploaded_images(table):
+        """Fast DB-level count of questions that actually have an image_url mapped."""
+        try:
+            res = (
+                supabase_admin.table(table)
+                .select("id", count="exact")
+                .not_.is_("image_url", "null")
+                .limit(1)
+                .execute()
+            )
+            return res.count or 0
+        except Exception as e:
+            logger.error(f"Error counting uploaded images in {table}: {e}")
             return 0
 
     counts = {
@@ -89,35 +102,25 @@ def dashboard():
         "incomplete_attempts": incomplete_count,
     }
 
-    # Storage usage estimation (~100KB per compressed image)
-    uploaded_count = 0
+    # O(1) FAST STORAGE CALCULATION: Replaces the N+1 API crash bug!
+    # A compressed NEET diagram is roughly ~100KB, so 10 images = ~1MB.
     try:
-        for prefix in ("questions", "mock_questions"):
-            folders = supabase_admin.storage.from_(BUCKET_NAME).list(prefix)
-            for folder in folders or []:
-                # Ignore hidden system files (like .emptyFolderPlaceholder)
-                if folder.get('name', '').startswith('.'):
-                    continue
-                files = supabase_admin.storage.from_(BUCKET_NAME).list(f"{prefix}/{folder['name']}")
-                
-                # Count only valid image files
-                valid_files = [f for f in (files or []) if not f.get('name', '').startswith('.')]
-                uploaded_count += len(valid_files)
+        q_images = _count_uploaded_images("questions")
+        mq_images = _count_uploaded_images("mock_questions")
+        uploaded_count = q_images + mq_images
+        estimated_mb = round((uploaded_count * 100) / 1024, 1)
     except Exception as e:
-        logger.warning(f"Storage bucket list failed: {e}")
+        logger.warning(f"Fast storage calc failed: {e}")
         uploaded_count = None
+        estimated_mb = None
 
     storage_info = {
         "uploaded_count": uploaded_count,
-        "estimated_mb": round((uploaded_count or 0) * 100 / 1024, 1) if uploaded_count is not None else None,
+        "estimated_mb": estimated_mb,
         "pending_questions": _count_pending_images("questions"),
         "pending_mock_questions": _count_pending_images("mock_questions"),
     }
 
-    # FEATURE: Orphan tracking. These are mock_questions rows (and therefore
-    # their bucket images) left behind by a test/folder delete that couldn't
-    # find them through the mock_test_questions mapping join. See the
-    # ROOT-CAUSE FIX comments in test_routes.py for how this happens.
     orphan_info = {
         "orphaned_mock_questions": _count_orphaned_mock_questions(),
     }
@@ -141,9 +144,8 @@ def cleanup_guest_attempts():
     """
     try:
         res = supabase_admin.table("test_attempts").delete().is_("user_id", "null").execute()
-        # Fetch actual deleted count for a more satisfying UI message
         deleted_count = len(res.data) if res.data else 0
-        flash(f"Success: {deleted_count} Guest attempts and their data have been permanently wiped.", "success")
+        flash(f"Success: {deleted_count} Guest attempts and their temporary data have been permanently wiped.", "success")
     except Exception as exc:
         flash(f"Cleanup failed: {exc}", "error")
     return redirect(url_for("admin.dashboard"))
@@ -158,7 +160,6 @@ def cleanup_incomplete_attempts():
     """
     try:
         res = supabase_admin.table("test_attempts").delete().is_("submitted_at", "null").execute()
-        # Fetch actual deleted count
         deleted_count = len(res.data) if res.data else 0
         flash(f"Success: {deleted_count} abandoned/incomplete test attempts have been permanently wiped.", "success")
     except Exception as exc:
@@ -185,11 +186,10 @@ def cleanup_orphaned_mock_questions():
         orphan_ids = list(all_ids - mapped_ids)
 
         if not orphan_ids:
-            flash("No orphaned questions found — everything is already clean.", "success")
+            flash("No orphaned questions found — system is already 100% clean.", "success")
             return redirect(url_for("admin.dashboard"))
 
-        # 1. Delete their bucket images first, in chunks of 100 to fetch,
-        #    then chunks of 50 to remove from storage.
+        # 1. Delete their bucket images first
         image_paths = []
         for i in range(0, len(orphan_ids), 100):
             chunk = orphan_ids[i:i + 100]
@@ -212,15 +212,14 @@ def cleanup_orphaned_mock_questions():
             except Exception as e:
                 logger.warning(f"Orphan sweep: bucket batch delete error: {e}")
 
-        # 2. Delete the orphaned rows themselves, in chunks of 40 (matches the
-        #    chunk size used elsewhere to avoid 414 URI Too Long).
+        # 2. Delete the orphaned rows themselves
         for i in range(0, len(orphan_ids), 40):
             chunk = orphan_ids[i:i+40]
             supabase_admin.table("mock_questions").delete().in_("id", chunk).execute()
 
         flash(
             f"Success: {len(orphan_ids)} orphaned question(s) and {len(image_paths)} orphaned image(s) "
-            "permanently wiped.",
+            "permanently wiped from DB and Storage.",
             "success",
         )
     except Exception as exc:
