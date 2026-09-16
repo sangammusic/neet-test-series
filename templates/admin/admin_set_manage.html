@@ -1,8 +1,12 @@
 {% extends "shared/base.html" %}
 {% block title %}Manage Quiz: {{ selected_set }} — Admin{% endblock %}
-{% block content %}
-{% include "admin/_admin_nav.html" %}
 
+<!-- SANGAM FIX: Override the default student nav with admin nav -->
+{% block nav %}
+    {% include "admin/_admin_nav.html" %}
+{% endblock %}
+
+{% block content %}
 <!-- Alpine.js for State Management (Tabs, Modals, Menus) -->
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
@@ -311,6 +315,7 @@
         try {
           const payload = {
               chapter_id: '{{ selected_chapter_id }}',
+              category: '{{ selected_category }}',
               folder_name: '{{ selected_folder }}',
               set_name: '{{ selected_set }}',
               bulk_json: parsedData
@@ -324,7 +329,6 @@
           const data = await res.json();
           
           if (data.ok) {
-            // Check if backend returned inserted_ids for Undo support
             const insertedIds = data.inserted_ids || []; 
             if (insertedIds.length === 0) {
                 console.warn("Backend did not return inserted_ids. Undo will not work correctly.");
@@ -360,7 +364,6 @@
           const lastAction = this.history.pop();
           this.isSaving = true; this.errorMsg = ''; this.successMsg = '';
 
-          // If backend didn't return IDs, we can't undo via API
           if (!lastAction.insertedIds || lastAction.insertedIds.length === 0) {
               this.errorMsg = "Cannot Undo: Backend did not return inserted IDs. Please update backend.";
               this.history.push(lastAction);
