@@ -1,0 +1,26 @@
+{% extends "shared/base.html" %}
+{% block title %}{{ folder }} — {{ chapter.name }}{% endblock %}
+{% block content %}
+<section class="max-w-3xl mx-auto px-6 pt-12 pb-24">
+  <p class="text-gold font-semibold text-sm mb-2">
+    {{ chapter.name }} · {{ 'PYQ' if mode == 'pyq' else 'MCQ' }} · {{ 'Topic-wise' if category == 'topic' else 'Random' }}
+  </p>
+  <h1 class="font-display text-2xl font-semibold text-ink mb-8">📁 {{ folder }}</h1>
+
+  <div class="grid sm:grid-cols-2 gap-4">
+    {% for s in sets %}
+    <a href="{{ url_for('user.practice_overview', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=s.name) }}"
+       class="block p-5 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-sm transition-all bg-white">
+      <div class="flex items-center justify-between mb-1">
+        <span class="font-medium text-ink">{{ s.name }}</span>
+        {% if s.is_premium %}<span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5">Premium 🔒</span>
+        {% else %}<span class="text-xs bg-green-50 text-green-700 rounded px-2 py-0.5">Free</span>{% endif %}
+      </div>
+      <p class="text-sm text-ink/50">{{ s.count }} question{{ 's' if s.count != 1 else '' }}</p>
+    </a>
+    {% else %}
+    <p class="text-ink/50 text-sm col-span-full">No quizzes in this folder yet — check back soon.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
