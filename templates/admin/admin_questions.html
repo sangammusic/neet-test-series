@@ -67,13 +67,24 @@
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
           {% for s in streams %}
-          <a href="{{ url_for('admin.questions_list', stream_id=s.id) }}" class="bg-white border-2 border-gray-100 rounded-2xl p-6 hover:border-indigo-500 hover:shadow-lg transition-all group flex items-center gap-4 relative overflow-hidden">
-              <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16"><path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/></svg></div>
-              <div class="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors shadow-sm relative z-10">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+          <div class="bg-white border-2 border-gray-100 rounded-2xl hover:border-indigo-500 hover:shadow-lg transition-all group relative overflow-visible">
+              <a href="{{ url_for('admin.questions_list', stream_id=s.id) }}" class="flex items-center gap-4 p-6 pr-12 block h-full w-full">
+                  <div class="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors shadow-sm shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                  </div>
+                  <span class="font-bold text-xl text-ink leading-tight">{{ s.name }}</span>
+              </a>
+              <!-- 3-Dots Menu -->
+              <div class="absolute top-4 right-4 z-20" x-data="{ menuOpen: false }">
+                  <button @click.prevent="menuOpen = !menuOpen" @click.outside="menuOpen = false" class="p-2 text-gray-400 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
+                  </button>
+                  <div x-show="menuOpen" x-cloak class="absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-xl border border-gray-100 z-[100] overflow-hidden">
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'rename', type: 'stream', id: '{{ s.id }}', name: '{{ s.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50">✏️ Rename</button>
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'delete', type: 'stream', id: '{{ s.id }}', name: '{{ s.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50">🗑️ Delete</button>
+                  </div>
               </div>
-              <span class="font-bold text-xl text-ink relative z-10">{{ s.name }}</span>
-          </a>
+          </div>
           {% endfor %}
       </div>
 
@@ -86,12 +97,24 @@
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
           {% for s in subjects %}
-          <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=s.id) }}" class="bg-white border-2 border-gray-100 rounded-2xl p-6 hover:border-blue-500 hover:shadow-lg transition-all group flex items-center gap-4 relative overflow-hidden">
-              <div class="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-sm relative z-10">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+          <div class="bg-white border-2 border-gray-100 rounded-2xl hover:border-blue-500 hover:shadow-lg transition-all group relative overflow-visible">
+              <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=s.id) }}" class="flex items-center gap-4 p-6 pr-12 block h-full w-full">
+                  <div class="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-sm shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                  </div>
+                  <span class="font-bold text-xl text-ink leading-tight">{{ s.name }}</span>
+              </a>
+              <!-- 3-Dots Menu -->
+              <div class="absolute top-4 right-4 z-20" x-data="{ menuOpen: false }">
+                  <button @click.prevent="menuOpen = !menuOpen" @click.outside="menuOpen = false" class="p-2 text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50 rounded-lg transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
+                  </button>
+                  <div x-show="menuOpen" x-cloak class="absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-xl border border-gray-100 z-[100] overflow-hidden">
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'rename', type: 'subject', id: '{{ s.id }}', name: '{{ s.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-600 border-b border-gray-50">✏️ Rename</button>
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'delete', type: 'subject', id: '{{ s.id }}', name: '{{ s.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50">🗑️ Delete</button>
+                  </div>
               </div>
-              <span class="font-bold text-xl text-ink relative z-10">{{ s.name }}</span>
-          </a>
+          </div>
           {% endfor %}
       </div>
 
@@ -104,10 +127,22 @@
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {% for c in chapters %}
-          <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=c.id) }}" class="bg-white border-2 border-gray-100 rounded-xl p-5 hover:border-indigo-500 hover:shadow-md transition-all group flex items-center justify-between">
-              <span class="font-bold text-lg text-ink">{{ c.name }}</span>
-              <span class="text-indigo-400 group-hover:text-indigo-600 transition-colors bg-indigo-50 w-8 h-8 rounded-full flex items-center justify-center">&rarr;</span>
-          </a>
+          <div class="bg-white border-2 border-gray-100 rounded-xl hover:border-indigo-500 hover:shadow-md transition-all group relative overflow-visible flex items-center justify-between p-5 pr-14">
+              <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=c.id) }}" class="font-bold text-lg text-ink absolute inset-0 flex items-center px-5 pr-16 w-full">
+                  {{ c.name }}
+              </a>
+              <span class="text-indigo-400 group-hover:text-indigo-600 transition-colors bg-indigo-50 w-8 h-8 rounded-full flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100">&rarr;</span>
+              <!-- 3-Dots Menu -->
+              <div class="absolute right-4 z-20" x-data="{ menuOpen: false }">
+                  <button @click.prevent="menuOpen = !menuOpen" @click.outside="menuOpen = false" class="p-2 text-gray-400 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
+                  </button>
+                  <div x-show="menuOpen" x-cloak class="absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-xl border border-gray-100 z-[100] overflow-hidden">
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'rename', type: 'chapter', id: '{{ c.id }}', name: '{{ c.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50">✏️ Rename</button>
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'delete', type: 'chapter', id: '{{ c.id }}', name: '{{ c.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50">🗑️ Delete</button>
+                  </div>
+              </div>
+          </div>
           {% endfor %}
       </div>
 
@@ -116,49 +151,69 @@
   <!-- ==========================================
        THE DPP/WORKSHEET UPLOAD ENGINE
        ========================================== -->
-  <div x-data="chapterUploader()" class="mb-14">
+  <div x-data="chapterUploader()" class="mb-14" @open-upload-more.window="openUploadMore($event.detail)">
     
-    <!-- STEP 1: THE 4-WAY SPLIT -->
-    <div x-show="step === 'mode'" x-transition class="animate-fade-in">
-        <h2 class="text-2xl font-bold text-ink mb-6 flex items-center gap-3">
-            <span class="text-indigo-600">⚡</span> Action: Create New Folder/Set
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Card 1 -->
-            <button @click="selectMode('mcq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-indigo-600 hover:shadow-xl transition-all text-left group">
-                <div class="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-5 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                </div>
-                <h3 class="text-xl font-bold text-ink mb-2">Topic-Wise MCQ</h3>
-                <p class="text-sm text-gray-500 font-medium">Create a folder for specific notes (e.g., Electric Flux MCQs).</p>
-            </button>
+    <!-- STEP 1: THE NESTED "ANDAR" SPLIT (MCQ vs PYQ -> Topic vs Random) -->
+    <div x-show="step === 'mode'" x-transition class="animate-fade-in bg-white border-2 border-gray-200 rounded-2xl p-8 shadow-sm">
+        
+        <!-- Level 1: Choose MCQ or PYQ -->
+        <div x-show="!mainMode" x-transition>
+            <h2 class="text-2xl font-display font-bold text-ink mb-6 flex items-center gap-3 border-b border-gray-100 pb-4">
+                <span class="text-indigo-600">⚡</span> Step 1: Select Practice Mode
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button @click="mainMode = 'mcq'" class="bg-indigo-50 border-2 border-indigo-100 rounded-2xl p-8 hover:border-indigo-500 hover:shadow-md transition-all group flex flex-col items-center justify-center text-center">
+                    <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center text-indigo-600 mb-4 group-hover:scale-110 transition-transform shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold text-indigo-900 mb-2">MCQ Practice</h3>
+                    <p class="text-sm font-medium text-indigo-700/70">Upload regular Multiple Choice Questions.</p>
+                </button>
 
-            <!-- Card 2 -->
-            <button @click="selectMode('mcq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-blue-500 hover:shadow-xl transition-all text-left group">
-                <div class="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-5 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-                </div>
-                <h3 class="text-xl font-bold text-ink mb-2">Custom Book / Random MCQ</h3>
-                <p class="text-sm text-gray-500 font-medium">Create a custom module folder (e.g., HC Verma Part 1).</p>
-            </button>
+                <button @click="mainMode = 'pyq'" class="bg-amber-50 border-2 border-amber-100 rounded-2xl p-8 hover:border-amber-500 hover:shadow-md transition-all group flex flex-col items-center justify-center text-center">
+                    <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center text-amber-600 mb-4 group-hover:scale-110 transition-transform shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold text-amber-900 mb-2">PYQ Practice</h3>
+                    <p class="text-sm font-medium text-amber-700/70">Upload Previous Year Questions (with Exam Year).</p>
+                </button>
+            </div>
+        </div>
 
-            <!-- Card 3 -->
-            <button @click="selectMode('pyq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-amber-500 hover:shadow-xl transition-all text-left group">
-                <div class="w-14 h-14 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 mb-5 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <h3 class="text-xl font-bold text-ink mb-2">Topic-Wise PYQ</h3>
-                <p class="text-sm text-gray-500 font-medium">Group Previous Year Questions by specific sub-topics.</p>
-            </button>
+        <!-- Level 2: Inside MCQ -->
+        <div x-show="mainMode === 'mcq'" x-cloak x-transition>
+            <div class="flex items-center gap-4 mb-6 border-b border-gray-100 pb-4">
+                <button @click="mainMode = null" class="text-sm font-bold text-gray-400 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">&larr; Back</button>
+                <h2 class="text-2xl font-display font-bold text-ink">Step 2: Choose MCQ Type</h2>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button @click="selectMode('mcq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-indigo-600 hover:shadow-lg transition-all text-left group">
+                    <h3 class="text-xl font-bold text-ink mb-1 group-hover:text-indigo-600">Topic-Wise MCQ</h3>
+                    <p class="text-sm text-gray-500 font-medium">Create a folder for specific notes (e.g., Electric Flux MCQs).</p>
+                </button>
+                <button @click="selectMode('mcq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-blue-500 hover:shadow-lg transition-all text-left group">
+                    <h3 class="text-xl font-bold text-ink mb-1 group-hover:text-blue-600">Custom Book / Random MCQ</h3>
+                    <p class="text-sm text-gray-500 font-medium">Create a custom module folder (e.g., HC Verma Part 1).</p>
+                </button>
+            </div>
+        </div>
 
-            <!-- Card 4 -->
-            <button @click="selectMode('pyq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-emerald-500 hover:shadow-xl transition-all text-left group">
-                <div class="w-14 h-14 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 mb-5 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                </div>
-                <h3 class="text-xl font-bold text-ink mb-2">Random PYQ</h3>
-                <p class="text-sm text-gray-500 font-medium">Upload mixed PYQs covering the entire chapter randomly.</p>
-            </button>
+        <!-- Level 2: Inside PYQ -->
+        <div x-show="mainMode === 'pyq'" x-cloak x-transition>
+            <div class="flex items-center gap-4 mb-6 border-b border-gray-100 pb-4">
+                <button @click="mainMode = null" class="text-sm font-bold text-gray-400 hover:text-amber-600 bg-gray-100 hover:bg-amber-50 px-3 py-1.5 rounded-lg transition-colors">&larr; Back</button>
+                <h2 class="text-2xl font-display font-bold text-ink">Step 2: Choose PYQ Type</h2>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button @click="selectMode('pyq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-amber-500 hover:shadow-lg transition-all text-left group">
+                    <h3 class="text-xl font-bold text-ink mb-1 group-hover:text-amber-600">Topic-Wise PYQ</h3>
+                    <p class="text-sm text-gray-500 font-medium">Group Previous Year Questions by specific sub-topics.</p>
+                </button>
+                <button @click="selectMode('pyq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-emerald-500 hover:shadow-lg transition-all text-left group">
+                    <h3 class="text-xl font-bold text-ink mb-1 group-hover:text-emerald-600">Random PYQ</h3>
+                    <p class="text-sm text-gray-500 font-medium">Upload mixed PYQs covering the entire chapter randomly.</p>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -203,7 +258,7 @@
     </div>
 
     <!-- STEP 3: THE JSON UPLOADER ENGINE -->
-    <div x-show="step === 'upload'" x-cloak class="animate-fade-in bg-white border-2 border-gray-200 rounded-2xl shadow-xl overflow-hidden">
+    <div x-show="step === 'upload'" x-cloak class="animate-fade-in bg-white border-2 border-gray-200 rounded-2xl shadow-xl overflow-hidden" id="upload-engine-box">
         
         <div class="bg-indigo-50 border-b-2 border-indigo-100 px-8 py-5 flex justify-between items-center">
             <div class="flex items-center gap-3">
@@ -286,7 +341,7 @@
       {% if folders %}
       <div class="space-y-10">
           {% for folder_name, qs in folders.items() %}
-          <!-- FIX APPLIED HERE: Replaced invalid 'slugify' filter with native string methods to prevent 500 error -->
+          {% set f_type = 'pyq' if qs[0].is_pyq else 'mcq' %}
           <div class="bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden" id="folder-{{ folder_name.split() | join('-') | lower }}">
               
               <!-- FOLDER HEADER with Actions -->
@@ -299,16 +354,20 @@
                       </div>
                   </div>
                   
-                  <!-- Folder Management Menu (Alpine) -->
+                  <!-- Folder Management Menu -->
                   <div class="relative" x-data="{ menuOpen: false }">
-                      <button @click="menuOpen = !menuOpen" @click.outside="menuOpen = false" class="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors focus:outline-none">
+                      <button @click.prevent="menuOpen = !menuOpen" @click.outside="menuOpen = false" class="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors focus:outline-none">
                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
                       </button>
-                      <div x-show="menuOpen" x-transition x-cloak class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-20 overflow-hidden">
-                          <button @click="$dispatch('open-rename-folder', { oldName: '{{ folder_name }}', chapterId: '{{ selected_chapter_id }}' }); menuOpen = false" class="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50 transition-colors text-left">
+                      <div x-show="menuOpen" x-transition x-cloak class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-20 overflow-hidden">
+                          <!-- The new "Upload More Here" Button -->
+                          <button @click.prevent="$dispatch('open-upload-more', { folderName: '{{ folder_name|escape }}', type: '{{ f_type }}' }); menuOpen = false" class="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 border-b border-gray-50 transition-colors text-left">
+                              ➕ Add More Questions
+                          </button>
+                          <button @click.prevent="$dispatch('open-rename-folder', { oldName: '{{ folder_name|escape }}', chapterId: '{{ selected_chapter_id }}' }); menuOpen = false" class="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50 transition-colors text-left">
                               ✏️ Rename Folder
                           </button>
-                          <button @click="$dispatch('open-delete-folder', { folderName: '{{ folder_name }}', chapterId: '{{ selected_chapter_id }}' }); menuOpen = false" class="w-full flex items-center gap-2 text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors">
+                          <button @click.prevent="$dispatch('open-delete-folder', { folderName: '{{ folder_name|escape }}', chapterId: '{{ selected_chapter_id }}' }); menuOpen = false" class="w-full flex items-center gap-2 text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors">
                               🗑️ Delete Folder
                           </button>
                       </div>
@@ -390,7 +449,7 @@
   {% endif %}
 
   <!-- ==========================================
-       GLOBAL MODALS (Inline Creation & Edits)
+       GLOBAL MODALS (Card Item Manage & Quick Add)
        ========================================== -->
        
   <!-- Quick Add Modal (Stream/Subject/Chapter) -->
@@ -408,22 +467,50 @@
       </div>
   </div>
 
+  <!-- Item Manage Modal (Rename/Delete Stream/Subject/Chapter) -->
+  <div x-show="itemManage.isOpen" x-cloak @open-item-manage.window="openItemManage($event.detail)" class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="closeItemManage()">
+      <div class="bg-white rounded-3xl border-2 p-8 w-full max-w-md shadow-2xl relative" :class="itemManage.mode === 'delete' ? 'border-red-500' : 'border-gray-200'">
+          <button @click="closeItemManage()" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+          
+          <div x-show="itemManage.mode === 'rename'">
+              <h3 class="font-display text-2xl font-bold text-ink mb-1">Rename <span class="capitalize" x-text="itemManage.type"></span></h3>
+              <p class="text-sm font-medium text-gray-500 mb-6">Update the name across the system.</p>
+              <input type="text" x-model="itemManage.newName" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-6 text-lg">
+              <button @click="submitItemManage()" :disabled="!itemManage.newName.trim() || itemManage.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">
+                  <span x-text="itemManage.isSaving ? 'Saving...' : 'Save New Name'"></span>
+              </button>
+          </div>
+
+          <div x-show="itemManage.mode === 'delete'">
+              <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200 text-red-600 text-3xl">⚠️</div>
+              <h3 class="font-display text-2xl font-bold text-red-600 mb-2 text-center">Delete <span class="capitalize" x-text="itemManage.type"></span>?</h3>
+              <p class="text-sm font-bold text-gray-600 mb-6 text-center leading-relaxed">
+                  You are about to delete <span class="text-ink font-black bg-gray-100 px-2 rounded">"<span x-text="itemManage.oldName"></span>"</span>.<br><span class="text-red-600">This action may cause data loss. Proceed?</span>
+              </p>
+              <div class="flex gap-3">
+                  <button @click="closeItemManage()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
+                  <button @click="submitItemManage()" :disabled="itemManage.isSaving" class="flex-1 bg-red-600 text-white font-bold py-3.5 rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors shadow-md">
+                      <span x-text="itemManage.isSaving ? 'Deleting...' : 'Yes, Delete'"></span>
+                  </button>
+              </div>
+          </div>
+      </div>
+  </div>
+
   <!-- Rename Folder Modal -->
   <div x-show="folderManage.renameOpen" x-cloak @open-rename-folder.window="folderManage.oldName = $event.detail.oldName; folderManage.newName = $event.detail.oldName; folderManage.chapterId = $event.detail.chapterId; folderManage.renameOpen = true;" class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="folderManage.renameOpen = false">
       <div class="bg-white rounded-3xl border border-gray-200 p-8 w-full max-w-md shadow-2xl relative">
           <button @click="folderManage.renameOpen = false" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
           <h3 class="font-display text-2xl font-bold text-ink mb-1">Rename Folder</h3>
           <p class="text-sm font-medium text-gray-500 mb-6">This will update the topic name for all questions inside.</p>
-          
           <input type="text" x-model="folderManage.newName" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-6 text-lg">
-          
-          <button @click="submitFolderRename()" :disabled="!folderManage.newName.trim() || folderManage.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg flex items-center justify-center gap-2">
+          <button @click="submitFolderRename()" :disabled="!folderManage.newName.trim() || folderManage.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">
               <span x-text="folderManage.isSaving ? 'Saving...' : 'Save New Name'"></span>
           </button>
       </div>
   </div>
 
-  <!-- Delete Folder Modal (Strict Warning) -->
+  <!-- Delete Folder Modal -->
   <div x-show="folderManage.deleteOpen" x-cloak @open-delete-folder.window="folderManage.oldName = $event.detail.folderName; folderManage.chapterId = $event.detail.chapterId; folderManage.deleteOpen = true;" class="fixed inset-0 bg-red-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="folderManage.deleteOpen = false">
       <div class="bg-white rounded-3xl border-2 border-red-500 p-8 w-full max-w-md shadow-2xl relative">
           <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200 text-red-600 text-3xl">⚠️</div>
@@ -440,7 +527,7 @@
       </div>
   </div>
 
-  <!-- LIVE JSON EDIT MODAL (Per Question) -->
+  <!-- LIVE JSON EDIT MODAL -->
   <div x-data="editModalApp()" @open-edit-modal.window="openModal($event.detail)" x-show="isOpen" x-cloak class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm">
       <div class="bg-white rounded-3xl border border-gray-700 p-8 w-full max-w-3xl shadow-2xl relative" @click.outside="closeModal()">
         <button @click="closeModal()" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
@@ -450,7 +537,7 @@
         <p x-show="editError" class="text-red-700 text-sm mb-4 font-bold bg-red-100 border border-red-200 px-4 py-2 rounded-lg" x-text="editError"></p>
         <div class="flex justify-end gap-3">
           <button @click="closeModal()" class="px-6 py-3 rounded-xl text-gray-700 font-bold border-2 border-gray-300 hover:bg-gray-100 transition-colors">Cancel</button>
-          <button @click="submitEdit()" :disabled="isSaving" class="px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 border-2 border-indigo-700 shadow-md transition-colors text-lg">
+          <button @click="submitEdit()" :disabled="isSaving" class="px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 border-2 border-indigo-700 shadow-md text-lg">
             <span x-text="isSaving ? 'Updating DB...' : 'Save Changes'"></span>
           </button>
         </div>
@@ -480,32 +567,30 @@
       }, 4000);
   }
 
-  // FIX APPLIED HERE: Matches the Jinja split/join logic exactly to ensure smooth scrolling
   function slugify(text) {
       return text.toString().toLowerCase().trim().split(/\s+/).join('-');
   }
 
-  // THE MASTER APP (Handles Global Modals for Inline Creation & Folder Management)
+  // MASTER APP (Modals for Quick Add & Item Manage)
   function adminQuestionsApp() {
       return {
           currentStreamId: '{{ selected_stream_id or "" }}',
           currentSubjectId: '{{ selected_subject_id or "" }}',
           
-          quickAdd: {
-              isOpen: false, type: '', name: '', isSaving: false
-          },
-          folderManage: {
-              renameOpen: false, deleteOpen: false, oldName: '', newName: '', chapterId: '', isSaving: false
-          },
+          quickAdd: { isOpen: false, type: '', name: '', isSaving: false },
+          itemManage: { isOpen: false, mode: '', type: '', id: '', oldName: '', newName: '', isSaving: false },
+          folderManage: { renameOpen: false, deleteOpen: false, oldName: '', newName: '', chapterId: '', isSaving: false },
 
-          openQuickAdd(type) {
-              this.quickAdd.type = type;
-              this.quickAdd.name = '';
-              this.quickAdd.isOpen = true;
+          openQuickAdd(type) { this.quickAdd.type = type; this.quickAdd.name = ''; this.quickAdd.isOpen = true; },
+          closeQuickAdd() { this.quickAdd.isOpen = false; },
+          
+          openItemManage(detail) {
+              this.itemManage.mode = detail.mode; this.itemManage.type = detail.type;
+              this.itemManage.id = detail.id; this.itemManage.oldName = detail.name;
+              this.itemManage.newName = detail.name; this.itemManage.isOpen = true;
           },
-          closeQuickAdd() {
-              this.quickAdd.isOpen = false;
-          },
+          closeItemManage() { this.itemManage.isOpen = false; },
+
           async submitQuickAdd() {
               this.quickAdd.isSaving = true;
               const type = this.quickAdd.type;
@@ -519,53 +604,63 @@
               try {
                   const res = await fetch(endpoint, { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                   const data = await res.json();
-                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Feature endpoint pending in backend (Next Step).'); }
-              } catch(e) { alert('Endpoint pending implementation in python routes.'); }
+                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Endpoint pending backend implementation.'); }
+              } catch(e) { alert('Network Error.'); }
               this.quickAdd.isSaving = false;
+          },
+
+          async submitItemManage() {
+              this.itemManage.isSaving = true;
+              const type = this.itemManage.type;
+              const mode = this.itemManage.mode; // 'rename' or 'delete'
+              let endpoint = `/admin/api/${type}s/${mode}`; // e.g., /admin/api/streams/edit
+              if (mode === 'rename') endpoint = `/admin/api/${type}s/edit`;
+              
+              let payload = { id: this.itemManage.id, name: this.itemManage.newName };
+
+              try {
+                  const res = await fetch(endpoint, { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                  const data = await res.json();
+                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Endpoint pending backend implementation.'); }
+              } catch(e) { alert('Network Error.'); }
+              this.itemManage.isSaving = false;
           },
 
           async submitFolderRename() {
               this.folderManage.isSaving = true;
               try {
-                  const res = await fetch('/admin/questions/folder/rename', {
-                      method: 'POST', headers:{'Content-Type': 'application/json'},
-                      body: JSON.stringify({ old_name: this.folderManage.oldName, new_name: this.folderManage.newName, chapter_id: this.folderManage.chapterId })
-                  });
+                  const res = await fetch('/admin/questions/folder/rename', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({ old_name: this.folderManage.oldName, new_name: this.folderManage.newName, chapter_id: this.folderManage.chapterId }) });
                   const data = await res.json();
-                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Endpoint pending in backend (Next Step).'); }
-              } catch(e) { alert('Endpoint pending implementation in python routes.'); }
+                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Error renaming folder.'); }
+              } catch(e) { alert('Network error.'); }
               this.folderManage.isSaving = false;
           },
 
           async submitFolderDelete() {
               this.folderManage.isSaving = true;
               try {
-                  const res = await fetch('/admin/questions/folder/delete', {
-                      method: 'POST', headers:{'Content-Type': 'application/json'},
-                      body: JSON.stringify({ folder_name: this.folderManage.oldName, chapter_id: this.folderManage.chapterId })
-                  });
+                  const res = await fetch('/admin/questions/folder/delete', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({ folder_name: this.folderManage.oldName, chapter_id: this.folderManage.chapterId }) });
                   const data = await res.json();
-                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Endpoint pending in backend (Next Step).'); }
-              } catch(e) { alert('Endpoint pending implementation in python routes.'); }
+                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Error deleting folder.'); }
+              } catch(e) { alert('Network error.'); }
               this.folderManage.isSaving = false;
           }
       };
   }
 
-  // UPLOAD ENGINE APP
+  // UPLOAD ENGINE APP (Modified for "Andar" Logic and "Add More")
   function chapterUploader() {
     return {
       selectedChapterId: '{{ selected_chapter_id or "" }}',
       step: 'mode', // 'mode' -> 'setup' -> 'upload'
+      mainMode: null, // 'mcq' or 'pyq'
       modeParams: { type: 'mcq', category: 'topic' },
       folderSetup: { name: '', year: '', marks: 4, negative: 1 },
       jsonText: '[]', qCount: 0, totalSaved: 0, isSaving: false, errorMsg: '', successMsg: '',
       
       init() {
         this.validateInput();
-        if (window.location.hash.includes('folder-')) {
-            showSangamToast('✅ Successfully uploaded! Manage images below.');
-        }
+        if (window.location.hash.includes('folder-')) { showSangamToast('✅ Successfully uploaded! Manage images below.'); }
       },
 
       selectMode(type, category) {
@@ -573,6 +668,16 @@
           this.folderSetup.name = ''; this.folderSetup.year = '';
           this.step = 'setup';
       },
+      
+      // Inject directly into existing folder (The "Add More" Button)
+      openUploadMore(detail) {
+          this.modeParams.type = detail.type;
+          this.modeParams.category = 'topic'; // defaults to topic behavior
+          this.folderSetup.name = detail.folderName;
+          this.step = 'upload';
+          window.scrollTo({ top: document.getElementById('upload-engine-box').offsetTop - 20, behavior: 'smooth' });
+      },
+
       finalizeSetup() { if (!this.folderSetup.name.trim()) return; this.step = 'upload'; },
 
       doneUploading() {
@@ -598,22 +703,13 @@
         this.isSaving = true; this.errorMsg = ''; this.successMsg = '';
         try {
           const parsedData = JSON.parse(this.jsonText);
-          
           parsedData.forEach(item => {
               item.question_type = this.modeParams.type;
               item.topic_name = this.folderSetup.name; 
               if (this.modeParams.type === 'pyq') { item.pyq_year = this.folderSetup.year ? parseInt(this.folderSetup.year, 10) : null; }
           });
-          
-          const payload = {
-            stream_id: '{{ selected_stream_id }}', subject_id: '{{ selected_subject_id }}', chapter_id: this.selectedChapterId,
-            bulk_json: parsedData, marks: parseFloat(this.folderSetup.marks) || 4, negative_marks: parseFloat(this.folderSetup.negative) || 1
-          };
-          
-          const res = await fetch("{{ url_for('admin.questions_bulk_upload') }}?ajax=1", {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-          });
-          
+          const payload = { stream_id: '{{ selected_stream_id }}', subject_id: '{{ selected_subject_id }}', chapter_id: this.selectedChapterId, bulk_json: parsedData, marks: parseFloat(this.folderSetup.marks) || 4, negative_marks: parseFloat(this.folderSetup.negative) || 1 };
+          const res = await fetch("{{ url_for('admin.questions_bulk_upload') }}?ajax=1", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
           const data = await res.json();
           if (data.ok) {
             this.totalSaved += data.inserted;
@@ -632,14 +728,11 @@
       openModal(detail) { this.qId = detail.id; this.editJsonText = ''; this.editError = ''; this.isOpen = true; },
       closeModal() { this.isOpen = false; },
       async submitEdit() {
-        this.editError = '';
-        let parsedData;
+        this.editError = ''; let parsedData;
         try { parsedData = JSON.parse(this.editJsonText); } catch(e) { this.editError = 'Invalid JSON syntax.'; return; }
         this.isSaving = true;
         try {
-          const res = await fetch(`/admin/questions/${this.qId}/edit`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsedData)
-          });
+          const res = await fetch(`/admin/questions/${this.qId}/edit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsedData) });
           const data = await res.json();
           if (data.ok) { window.location.reload(); } else { this.editError = data.error; }
         } catch (err) { this.editError = 'Network failure.'; } finally { this.isSaving = false; }
