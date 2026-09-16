@@ -7,8 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<!-- Alpine.js for State Management (Tabs, Chunking, Modals) -->
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- Alpine.js is now loaded globally in shared/base.html -->
 
 <!-- WRAPPING ENTIRE PAGE IN MASTER ALPINE APP FOR GLOBAL MODALS -->
 <div x-data="adminQuestionsApp()" @open-item-manage.window="openItemManage($event.detail)" class="max-w-6xl mx-auto px-6 py-10 relative font-body">
