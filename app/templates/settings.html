@@ -1,0 +1,46 @@
+{% extends "shared/base.html" %}
+{% block title %}Account Settings — SANGAM STUDY{% endblock %}
+{% block content %}
+<section class="max-w-xl mx-auto px-4 md:px-6 pt-12 pb-24 font-body">
+  
+  <div class="mb-10 border-b border-ink/10 pb-6">
+    <a href="{{ url_for('user.profile') }}" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-block transition-colors">
+      &larr; Back to Dashboard
+    </a>
+    <h1 class="font-display text-3xl font-bold text-ink mb-2">Account Settings</h1>
+    <p class="text-ink/60 text-sm font-medium tracking-wide">Update your username or change your password.</p>
+  </div>
+
+  <div class="bg-white border border-ink/10 rounded-2xl p-6 md:p-8 shadow-sm">
+    <form method="POST" action="{{ url_for('user.settings') }}" class="space-y-8">
+      
+      <!-- Change Username Section -->
+      <div>
+        <h2 class="font-bold text-lg text-ink mb-1">Change Username</h2>
+        <p class="text-xs text-ink/50 mb-4">Your current username is <span class="font-bold text-ink bg-gray-100 px-2 py-0.5 rounded">{{ profile.username if profile else 'Guest' }}</span></p>
+        
+        <label class="block text-sm font-medium text-ink mb-1">New Username <span class="text-ink/40 font-normal">(Leave blank if you don't want to change)</span></label>
+        <input type="text" name="username" pattern="[a-zA-Z0-9_]+" title="Only letters, numbers, and underscores allowed" placeholder="e.g. new_name_123"
+               class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold bg-gray-50">
+      </div>
+
+      <hr class="border-ink/5">
+
+      <!-- Change Password Section -->
+      <div>
+        <h2 class="font-bold text-lg text-ink mb-1">Change Password</h2>
+        <p class="text-xs text-ink/50 mb-4">Set a new strong password for your account.</p>
+
+        <label class="block text-sm font-medium text-ink mb-1">New Password <span class="text-ink/40 font-normal">(Leave blank if you don't want to change)</span></label>
+        <input type="password" name="password" minlength="6" placeholder="Enter new password"
+               class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold bg-gray-50">
+      </div>
+
+      <button type="submit" class="w-full bg-gold text-ink font-bold text-lg py-3.5 rounded-xl hover:bg-gold-light transition-all shadow-md">
+        Save Changes
+      </button>
+    </form>
+  </div>
+
+</section>
+{% endblock %}
