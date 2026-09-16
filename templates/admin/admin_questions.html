@@ -6,299 +6,388 @@
 <!-- Alpine.js for State Management (Tabs, Chunking, Modals) -->
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
-<div class="max-w-5xl mx-auto px-6 py-10">
-  <h1 class="font-display text-3xl text-ink mb-6">Chapter-wise Questions</h1>
-
-  <!-- ==========================================
-       STREAM & SUBJECT SELECTION
-       ========================================== -->
-  <div class="bg-white border border-ink/10 rounded-lg p-6 mb-8 grid grid-cols-2 gap-4 shadow-sm">
-    <form method="GET" class="contents">
-      <div>
-        <label class="block text-sm font-medium text-ink mb-1">Stream</label>
-        <select name="stream_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-gold focus:outline-none transition-shadow">
-          <option value="">— select —</option>
-          {% for s in streams %}
-          <option value="{{ s.id }}" {{ 'selected' if s.id == selected_stream_id }}>{{ s.name }}</option>
-          {% endfor %}
-        </select>
+<div class="max-w-6xl mx-auto px-6 py-10">
+  
+  <!-- SANGAM STUDY HUB CUSTOM TOAST NOTIFICATION -->
+  <div id="sangam-toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-4 rounded-xl shadow-2xl z-[100] flex items-center gap-3 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] max-w-md w-full">
+      <div class="bg-indigo-500 rounded-full p-1 shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M10.97 4.97a.235.235 0 0 0-.02.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-1.071-1.05z"/></svg>
       </div>
-      <div>
-        <label class="block text-sm font-medium text-ink mb-1">Subject</label>
-        <select name="subject_id" onchange="this.form.submit()" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-gold focus:outline-none transition-shadow" {{ 'disabled' if not subjects }}>
-          <option value="">— select —</option>
-          {% for s in subjects %}
-          <option value="{{ s.id }}" {{ 'selected' if s.id == selected_subject_id }}>{{ s.name }}</option>
-          {% endfor %}
-        </select>
-        <input type="hidden" name="stream_id" value="{{ selected_stream_id }}">
-      </div>
-    </form>
+      <p id="sangam-toast-msg" class="text-sm font-medium leading-tight"></p>
   </div>
 
-  {% if selected_subject_id %}
+  <div class="flex items-center justify-between mb-6">
+      <div>
+          <h1 class="font-display text-4xl font-bold text-ink mb-2">Chapter-wise Practice</h1>
+          <p class="text-gray-500 font-medium">Create Worksheets, Custom Books (e.g., HC Verma), and PYQ Collections.</p>
+      </div>
+  </div>
+
+  <!-- ==========================================
+       BREADCRUMB NAVIGATION
+       ========================================== -->
+  <nav class="flex items-center gap-3 text-sm font-bold text-gray-500 mb-8 bg-white px-5 py-4 rounded-xl shadow-sm border-2 border-gray-100">
+      <a href="{{ url_for('admin.questions_list') }}" class="hover:text-indigo-600 transition-colors flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+          Streams
+      </a>
+      
+      {% if selected_stream_id %}
+      <span class="text-gray-300">/</span>
+      <!-- Find stream name from the passed list -->
+      {% set active_stream = streams | selectattr('id', 'equalto', selected_stream_id|int) | first %}
+      <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id) }}" class="hover:text-indigo-600 transition-colors">
+          {{ active_stream.name if active_stream else 'Selected Stream' }}
+      </a>
+      {% endif %}
+
+      {% if selected_subject_id %}
+      <span class="text-gray-300">/</span>
+      {% set active_subj = subjects | selectattr('id', 'equalto', selected_subject_id|int) | first %}
+      <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id) }}" class="hover:text-indigo-600 transition-colors">
+          {{ active_subj.name if active_subj else 'Selected Subject' }}
+      </a>
+      {% endif %}
+
+      {% if selected_chapter_id %}
+      <span class="text-gray-300">/</span>
+      <span class="text-indigo-600 bg-indigo-50 px-2 py-1 rounded">{{ chapter.name }}</span>
+      {% endif %}
+  </nav>
+
+  <!-- ==========================================
+       VISUAL GOOGLE-DRIVE STYLE DRILLDOWN
+       ========================================== -->
+  {% if not selected_stream_id %}
+      <h2 class="text-xl font-bold text-ink mb-4">Select a Stream</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {% for s in streams %}
+          <a href="{{ url_for('admin.questions_list', stream_id=s.id) }}" class="bg-white border-2 border-gray-100 rounded-xl p-6 hover:border-indigo-500 hover:shadow-lg transition-all group flex items-center gap-4">
+              <div class="w-12 h-12 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+              </div>
+              <span class="font-bold text-lg text-ink">{{ s.name }}</span>
+          </a>
+          {% endfor %}
+      </div>
+
+  {% elif not selected_subject_id %}
+      <div class="flex justify-between items-center mb-4">
+          <h2 class="text-xl font-bold text-ink">Select a Subject</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {% for s in subjects %}
+          <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=s.id) }}" class="bg-white border-2 border-gray-100 rounded-xl p-6 hover:border-indigo-500 hover:shadow-lg transition-all group flex items-center gap-4">
+              <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+              </div>
+              <span class="font-bold text-lg text-ink">{{ s.name }}</span>
+          </a>
+          {% endfor %}
+      </div>
+
+  {% elif not selected_chapter_id %}
+      <div class="flex justify-between items-center mb-4">
+          <h2 class="text-xl font-bold text-ink">Select a Chapter</h2>
+          <a href="{{ url_for('admin.chapters_list') }}" class="text-sm font-bold text-indigo-600 hover:underline">+ Add New Chapter</a>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {% for c in chapters %}
+          <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=c.id) }}" class="bg-white border-2 border-gray-100 rounded-xl p-5 hover:border-indigo-500 hover:shadow-md transition-all group flex items-center justify-between">
+              <span class="font-bold text-ink">{{ c.name }}</span>
+              <span class="text-indigo-400 group-hover:text-indigo-600 transition-colors">&rarr;</span>
+          </a>
+          {% endfor %}
+      </div>
+
+  {% else %}
   
   <!-- ==========================================
-       PILLAR 2: ROW BUILDER & 25-CHUNK UPLOADER
+       THE DPP/WORKSHEET UPLOAD ENGINE (ALPINE)
        ========================================== -->
-  <div x-data="chapterUploader()" class="bg-white border border-ink/10 rounded-lg p-6 mb-8 shadow-sm">
-    <div class="mb-5">
-      <h2 class="font-medium text-ink text-lg">Bulk Chapter-wise Upload (Chunk System)</h2>
-      <p class="text-sm text-ink/60 mt-0.5">
-        Create custom books (like HC Verma), build your rows, and upload in batches of 25.
-      </p>
+  <div x-data="chapterUploader()" class="mb-12">
+    
+    <!-- STEP 1: THE 4-WAY SPLIT -->
+    <div x-show="step === 'mode'" x-transition class="animate-fade-in">
+        <h2 class="text-xl font-bold text-ink mb-4">Choose Upload Type for {{ chapter.name }}</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Card 1 -->
+            <button @click="selectMode('mcq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-indigo-600 hover:shadow-xl transition-all text-left group">
+                <div class="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-4 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                </div>
+                <h3 class="text-xl font-bold text-ink mb-1">Topic-Wise MCQ</h3>
+                <p class="text-sm text-gray-500 font-medium">Create a practice set for a specific topic (e.g., Kinematics Equations).</p>
+            </button>
+
+            <!-- Card 2 -->
+            <button @click="selectMode('mcq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-blue-500 hover:shadow-xl transition-all text-left group">
+                <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                </div>
+                <h3 class="text-xl font-bold text-ink mb-1">Custom Book / Complete Chapter</h3>
+                <p class="text-sm text-gray-500 font-medium">Create a folder for modules (e.g., HC Verma Part 1) or mixed MCQs.</p>
+            </button>
+
+            <!-- Card 3 -->
+            <button @click="selectMode('pyq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-amber-500 hover:shadow-xl transition-all text-left group">
+                <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 mb-4 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <h3 class="text-xl font-bold text-ink mb-1">Topic-Wise PYQ</h3>
+                <p class="text-sm text-gray-500 font-medium">Upload Previous Year Questions grouped by specific sub-topics.</p>
+            </button>
+
+            <!-- Card 4 -->
+            <button @click="selectMode('pyq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-emerald-500 hover:shadow-xl transition-all text-left group">
+                <div class="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 mb-4 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                </div>
+                <h3 class="text-xl font-bold text-ink mb-1">Random PYQ</h3>
+                <p class="text-sm text-gray-500 font-medium">Upload mixed PYQs covering the entire chapter randomly.</p>
+            </button>
+        </div>
     </div>
 
-    <!-- Chapter Selection (Strict mapping) -->
-    <div class="mb-6">
-      <label class="block text-sm font-medium text-ink mb-1">Select Chapter</label>
-      <select x-model="selectedChapterId" @change="updateUrlWithChapter()" class="w-full rounded-md border border-ink/15 px-3 py-2 focus:ring-2 focus:ring-gold focus:outline-none">
-        <option value="">— Choose a pre-created chapter —</option>
-        {% for c in chapters %}
-        <option value="{{ c.id }}" {{ 'selected' if c.id == selected_chapter_id }}>{{ c.name }}</option>
-        {% endfor %}
-      </select>
-      <p class="text-xs text-ink/50 mt-1">Chapters must be created in the 'Subjects & Chapters' section first.</p>
+    <!-- STEP 2: THE WORKSHEET / DPP FOLDER SETUP -->
+    <div x-show="step === 'setup'" x-cloak class="animate-fade-in bg-white border-2 border-indigo-100 rounded-2xl p-8 shadow-lg">
+        <div class="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+            <div>
+                <h3 class="font-bold text-2xl text-ink">Create Practice Set</h3>
+                <p class="text-sm text-gray-500 font-medium mt-1">Define folder details. These will automatically override the JSON array.</p>
+            </div>
+            <button @click="step = 'mode'" class="text-sm font-bold text-gray-400 hover:text-indigo-600 px-4 py-2 border border-gray-200 rounded-lg">Cancel</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="md:col-span-2">
+                <label class="block text-sm font-bold text-indigo-900 mb-2">
+                    <span x-show="modeParams.category === 'topic'">Enter Specific Topic Name</span>
+                    <span x-show="modeParams.category === 'random'">Enter Custom Book / Set Name</span>
+                    <span class="text-red-500">*</span>
+                </label>
+                <input type="text" x-model="folderSetup.name" :placeholder="modeParams.category === 'topic' ? 'e.g., Kinematics Equations' : 'e.g., HC Verma Part 1'" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none text-lg font-bold bg-gray-50">
+            </div>
+
+            <div x-show="modeParams.type === 'pyq'">
+                <label class="block text-sm font-bold text-indigo-900 mb-2">Exam Year <span class="text-red-500">*</span></label>
+                <input type="number" x-model="folderSetup.year" placeholder="e.g. 2023" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
+            </div>
+
+            <!-- UI Placeholders for Future Backend Update -->
+            <div>
+                <label class="block text-sm font-bold text-indigo-900 mb-2">Correct Marks (Per Q)</label>
+                <input type="number" x-model.number="folderSetup.marks" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50" title="Will be mapped in next DB update">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-indigo-900 mb-2">Negative Marks</label>
+                <input type="number" step="0.25" x-model.number="folderSetup.negative" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
+            </div>
+        </div>
+
+        <button @click="finalizeSetup()" :disabled="!folderSetup.name" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">
+            Create Folder & Continue
+        </button>
     </div>
 
-    <!-- 4-Combination Row Builder -->
-    <div class="bg-ink/5 border border-ink/10 rounded-md p-5 space-y-5 mb-6">
-      <div class="flex items-center justify-between border-b border-ink/10 pb-3">
-        <p class="text-sm font-bold text-ink">Build a question row</p>
-        <button type="button" @click="resetBuilder()" class="text-xs text-ink/50 hover:text-ink underline">Clear Form</button>
-      </div>
-
-      <div class="grid grid-cols-2 gap-6">
-        <!-- Level 1: MCQ vs PYQ (Strict Parallel) -->
-        <div class="bg-white p-4 rounded border border-ink/10">
-          <p class="text-xs font-bold text-ink/70 mb-3 uppercase tracking-wider">Level 1 — Type</p>
-          <div class="flex gap-6 mb-3">
-            <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
-              <input type="radio" x-model="builder.qtype" value="mcq" class="text-gold focus:ring-gold cursor-pointer"> Standard MCQ
-            </label>
-            <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
-              <input type="radio" x-model="builder.qtype" value="pyq" class="text-gold focus:ring-gold cursor-pointer"> PYQ
-            </label>
-          </div>
-          <div x-show="builder.qtype === 'pyq'" x-cloak>
-            <label class="block text-xs font-medium text-ink/70 mb-1">Enter Exam Year</label>
-            <input type="number" x-model.number="builder.pyq_year" placeholder="e.g. 2023" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none">
-          </div>
+    <!-- STEP 3: THE JSON UPLOADER -->
+    <div x-show="step === 'upload'" x-cloak class="animate-fade-in bg-white border-2 border-gray-200 rounded-2xl shadow-lg overflow-hidden">
+        
+        <div class="bg-gray-50 border-b border-gray-200 px-8 py-5 flex justify-between items-center">
+            <div>
+                <h3 class="font-bold text-xl text-ink">Upload Questions</h3>
+                <p class="text-sm font-bold text-indigo-600 mt-1">Folder: <span x-text="folderSetup.name"></span> | Type: <span class="uppercase" x-text="modeParams.type"></span></p>
+            </div>
+            <button @click="step = 'setup'" class="text-sm font-bold text-gray-500 hover:text-indigo-600 px-4 py-2 border border-gray-200 bg-white rounded-lg shadow-sm">Edit Folder Info</button>
         </div>
 
-        <!-- Level 2: Topic-wise vs Custom Book (HC Verma etc) -->
-        <div class="bg-white p-4 rounded border border-ink/10">
-          <p class="text-xs font-bold text-ink/70 mb-3 uppercase tracking-wider">Level 2 — Grouping</p>
-          <div class="flex flex-col gap-2 mb-3">
-            <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
-              <input type="radio" x-model="builder.grouping" value="topic_wise" class="text-gold focus:ring-gold cursor-pointer"> Topic-wise
-            </label>
-            <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
-              <input type="radio" x-model="builder.grouping" value="custom_book" class="text-gold focus:ring-gold cursor-pointer"> Custom Book / Special
-            </label>
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-ink/70 mb-1">
-              <span x-show="builder.grouping === 'topic_wise'">Enter Topic Name</span>
-              <span x-show="builder.grouping === 'custom_book'">Enter Custom Name (e.g. HC Verma)</span>
-            </label>
-            <input type="text" x-model="builder.topic_name" :placeholder="builder.grouping === 'topic_wise' ? 'e.g. Newton\'s Second Law' : 'e.g. HC Verma Specials'" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none">
-          </div>
-        </div>
-      </div>
+        <div class="p-8">
+            <div class="flex justify-between items-center mb-3">
+                <label class="font-bold text-ink text-lg">Paste JSON Array <span class="text-sm font-medium text-gray-500 ml-2">(Max 25 questions per batch)</span></label>
+            </div>
 
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-xs font-medium text-ink/70 mb-1">Question Text</label>
-          <textarea x-model="builder.question_text" rows="2" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></textarea>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-ink/70 mb-1">Explanation (Optional)</label>
-          <textarea x-model="builder.explanation" rows="2" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></textarea>
-        </div>
-      </div>
+            <textarea x-model="jsonText" @input="validateInput" rows="10" placeholder="[{ ... }]"
+                      class="w-full rounded-xl border-2 border-gray-300 p-5 font-mono text-sm mb-4 outline-none focus:border-indigo-500 bg-gray-50 shadow-inner resize-y"></textarea>
+            
+            <div class="text-sm flex justify-between items-center mb-6 px-2">
+                <p :class="qCount > 25 ? 'text-red-600 font-bold' : 'text-gray-500 font-bold'" x-show="jsonText.length > 0">
+                    Detected: <span x-text="qCount"></span> questions
+                </p>
+                <p x-show="errorMsg" class="text-red-600 font-bold bg-red-50 px-3 py-1 rounded" x-text="errorMsg"></p>
+                <p x-show="successMsg" class="text-green-600 font-bold bg-green-50 px-3 py-1 rounded" x-text="successMsg"></p>
+            </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option A</label><input type="text" x-model="builder.option_a" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></div>
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option B</label><input type="text" x-model="builder.option_b" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></div>
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option C</label><input type="text" x-model="builder.option_c" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></div>
-        <div><label class="block text-xs font-medium text-ink/70 mb-1">Option D</label><input type="text" x-model="builder.option_d" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none"></div>
-      </div>
-
-      <div class="grid grid-cols-3 gap-4 items-end">
-        <div>
-          <label class="block text-xs font-medium text-ink/70 mb-1">Correct Option</label>
-          <select x-model="builder.correct_option" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none">
-            <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
-          </select>
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-100">
+                <p class="text-sm font-bold text-gray-600">Total Uploaded to this Folder: <span x-text="totalSaved" class="text-indigo-600 text-xl ml-1"></span></p>
+                
+                <div class="flex gap-3 w-full sm:w-auto">
+                    <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25"
+                            class="flex-1 sm:flex-none bg-indigo-600 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-2">
+                        <svg x-show="isSaving" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span x-text="isSaving ? 'Uploading...' : 'Save Chunk'"></span>
+                    </button>
+                    <!-- Redirects down to the Manage Questions list automatically -->
+                    <button type="button" @click="doneUploading()"
+                            class="flex-1 sm:flex-none border-2 border-gray-300 text-gray-700 font-bold py-3.5 px-8 rounded-xl hover:bg-gray-100 transition-colors">
+                        DONE &rarr; Manage Images
+                    </button>
+                </div>
+            </div>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-ink/70 mb-1">Difficulty</label>
-          <select x-model.number="builder.difficulty_id" class="w-full rounded-md border border-ink/15 px-3 py-2 text-sm focus:ring-2 focus:ring-gold focus:outline-none">
-            {% for d in difficulty_levels %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
-          </select>
+
+        <!-- The Hidden Emergency Form Toggle -->
+        <div class="bg-gray-50 px-8 py-4 border-t border-gray-200 text-center">
+            <button @click="showManual = !showManual" class="text-xs font-bold text-gray-400 hover:text-indigo-600 uppercase tracking-widest transition-colors">
+                + Want to add a single question manually? Click here
+            </button>
+            
+            <div x-show="showManual" x-collapse class="mt-6 text-left">
+                <!-- Restoring the Original Manual Form specifically inside the toggle -->
+                <div class="bg-white border border-gray-200 rounded-xl p-6 space-y-5 shadow-inner">
+                    <p class="text-sm font-bold text-indigo-900 border-b border-gray-100 pb-2">Emergency Single Row Builder</p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Question Text</label>
+                        <textarea x-model="builder.question_text" rows="2" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 outline-none"></textarea>
+                        </div>
+                        <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Explanation</label>
+                        <textarea x-model="builder.explanation" rows="2" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 outline-none"></textarea>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-4 gap-3">
+                        <div><input type="text" x-model="builder.option_a" placeholder="Opt A" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"></div>
+                        <div><input type="text" x-model="builder.option_b" placeholder="Opt B" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"></div>
+                        <div><input type="text" x-model="builder.option_c" placeholder="Opt C" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"></div>
+                        <div><input type="text" x-model="builder.option_d" placeholder="Opt D" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"></div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <select x-model="builder.correct_option" class="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none font-bold">
+                            <option value="A">Answer: A</option><option value="B">Answer: B</option><option value="C">Answer: C</option><option value="D">Answer: D</option>
+                        </select>
+                        <select x-model.number="builder.difficulty_id" class="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none font-bold">
+                            {% for d in difficulty_levels %}<option value="{{ d.id }}">Level: {{ d.name }}</option>{% endfor %}
+                        </select>
+                        <label class="flex items-center gap-2 text-sm font-bold text-gray-600"><input type="checkbox" x-model="builder.is_premium" class="rounded text-indigo-600"> Premium</label>
+                        <label class="flex items-center gap-2 text-sm font-bold text-gray-600"><input type="checkbox" x-model="builder.has_image" class="rounded text-indigo-600"> Has Image</label>
+                    </div>
+                    <button type="button" @click="addManualRow()" class="w-full bg-indigo-50 text-indigo-700 font-bold py-2.5 rounded-lg border border-indigo-200 hover:bg-indigo-100">
+                        Add to JSON Batch Above &uarr;
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="flex items-center gap-5 pb-2">
-          <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
-            <input type="checkbox" x-model="builder.is_premium" class="rounded border-ink/30 text-gold focus:ring-gold"> Premium 🔒
-          </label>
-          <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
-            <input type="checkbox" x-model="builder.has_image" class="rounded border-ink/30 text-gold focus:ring-gold"> Has Diagram
-          </label>
-        </div>
-      </div>
-
-      <button type="button" @click="addRowToJson()" class="w-full bg-ink text-paper text-sm font-medium py-2.5 px-4 rounded-md hover:bg-ink-light transition-colors mt-2">
-        + Add Row to JSON Batch Below
-      </button>
-    </div>
-
-    <!-- JSON Upload Section -->
-    <div class="space-y-4 border-t border-ink/10 pt-6">
-      <div class="flex items-center justify-between">
-        <label class="block text-sm font-bold text-ink">JSON Array (Max 25 questions per batch)</label>
-        <button type="button" @click="showFormat = !showFormat" class="text-xs text-ink/50 hover:text-ink underline whitespace-nowrap">Toggle Format Example</button>
-      </div>
-
-      <pre x-show="showFormat" x-cloak class="bg-ink/5 border border-ink/10 rounded-md p-4 text-xs text-ink/70 overflow-x-auto">[
-  {
-    "question_type": "mcq",
-    "topic_name": "HC Verma Specials",
-    "question_text": "A block of mass m...",
-    "option_a": "mg", "option_b": "2mg", "option_c": "mg/2", "option_d": "0",
-    "correct_option": "A",
-    "difficulty_id": 3,
-    "is_premium": true,
-    "has_image": true,
-    "explanation": "Using Newton's Second Law..."
-  }
-]</pre>
-      
-      <textarea x-model="jsonText" @input="validateInput" rows="12" placeholder="[]"
-                class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-gold focus:outline-none"></textarea>
-      
-      <!-- Status Messages -->
-      <div class="text-sm flex justify-between items-center">
-        <p :class="qCount > 25 ? 'text-red-600 font-semibold' : 'text-ink/50'" x-show="jsonText.length > 0">
-          Detected: <span x-text="qCount"></span> questions (Max 25)
-        </p>
-        <p x-show="errorMsg" class="text-red-600 font-medium" x-text="errorMsg"></p>
-        <p x-show="successMsg" class="text-green-600 font-semibold animate-pulse" x-text="successMsg"></p>
-      </div>
-
-      <div class="flex items-center justify-between pt-4 border-t border-ink/10">
-        <p class="text-sm font-bold text-ink">
-          Total Uploaded this session: <span x-text="totalSaved" class="text-gold text-lg"></span>
-        </p>
-        <div class="flex gap-3">
-          <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25 || !selectedChapterId"
-                  class="bg-ink text-paper font-medium py-2.5 px-6 rounded-md hover:bg-ink-light disabled:opacity-50 transition-colors">
-            <span x-text="isSaving ? 'Saving...' : 'Save & Add More'"></span>
-          </button>
-          <button type="button" @click="window.location.reload()"
-                  class="border-2 border-ink text-ink font-medium py-2.5 px-6 rounded-md hover:bg-ink/5 transition-colors">
-            Final Refresh
-          </button>
-        </div>
-      </div>
     </div>
   </div>
-  {% else %}
-  <p class="text-ink/50 text-sm">Select a Stream and Subject above to manage chapter-wise questions.</p>
-  {% endif %}
 
   <!-- ==========================================
-       CHAPTER QUESTIONS LIST & LIVE EDIT
+       CHAPTER QUESTIONS LIST & LIVE EDIT (Manage)
        ========================================== -->
-  {% if chapter %}
-  <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10 shadow-sm mt-8">
-    <div class="px-5 py-3 bg-ink/5 flex items-center justify-between rounded-t-lg">
-      <p class="text-sm font-bold text-ink">Questions in {{ chapter.name }}</p>
-      {% set pending = questions|selectattr('has_image')|rejectattr('image_url')|list %}
-      {% if pending %}
-      <span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5">{{ pending|length }} image(s) pending upload</span>
-      {% endif %}
-    </div>
-    
-    {% for q in questions %}
-    <div class="px-5 py-4 gap-4 transition-colors hover:bg-ink/5" data-question-row data-table="questions" data-question-id="{{ q.id }}">
-      <div class="flex items-start justify-between gap-4">
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-ink">{{ q.question_text }}</p>
-          <p class="text-xs text-ink/50 mt-1">
-            <span class="font-bold {{ 'text-blue-600' if q.is_pyq else 'text-ink/70' }}">{{ 'PYQ ' ~ q.pyq_year if q.is_pyq else 'MCQ' }}</span> 
-            · Folder/Book: <span class="font-semibold">{{ q.topic_name }}</span>
-            {% if q.is_premium %}<span class="text-gold font-bold ml-1">· Premium 🔒</span>{% endif %}
-          </p>
+  <div id="manage-questions" class="scroll-mt-8">
+      <div class="bg-white border-2 border-gray-200 rounded-2xl divide-y divide-gray-100 shadow-sm mt-8 overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 flex items-center justify-between border-b-2 border-gray-200">
+          <p class="text-base font-bold text-ink">Manage Uploaded Questions: {{ chapter.name }}</p>
+          {% set pending = questions|selectattr('has_image')|rejectattr('image_url')|list %}
+          {% if pending %}
+          <span class="text-xs bg-red-100 text-red-700 border border-red-200 font-bold rounded-md px-3 py-1 shadow-sm">{{ pending|length }} image(s) pending upload</span>
+          {% endif %}
         </div>
         
-        <!-- Action Buttons -->
-        <div class="flex flex-col items-end gap-2 shrink-0">
-          <button type="button" @click="$dispatch('open-edit-modal', { id: '{{ q.id }}' })"
-                  class="text-xs font-semibold bg-gold/20 text-gold-light px-3 py-1 rounded hover:bg-gold hover:text-ink transition-colors">
-            Edit JSON
-          </button>
-          <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}"
-                onsubmit="return confirm('⚠️ DANGER: Remove this question? Its image will be permanently wiped from the Storage Bucket.');">
-            <button class="text-xs text-red-600 hover:underline whitespace-nowrap font-medium">Delete</button>
-          </form>
-        </div>
-      </div>
-
-      <!-- Image Zone -->
-      <div class="mt-3" data-image-zone="true">
-        {% if q.has_image %}
-          {% if q.image_url %}
-          <div class="flex items-center gap-3" data-image-uploaded>
-            <img src="{{ q.image_url }}" alt="" class="h-16 w-16 object-cover rounded border border-ink/10">
-            <div class="flex flex-col gap-1">
-              <label class="text-xs text-ink/60 hover:text-ink underline cursor-pointer w-fit">
-                Replace image
-                <input type="file" accept="image/*" class="hidden" data-image-input>
-              </label>
-              <button type="button" class="text-xs text-red-600 hover:underline text-left" data-remove-image>Remove image</button>
+        {% for q in questions %}
+        <div class="px-6 py-5 gap-4 transition-colors hover:bg-gray-50 group" data-question-row data-table="questions" data-question-id="{{ q.id }}">
+          <div class="flex items-start justify-between gap-6">
+            <div class="min-w-0 flex-1">
+              <p class="text-base font-medium text-ink leading-relaxed">{{ q.question_text }}</p>
+              <div class="flex items-center gap-2 mt-3">
+                <span class="text-xs font-bold px-2.5 py-1 rounded-md {{ 'bg-purple-100 text-purple-800 border border-purple-200' if q.is_pyq else 'bg-gray-100 text-gray-700 border border-gray-200' }}">
+                    {{ 'PYQ ' ~ q.pyq_year if q.is_pyq else 'MCQ' }}
+                </span> 
+                <span class="text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-1 rounded-md shadow-sm">
+                    📁 {{ q.topic_name }}
+                </span>
+                {% if q.is_premium %}<span class="text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-300 px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1">🔒 Premium</span>{% endif %}
+              </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex flex-col items-end gap-2 shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+              <button type="button" @click="$dispatch('open-edit-modal', { id: '{{ q.id }}' })"
+                      class="text-xs font-bold bg-white text-indigo-600 border border-gray-200 shadow-sm px-4 py-2 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition-colors w-full text-center">
+                ✏️ Edit JSON
+              </button>
+              <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}"
+                    onsubmit="return confirm('⚠️ DANGER: Remove this question? Its image will be permanently wiped from the Storage Bucket.');" class="w-full">
+                <button class="text-xs font-bold bg-red-50 text-red-600 border border-red-100 shadow-sm px-4 py-2 rounded-lg hover:bg-red-100 hover:border-red-200 transition-colors w-full text-center">
+                    🗑️ Delete
+                </button>
+              </form>
             </div>
           </div>
-          {% else %}
-          <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3" data-image-pending>
-            <p class="text-xs text-ink/70">📷 Image required — <span data-upload-status>no image uploaded yet</span></p>
-            <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
-              Upload Image
-              <input type="file" accept="image/*" class="hidden" data-image-input>
-            </label>
+
+          <!-- Image Zone -->
+          <div class="mt-4" data-image-zone="true">
+            {% if q.has_image %}
+              {% if q.image_url %}
+              <div class="flex items-center gap-4 bg-gray-50 p-3 rounded-xl border border-gray-200 w-fit" data-image-uploaded>
+                <img src="{{ q.image_url }}" alt="" class="h-20 w-20 object-contain rounded-lg border border-gray-300 bg-white shadow-sm p-1">
+                <div class="flex flex-col gap-2">
+                  <label class="text-xs font-bold bg-white border border-gray-300 shadow-sm text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 cursor-pointer transition-colors text-center">
+                    🔄 Replace Image
+                    <input type="file" accept="image/*" class="hidden" data-image-input>
+                  </label>
+                  <button type="button" class="text-xs font-bold text-red-600 hover:text-red-800 text-left px-1" data-remove-image>🗑️ Remove Image</button>
+                </div>
+              </div>
+              {% else %}
+              <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4 max-w-md" data-image-pending>
+                <div>
+                    <p class="text-sm font-bold text-amber-900">📷 Diagram Required</p>
+                    <p class="text-xs text-amber-700 mt-0.5" data-upload-status>No image uploaded yet.</p>
+                </div>
+                <label class="text-xs bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 shadow-md cursor-pointer whitespace-nowrap transition-colors">
+                  Upload Image
+                  <input type="file" accept="image/*" class="hidden" data-image-input>
+                </label>
+              </div>
+              {% endif %}
+            {% endif %}
           </div>
-          {% endif %}
-        {% endif %}
+        </div>
+        {% else %}
+        <div class="px-6 py-16 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+            <p class="text-xl font-bold text-gray-400 mb-1">No Questions Yet</p>
+            <p class="text-sm font-medium text-gray-400">Use the uploader above to create folders and add questions.</p>
+        </div>
+        {% endfor %}
       </div>
-    </div>
-    {% else %}
-    <p class="px-5 py-8 text-ink/50 text-sm text-center">No questions in this chapter yet.</p>
-    {% endfor %}
   </div>
   {% endif %}
 </div>
 
 <!-- ==========================================
-     LIVE JSON EDIT MODAL (Chapter-wise)
+     LIVE JSON EDIT MODAL
      ========================================== -->
-<div x-data="editModalApp()" @open-edit-modal.window="openModal($event.detail)" x-show="isOpen" x-cloak class="fixed inset-0 bg-ink/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-  <div class="bg-paper border border-ink/10 rounded-xl p-6 w-full max-w-2xl shadow-2xl relative" @click.outside="closeModal()">
-    <button @click="closeModal()" class="absolute top-4 right-4 text-ink/40 hover:text-ink">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+<div x-data="editModalApp()" @open-edit-modal.window="openModal($event.detail)" x-show="isOpen" x-cloak class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm">
+  <div class="bg-white rounded-3xl border border-gray-700 p-8 w-full max-w-3xl shadow-2xl relative" @click.outside="closeModal()">
+    <button @click="closeModal()" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
     </button>
     
-    <h3 class="font-display text-2xl font-semibold text-ink mb-2">Edit Chapter Question JSON</h3>
-    <p class="text-sm text-ink/60 mb-4">You can update text, switch MCQ/PYQ, or rename the Custom Book/Topic name here.</p>
+    <h3 class="font-display text-2xl font-black text-indigo-900 tracking-wide uppercase mb-1">Edit JSON Data</h3>
+    <p class="text-sm text-gray-500 font-bold mb-6">Modify topic names, text, or switch to PYQ safely.</p>
     
-    <textarea x-model="editJsonText" rows="12" placeholder='{\n  "question_type": "mcq",\n  "topic_name": "HC Verma Specials",\n  "question_text": "Updated text...",\n  "has_image": true\n}'
-              class="w-full rounded-md border border-ink/15 px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-gold focus:outline-none mb-4"></textarea>
+    <textarea x-model="editJsonText" rows="14" placeholder='{\n  "question_type": "mcq",\n  "topic_name": "HC Verma Specials",\n  "question_text": "Updated text...",\n  "has_image": true\n}'
+              class="w-full rounded-xl border-2 border-gray-300 px-4 py-4 font-mono text-sm focus:ring-0 focus:border-indigo-600 bg-gray-900 text-green-400 shadow-inner outline-none mb-4 resize-none"></textarea>
     
-    <p x-show="editError" class="text-red-600 text-sm mb-4 font-medium" x-text="editError"></p>
+    <p x-show="editError" class="text-red-700 text-sm mb-4 font-bold bg-red-100 border border-red-200 px-4 py-2 rounded-lg" x-text="editError"></p>
     
     <div class="flex justify-end gap-3">
-      <button @click="closeModal()" class="px-5 py-2 rounded-md text-ink font-medium border border-ink/20 hover:bg-ink/5">Cancel</button>
-      <button @click="submitEdit()" :disabled="isSaving" class="px-5 py-2 rounded-md bg-gold text-ink font-semibold hover:bg-gold-light disabled:opacity-50 flex items-center gap-2">
-        <span x-text="isSaving ? 'Updating...' : 'Update Question'"></span>
+      <button @click="closeModal()" class="px-6 py-3 rounded-xl text-gray-700 font-bold border-2 border-gray-300 hover:bg-gray-100 transition-colors">Cancel</button>
+      <button @click="submitEdit()" :disabled="isSaving" class="px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 border-2 border-indigo-700 shadow-md transition-colors text-lg">
+        <svg x-show="isSaving" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        <span x-text="isSaving ? 'Updating DB...' : 'Save Changes'"></span>
       </button>
     </div>
   </div>
@@ -307,128 +396,138 @@
 <!-- ==========================================
      SCRIPTS & ALPINE.JS LOGIC
      ========================================== -->
+<style>
+    .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+
 <script>
+  function showSangamToast(message) {
+      const toast = document.getElementById('sangam-toast');
+      const msgEl = document.getElementById('sangam-toast-msg');
+      msgEl.textContent = message;
+      toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-[-20px]');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      setTimeout(() => {
+          toast.classList.remove('opacity-100', 'translate-y-0');
+          toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-[-20px]');
+      }, 4000);
+  }
+
   function chapterUploader() {
     return {
       selectedChapterId: '{{ selected_chapter_id or "" }}',
-      showFormat: false,
+      step: 'mode', // 'mode' -> 'setup' -> 'upload'
+      modeParams: { type: 'mcq', category: 'topic' },
+      folderSetup: { name: '', year: '', marks: 4, negative: 1 },
+      
       jsonText: '[]',
       qCount: 0,
       totalSaved: 0,
       isSaving: false,
       errorMsg: '',
       successMsg: '',
+      showManual: false,
       
       builder: {
-        qtype: 'mcq',
-        grouping: 'topic_wise',
-        pyq_year: '',
-        topic_name: '',
-        question_text: '',
-        explanation: '',
-        option_a: '', option_b: '', option_c: '', option_d: '',
-        correct_option: 'A',
-        difficulty_id: 1,
-        is_premium: false,
-        has_image: false
+        question_text: '', explanation: '', option_a: '', option_b: '', option_c: '', option_d: '',
+        correct_option: 'A', difficulty_id: 1, is_premium: false, has_image: false
       },
 
       init() {
         this.validateInput();
-      },
-
-      updateUrlWithChapter() {
-        if (!this.selectedChapterId) return;
-        const url = new URL(window.location);
-        url.searchParams.set('chapter_id', this.selectedChapterId);
-        window.location = url.toString();
-      },
-
-      resetBuilder() {
-        this.builder = {
-          qtype: 'mcq', grouping: 'topic_wise', pyq_year: '', topic_name: '',
-          question_text: '', explanation: '', option_a: '', option_b: '', option_c: '', option_d: '',
-          correct_option: 'A', difficulty_id: 1, is_premium: false, has_image: false
-        };
-      },
-
-      addRowToJson() {
-        if (!this.builder.question_text.trim()) {
-          alert('Question text is required to build a row.');
-          return;
+        // Check if we arrived here via a redirect after completing an upload
+        if (window.location.search.includes('uploaded=1')) {
+            showSangamToast('✅ Questions uploaded! Manage images below.');
         }
+      },
+
+      selectMode(type, category) {
+          this.modeParams.type = type;
+          this.modeParams.category = category;
+          this.folderSetup.name = '';
+          this.folderSetup.year = '';
+          this.step = 'setup';
+      },
+
+      finalizeSetup() {
+          if (!this.folderSetup.name.trim()) return;
+          this.step = 'upload';
+      },
+
+      doneUploading() {
+          // Add uploaded parameter to trigger the success toast on reload, and smooth scroll to manage section
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.set('uploaded', '1');
+          currentUrl.hash = 'manage-questions';
+          window.location.href = currentUrl.toString();
+      },
+
+      addManualRow() {
+        if (!this.builder.question_text.trim()) { alert('Question text is required.'); return; }
 
         const row = {
-          question_type: this.builder.qtype,
-          topic_name: this.builder.topic_name.trim() || 'General',
+          question_type: this.modeParams.type,
+          topic_name: this.folderSetup.name.trim(),
           question_text: this.builder.question_text.trim(),
-          option_a: this.builder.option_a.trim(),
-          option_b: this.builder.option_b.trim(),
-          option_c: this.builder.option_c.trim(),
-          option_d: this.builder.option_d.trim(),
+          option_a: this.builder.option_a.trim(), option_b: this.builder.option_b.trim(),
+          option_c: this.builder.option_c.trim(), option_d: this.builder.option_d.trim(),
           correct_option: this.builder.correct_option,
           difficulty_id: parseInt(this.builder.difficulty_id, 10),
           is_premium: this.builder.is_premium,
           has_image: this.builder.has_image
         };
 
-        if (this.builder.qtype === 'pyq') {
-          row.pyq_year = parseInt(this.builder.pyq_year, 10) || null;
-        }
-        if (this.builder.explanation.trim()) {
-          row.explanation = this.builder.explanation.trim();
-        }
+        if (this.modeParams.type === 'pyq') { row.pyq_year = parseInt(this.folderSetup.year, 10) || null; }
+        if (this.builder.explanation.trim()) { row.explanation = this.builder.explanation.trim(); }
 
         let current = [];
         try {
           const parsed = JSON.parse(this.jsonText);
           if (Array.isArray(parsed)) current = parsed;
-        } catch (e) {
-          if (this.jsonText.trim() !== '' && this.jsonText.trim() !== '[]') {
-            alert('Current JSON in textarea is invalid. Fix it first.');
-            return;
-          }
-        }
+        } catch (e) {}
+        
         current.push(row);
         this.jsonText = JSON.stringify(current, null, 2);
         this.validateInput();
-        this.resetBuilder();
+        
+        // Reset manual builder visually
+        this.builder.question_text = ''; this.builder.explanation = '';
+        this.builder.option_a = ''; this.builder.option_b = ''; this.builder.option_c = ''; this.builder.option_d = '';
+        this.builder.has_image = false;
+        
+        showSangamToast('✅ Manual row added to JSON box above!');
       },
 
       validateInput() {
-        this.errorMsg = '';
-        this.successMsg = '';
+        this.errorMsg = ''; this.successMsg = '';
         try {
-          if (this.jsonText.trim() === '' || this.jsonText.trim() === '[]') {
-            this.qCount = 0;
-            return;
-          }
+          if (this.jsonText.trim() === '' || this.jsonText.trim() === '[]') { this.qCount = 0; return; }
           const parsed = JSON.parse(this.jsonText);
-          if (!Array.isArray(parsed)) {
-            this.errorMsg = 'Must be a valid JSON array []';
-            this.qCount = 0;
-            return;
-          }
+          if (!Array.isArray(parsed)) { this.errorMsg = 'Must be a valid JSON array []'; this.qCount = 0; return; }
           this.qCount = parsed.length;
         } catch (e) {
-          this.errorMsg = 'Invalid JSON format';
-          this.qCount = 0;
+          this.errorMsg = 'Invalid JSON format'; this.qCount = 0;
         }
       },
 
       async saveChunk() {
-        if (!this.selectedChapterId) {
-          this.errorMsg = 'Select a Chapter first.';
-          return;
-        }
-        if (this.qCount === 0 || this.qCount > 25) return;
+        if (!this.selectedChapterId || this.qCount === 0 || this.qCount > 25) return;
         
-        this.isSaving = true;
-        this.errorMsg = '';
-        this.successMsg = '';
+        this.isSaving = true; this.errorMsg = ''; this.successMsg = '';
         
         try {
           const parsedData = JSON.parse(this.jsonText);
+          
+          // STRICT SANGAM DATA OVERRIDE
+          // Ensures AI Hallucinations in JSON don't override the Admin's Folder Setup
+          parsedData.forEach(item => {
+              item.question_type = this.modeParams.type;
+              item.topic_name = this.folderSetup.name;
+              if (this.modeParams.type === 'pyq') {
+                  item.pyq_year = this.folderSetup.year ? parseInt(this.folderSetup.year, 10) : null;
+              }
+          });
           
           const payload = {
             stream_id: '{{ selected_stream_id }}',
@@ -448,149 +547,71 @@
             this.totalSaved += data.inserted;
             this.jsonText = '[]';
             this.qCount = 0;
-            this.successMsg = `Success! ${data.inserted} questions saved. Ready for next chunk.`;
-            setTimeout(() => this.successMsg = '', 4000);
+            showSangamToast(`🔥 SANGAM STUDY HUB: ${data.inserted} questions mapped to folder '${this.folderSetup.name}'!`);
           } else {
             this.errorMsg = data.error || 'Server error occurred.';
           }
         } catch (err) {
           this.errorMsg = 'Connection error. Check your network.';
         } finally {
-          this.isSaving = false;
+            this.isSaving = false;
         }
       }
     };
   }
 
-  // Live JSON Edit Modal Component Logic (Chapter-wise)
   function editModalApp() {
     return {
-      isOpen: false,
-      qId: null,
-      editJsonText: '',
-      isSaving: false,
-      editError: '',
+      isOpen: false, qId: null, editJsonText: '', isSaving: false, editError: '',
 
       openModal(detail) {
-        this.qId = detail.id;
-        this.editJsonText = '';
-        this.editError = '';
-        this.isOpen = true;
+        this.qId = detail.id; this.editJsonText = ''; this.editError = ''; this.isOpen = true;
       },
-      closeModal() {
-        this.isOpen = false;
-      },
+      closeModal() { this.isOpen = false; },
       async submitEdit() {
         this.editError = '';
         let parsedData;
-        
-        try {
-          parsedData = JSON.parse(this.editJsonText);
-        } catch(e) {
-          this.editError = 'Invalid JSON syntax.';
-          return;
-        }
+        try { parsedData = JSON.parse(this.editJsonText); } catch(e) { this.editError = 'Invalid JSON syntax.'; return; }
         
         this.isSaving = true;
         try {
           const res = await fetch(`/admin/questions/${this.qId}/edit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(parsedData)
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsedData)
           });
           const data = await res.json();
-          
-          if (data.ok) {
-            // MAGIC DOM INJECTION: Add/remove image box
-            const row = document.querySelector(`[data-question-id="${this.qId}"]`);
-            let imgZone = row.querySelector('[data-image-zone]');
-            
-            // Visual text update
-            if (parsedData.question_text) {
-               const textNode = row.querySelector('p.font-medium');
-               if (textNode) textNode.textContent = parsedData.question_text;
-            }
-
-            if (data.has_image) {
-              const existingImg = imgZone.querySelector('[data-image-uploaded], [data-image-pending]');
-              if (!existingImg) {
-                imgZone.innerHTML = `
-                  <div class="bg-gold/5 border border-gold/30 rounded-md p-3 flex items-center justify-between gap-3 animate-pulse" data-image-pending>
-                    <p class="text-xs text-ink/70">📷 Image required — <span data-upload-status>no image uploaded yet</span></p>
-                    <label class="text-xs bg-ink text-paper font-medium py-1.5 px-3 rounded-md hover:bg-ink-light cursor-pointer whitespace-nowrap">
-                      Upload Image
-                      <input type="file" accept="image/*" class="hidden" data-image-input>
-                    </label>
-                  </div>`;
-              }
-            } else {
-              imgZone.innerHTML = '';
-            }
-            this.closeModal();
-          } else {
-            this.editError = data.error;
-          }
+          if (data.ok) { window.location.reload(); } else { this.editError = data.error; }
         } catch (err) {
-          this.editError = 'Failed to communicate with server.';
-        } finally {
-          this.isSaving = false;
-        }
+          this.editError = 'Network failure.';
+        } finally { this.isSaving = false; }
       }
     };
   }
 
-  // Preserve global image upload/remove handlers
+  // GLOBAL IMAGE UPLOAD & REMOVE LOGIC
   document.addEventListener('change', async (e) => {
     const input = e.target.closest('[data-image-input]');
     if (!input || !input.files[0]) return;
-
     const row = input.closest('[data-question-row]');
-    const tableName = row.dataset.table;
-    const questionId = row.dataset.questionId;
-    const statusEl = row.querySelector('[data-upload-status]');
-    if (statusEl) statusEl.textContent = 'Uploading…';
-
-    const formData = new FormData();
-    formData.append('image', input.files[0]);
-
+    const formData = new FormData(); formData.append('image', input.files[0]);
+    showSangamToast('Uploading image to bucket...');
     try {
-      const res = await fetch(`/admin/questions/${tableName}/${questionId}/upload-image`, {
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch(`/admin/questions/${row.dataset.table}/${row.dataset.questionId}/upload-image`, { method: 'POST', body: formData });
       const data = await res.json();
-      if (data.ok) {
-        window.location.reload();
-      } else {
-        alert('Upload failed: ' + data.error);
-        if (statusEl) statusEl.textContent = 'no image uploaded yet';
-      }
-    } catch (err) {
-      alert('Upload failed: ' + err);
-      if (statusEl) statusEl.textContent = 'no image uploaded yet';
-    }
+      if (data.ok) window.location.reload(); else showSangamToast('❌ Upload failed: ' + data.error);
+    } catch (err) { showSangamToast('❌ Connection error.'); }
   });
 
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-remove-image]');
     if (!btn) return;
-    if (!confirm('Remove this image? The question will show the upload box again.')) return;
-
+    if (!confirm('Are you sure you want to permanently wipe this image from the Storage Bucket?')) return;
     const row = btn.closest('[data-question-row]');
-    const tableName = row.dataset.table;
-    const questionId = row.dataset.questionId;
-
+    showSangamToast('Deleting image...');
     try {
-      const res = await fetch(`/admin/questions/${tableName}/${questionId}/remove-image`, { method: 'POST' });
+      const res = await fetch(`/admin/questions/${row.dataset.table}/${row.dataset.questionId}/remove-image`, { method: 'POST' });
       const data = await res.json();
-      if (data.ok) {
-        window.location.reload();
-      } else {
-        alert('Could not remove image: ' + data.error);
-      }
-    } catch (err) {
-      alert('Could not remove image: ' + err);
-    }
+      if (data.ok) window.location.reload(); else showSangamToast('❌ Failed: ' + data.error);
+    } catch (err) { showSangamToast('❌ Network error.'); }
   });
 </script>
 {% endblock %}
