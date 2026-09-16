@@ -10,6 +10,16 @@ html {
   scroll-behavior: smooth;
 }
 
+/* BUGFIX: horizontally scrollable pages (e.g. wide quiz palette strips on
+   small screens) were letting the body's cream background peek through
+   on the side, since body/html had no explicit width cap. Locking this
+   down keeps dark, full-bleed screens (practice runner, test attempt)
+   from showing a stray light-colored margin. */
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 /* Consistent focus ring across browsers for keyboard nav (accessibility) */
 a:focus-visible,
 button:focus-visible,
