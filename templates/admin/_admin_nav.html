@@ -1,14 +1,15 @@
-<nav class="bg-ink text-paper px-6 py-4">
+<nav class="bg-[#080b12] border-b border-white/5 px-6 py-4 font-body">
   <div class="max-w-6xl mx-auto flex items-center justify-between">
-    <a href="{{ url_for('admin.dashboard') }}" class="font-display text-lg text-gold">SANGAM Admin</a>
-    <div class="flex gap-6 text-sm">
-      <a href="{{ url_for('admin.dashboard') }}" class="hover:text-gold transition-colors">Dashboard</a>
-      <a href="{{ url_for('admin.subjects_list') }}" class="hover:text-gold transition-colors">Subjects</a>
-      <a href="{{ url_for('admin.chapters_list') }}" class="hover:text-gold transition-colors">Chapters</a>
-      <a href="{{ url_for('admin.questions_list') }}" class="hover:text-gold transition-colors">Questions</a>
-      <!-- FIX APPLIED HERE: Changed from tests_list to test_series_list -->
-      <a href="{{ url_for('admin.test_series_list') }}" class="hover:text-gold transition-colors">Mock Tests</a>
-      <a href="{{ url_for('user.landing') }}" class="text-paper/60 hover:text-gold transition-colors">← Back to site</a>
+    <!-- Brand Logo -->
+    <a href="{{ url_for('admin.dashboard') }}" class="font-display text-xl font-bold tracking-tight text-white flex items-center gap-2 hover:opacity-90 transition-opacity">
+      SANGAM <span class="text-indigo-500">Admin</span>
+    </a>
+    
+    <!-- Clean Navigation Action -->
+    <div class="flex items-center gap-6 text-sm">
+      <a href="{{ url_for('user.landing') }}" class="text-gray-400 hover:text-white font-medium bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 px-4 py-2 rounded-lg transition-all shadow-sm">
+        &larr; Back to site
+      </a>
     </div>
   </div>
 </nav>
