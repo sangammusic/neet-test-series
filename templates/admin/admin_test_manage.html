@@ -173,6 +173,14 @@
                     </svg>
                     Edit JSON (Replace Question)
                 </button>
+
+                <!-- Remove Question Button -->
+                <form method="POST" action="{{ url_for('admin.tests_remove_question', test_id=test.id, question_id=m.mock_question_id) }}"
+                      onsubmit="return confirm('Remove this question from the test permanently? If it has an image, the image will be wiped from storage too.');" class="m-0">
+                    <button type="submit" class="w-full bg-red-50 text-red-600 font-bold py-3 rounded-xl hover:bg-red-100 transition-all shadow-sm flex items-center justify-center gap-2 text-sm border-2 border-red-200">
+                        🗑️ Remove Question
+                    </button>
+                </form>
             </div>
         </div>
     </div>
