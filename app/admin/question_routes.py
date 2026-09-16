@@ -6,12 +6,15 @@ Bulk upload follows the 2-level / 4-combination structure:
     Level 2: Topic-wise vs Random -> topic_name (Random -> "General")
 """
 import json
+import logging
 
 from flask import render_template, request, redirect, url_for, flash, jsonify
 
 from app.admin import admin_bp
 from app.admin.decorators import admin_required
 from app.extensions import supabase_admin
+
+logger = logging.getLogger(__name__)
 
 BUCKET_NAME = "question-images"
 
@@ -31,16 +34,17 @@ def _delete_image_from_storage(image_url):
     try:
         # URL format: https://[project_ref].supabase.co/storage/v1/object/public/question-images/questions/[id]/[uuid].jpg
         if "question-images/" in image_url:
-            path = image_url.split("question-images/")[1]
+            path = image_url.split("question-images/")[1].split("?")[0]
             supabase_admin.storage.from_(BUCKET_NAME).remove([path])
     except Exception as e:
-        print(f"Failed to delete image from storage {image_url}: {e}")
+        logger.error(f"Failed to delete image from storage {image_url}: {e}")
 
 
-def _validate_bulk_question(raw, difficulty_ids, chapter_id):
+def _validate_bulk_question(raw, difficulty_ids, chapter_id, default_marks=4.0, default_negative=1.0):
     """
     Validates + normalizes one question dict from the bulk-paste JSON.
     Enforces the MCQ vs PYQ rule, and handles Custom Book/Topic names seamlessly.
+    Now also aggressively maps 'marks' and 'negative_marks' for DPP Worksheets.
     """
     if not isinstance(raw, dict):
         return None, "not a JSON object"
@@ -78,11 +82,21 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id):
         pyq_year = None  # MCQ never carries a pyq_year
 
     # --- Level 2: Custom Books & Topic-wise Handling ---
-    # topic_name will capture standard topics OR Custom Names like "HC Verma Specials"
     topic_name = str(raw.get("topic_name", "")).strip() or "General"
 
     image_url = str(raw.get("image_url", "")).strip() if raw.get("image_url") else None
     has_image = bool(raw.get("has_image", bool(image_url)))
+    
+    # --- DPP Marks Logic ---
+    try:
+        marks = float(raw.get("marks", default_marks))
+    except (TypeError, ValueError):
+        marks = float(default_marks)
+
+    try:
+        negative_marks = abs(float(raw.get("negative_marks", default_negative)))
+    except (TypeError, ValueError):
+        negative_marks = abs(float(default_negative))
 
     payload = {
         "chapter_id": chapter_id,
@@ -100,6 +114,8 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id):
         "image_url": image_url,
         "has_image": has_image,
         "is_premium": bool(raw.get("is_premium", False)),
+        "marks": marks,
+        "negative_marks": negative_marks,
     }
     return payload, None
 
@@ -142,14 +158,30 @@ def questions_list():
 
     if chapter_id:
         chapter = supabase_admin.table("chapters").select("id, name").eq("id", chapter_id).single().execute().data
-        questions = (
-            supabase_admin.table("questions")
-            .select("id, question_text, is_pyq, pyq_year, topic_name, is_premium, difficulty_id, has_image, image_url")
-            .eq("chapter_id", chapter_id)
-            .order("created_at", desc=True)
-            .execute()
-            .data
-        )
+        
+        # SANGAM GRACEFUL FALLBACK: Attempt to fetch with marks/negative_marks
+        try:
+            questions = (
+                supabase_admin.table("questions")
+                .select("id, question_text, is_pyq, pyq_year, topic_name, is_premium, difficulty_id, has_image, image_url, marks, negative_marks")
+                .eq("chapter_id", chapter_id)
+                .order("created_at", desc=True)
+                .execute()
+                .data
+            )
+        except Exception as e:
+            # If the database schema hasn't been updated yet, fall back to safe query
+            if "marks" in str(e) or "column" in str(e).lower():
+                questions = (
+                    supabase_admin.table("questions")
+                    .select("id, question_text, is_pyq, pyq_year, topic_name, is_premium, difficulty_id, has_image, image_url")
+                    .eq("chapter_id", chapter_id)
+                    .order("created_at", desc=True)
+                    .execute()
+                    .data
+                )
+            else:
+                flash(f"Error loading questions: {e}", "error")
 
     difficulty_levels = supabase_admin.table("difficulty_levels").select("id, name").order("display_order").execute().data
 
@@ -165,19 +197,25 @@ def questions_list():
 @admin_required
 def questions_bulk_upload():
     """
-    Updated for Pillar 2 (AJAX 25-Chunk Support & Strict Hierarchy).
-    Chapter creation is no longer silent. The chapter_id must be provided.
+    Updated for Pillar 2: AJAX 25-Chunk Support & Strict Hierarchy & DPP Setup.
     """
     is_ajax = request.args.get("ajax") == "1"
 
-    stream_id = request.form.get("stream_id") if not request.is_json else request.json.get("stream_id")
-    subject_id = request.form.get("subject_id") if not request.is_json else request.json.get("subject_id")
-    chapter_id = request.form.get("chapter_id") if not request.is_json else request.json.get("chapter_id")
-
     if request.is_json:
+        stream_id = request.json.get("stream_id")
+        subject_id = request.json.get("subject_id")
+        chapter_id = request.json.get("chapter_id")
+        default_marks = request.json.get("marks", 4)
+        default_negative = request.json.get("negative_marks", request.json.get("negative", 1))
+        
         raw_json_data = request.json.get("bulk_json")
         raw_json = json.dumps(raw_json_data) if isinstance(raw_json_data, list) else str(raw_json_data or "").strip()
     else:
+        stream_id = request.form.get("stream_id")
+        subject_id = request.form.get("subject_id")
+        chapter_id = request.form.get("chapter_id")
+        default_marks = request.form.get("marks", 4)
+        default_negative = request.form.get("negative_marks", 1)
         raw_json = request.form.get("bulk_json", "").strip()
 
     redirect_target = lambda: redirect(url_for(  # noqa: E731
@@ -214,46 +252,107 @@ def questions_bulk_upload():
     valid_payloads = []
     errors = []
     for i, raw in enumerate(parsed, start=1):
-        payload, error = _validate_bulk_question(raw, difficulty_ids, chapter_id)
+        payload, error = _validate_bulk_question(raw, difficulty_ids, chapter_id, default_marks, default_negative)
         if error:
             errors.append(f"row {i}: {error}")
         else:
             valid_payloads.append(payload)
 
-    inserted_ids = []
+    # ==========================================
+    # SANGAM STUDY HUB: DUPLICATE DETECTION LOGIC
+    # ==========================================
     if valid_payloads:
+        existing_questions = (
+            supabase_admin.table("questions")
+            .select("question_text")
+            .eq("chapter_id", chapter_id)
+            .execute()
+            .data
+        )
+        
+        existing_texts = set()
+        for q in existing_questions:
+            if q.get("question_text"):
+                existing_texts.add(q["question_text"].strip().lower())
+
+        incoming_texts = set()
+        for p in valid_payloads:
+            clean_text = p["question_text"].strip().lower()
+            
+            # 1. DB Collision Check
+            if clean_text in existing_texts:
+                error_msg = f"Duplicate Detected: The question starting with '{clean_text[:40]}...' already exists in this chapter!"
+                if is_ajax: return jsonify({"ok": False, "error": error_msg}), 400
+                flash(error_msg, "error")
+                return redirect_target()
+                
+            # 2. Internal Chunk Collision Check
+            if clean_text in incoming_texts:
+                error_msg = f"Duplicate Detected: The question starting with '{clean_text[:40]}...' appears multiple times in your pasted JSON chunk!"
+                if is_ajax: return jsonify({"ok": False, "error": error_msg}), 400
+                flash(error_msg, "error")
+                return redirect_target()
+                
+            incoming_texts.add(clean_text)
+
+    # ==========================================
+    # DATABASE INSERT & GRACEFUL SCHEMA FALLBACK
+    # ==========================================
+    inserted_ids = []
+    warning_msg = None
+    
+    if valid_payloads and not errors:
         try:
+            # Attempt Full Insert (Assuming SQL migration was run)
             result = supabase_admin.table("questions").insert(valid_payloads).execute()
             inserted_ids = [row["id"] for row in result.data]
         except Exception as exc:
-            if is_ajax: return jsonify({"ok": False, "error": f"Upload failed at the database level: {exc}"}), 500
-            flash(f"Upload failed at the database level: {exc}", "error")
-            return redirect_target()
+            # If 'marks' column doesn't exist yet, gracefully downgrade and retry
+            if "marks" in str(exc) or "column" in str(exc).lower():
+                fallback_payloads = []
+                for p in valid_payloads:
+                    fp = p.copy()
+                    fp.pop("marks", None)
+                    fp.pop("negative_marks", None)
+                    fallback_payloads.append(fp)
+                
+                try:
+                    result = supabase_admin.table("questions").insert(fallback_payloads).execute()
+                    inserted_ids = [row["id"] for row in result.data]
+                    warning_msg = "Questions saved! ⚠️ BUT 'marks' were ignored. Please run SQL Migration: ALTER TABLE questions ADD COLUMN marks NUMERIC DEFAULT 4, ADD COLUMN negative_marks NUMERIC DEFAULT 1;"
+                except Exception as fallback_exc:
+                    if is_ajax: return jsonify({"ok": False, "error": f"Fallback Upload failed: {fallback_exc}"}), 500
+                    flash(f"Fallback Upload failed: {fallback_exc}", "error")
+                    return redirect_target()
+            else:
+                if is_ajax: return jsonify({"ok": False, "error": f"DB Upload failed: {exc}"}), 500
+                flash(f"DB Upload failed: {exc}", "error")
+                return redirect_target()
 
-    # --- AJAX RESPONSE FOR CHUNKING ---
+    # --- AJAX RESPONSE ---
     if is_ajax:
-        return jsonify({
+        resp = {
             "ok": True if inserted_ids else False,
             "inserted": len(inserted_ids),
             "errors": errors
-        })
+        }
+        if warning_msg:
+            resp["warning"] = warning_msg
+        return jsonify(resp)
 
     # --- STANDARD FORM RESPONSE ---
     if valid_payloads and not errors:
-        flash(f"Bulk upload complete — {len(valid_payloads)} question(s) inserted.", "success")
+        if warning_msg:
+            flash(warning_msg, "error")
+        else:
+            flash(f"Bulk upload complete — {len(valid_payloads)} question(s) inserted.", "success")
     elif valid_payloads and errors:
         flash(
             f"{len(valid_payloads)} question(s) inserted, but "
-            f"{len(errors)} row(s) were skipped — {'; '.join(errors[:5])}"
-            + (f" (+{len(errors) - 5} more)" if len(errors) > 5 else ""),
-            "error",
+            f"{len(errors)} row(s) were skipped — {'; '.join(errors[:5])}", "error"
         )
     else:
-        flash(
-            f"No questions were inserted — all {len(errors)} row(s) failed validation. "
-            f"{'; '.join(errors[:5])}" + (f" (+{len(errors) - 5} more)" if len(errors) > 5 else ""),
-            "error",
-        )
+        flash(f"No questions inserted. {'; '.join(errors[:5])}", "error")
 
     return redirect_target()
 
@@ -262,14 +361,12 @@ def questions_bulk_upload():
 @admin_required
 def questions_edit(question_id):
     """
-    NEW ROUTE: Pillar 2 (Live JSON Edit).
-    Updates a chapter-wise question (Custom Books, MCQs, PYQs). Cleanly handles image flags.
+    Live JSON Edit: Updates a chapter-wise question cleanly. Handles graceful downgrades.
     """
     raw = request.json
     if not raw:
         return jsonify({"ok": False, "error": "No JSON payload received"}), 400
 
-    # Fetch chapter_id and old image from existing row to pass into validator
     old_q = supabase_admin.table("questions").select("chapter_id, image_url, has_image").eq("id", question_id).single().execute().data
     if not old_q:
         return jsonify({"ok": False, "error": "Question not found."}), 404
@@ -281,7 +378,6 @@ def questions_edit(question_id):
     if error:
         return jsonify({"ok": False, "error": error}), 400
 
-    # Pillar 4: If admin toggled has_image to false but an image existed, physically delete it
     if old_q.get("image_url") and not payload.get("has_image"):
         _delete_image_from_storage(old_q["image_url"])
         payload["image_url"] = None
@@ -290,6 +386,14 @@ def questions_edit(question_id):
         supabase_admin.table("questions").update(payload).eq("id", question_id).execute()
         return jsonify({"ok": True, "has_image": payload.get("has_image")})
     except Exception as exc:
+        if "marks" in str(exc) or "column" in str(exc).lower():
+            payload.pop("marks", None)
+            payload.pop("negative_marks", None)
+            try:
+                supabase_admin.table("questions").update(payload).eq("id", question_id).execute()
+                return jsonify({"ok": True, "has_image": payload.get("has_image"), "warning": "Marks ignored. Run SQL Migration."})
+            except Exception as e2:
+                return jsonify({"ok": False, "error": str(e2)}), 500
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
