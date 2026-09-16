@@ -9,7 +9,7 @@
     <div class="flex items-center gap-2 md:gap-4 text-sm">
       
       <!-- SANGAM FIX: Added Admin check so normal users never see this if it accidentally loads -->
-      {% if is_logged_in() and current_user.is_admin %}
+      {% if current_user.is_authenticated and current_user.is_admin %}
       
       <!-- Universal Go Back Button (SANGAM FIX) -->
       <!-- Removed history.back() as it causes stale modal issues. Better to give a proper link if possible, or leave it for pure browser history but know it risks modals -->
