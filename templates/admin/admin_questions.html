@@ -3,9 +3,10 @@
 {% block content %}
 {% include "admin/_admin_nav.html" %}
 
-<!-- Alpine.js for State Management -->
+<!-- Alpine.js for State Management (Tabs, Chunking, Modals) -->
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
+<!-- WRAPPING ENTIRE PAGE IN MASTER ALPINE APP FOR GLOBAL MODALS -->
 <div x-data="adminQuestionsApp()" class="max-w-6xl mx-auto px-6 py-10 relative font-body">
   
   <!-- SANGAM STUDY HUB CUSTOM TOAST NOTIFICATION -->
@@ -19,7 +20,7 @@
   <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
       <div>
           <h1 class="font-display text-4xl font-bold text-ink mb-2">Chapter-wise Practice Engine</h1>
-          <p class="text-gray-500 font-medium">Create Folders & Manage Question Quizzes cleanly.</p>
+          <p class="text-gray-500 font-medium">Strictly Isolated Engine: Create Folders & Manage Question Quizzes cleanly.</p>
       </div>
   </div>
 
@@ -167,7 +168,10 @@
        LEVEL 4: SELECT MCQ / PYQ
        ========================================== -->
   {% elif not selected_type %}
-  <h2 class="text-2xl font-display font-bold text-ink mb-6">Select Practice Mode</h2>
+  <div class="flex items-center gap-4 mb-6">
+      <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}" class="text-sm font-bold text-gray-400 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">&larr; Back</a>
+      <h2 class="text-2xl font-display font-bold text-ink">Select Practice Mode</h2>
+  </div>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type='mcq') }}" class="bg-indigo-50 border-2 border-indigo-100 rounded-2xl p-8 hover:border-indigo-500 hover:shadow-md transition-all group flex flex-col items-center justify-center text-center">
           <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center text-indigo-600 mb-4 group-hover:scale-110 transition-transform shadow-sm">
@@ -189,7 +193,10 @@
        LEVEL 5: SELECT TOPIC-WISE / RANDOM
        ========================================== -->
   {% elif not selected_category %}
-  <h2 class="text-2xl font-display font-bold text-ink mb-6">Choose {{ 'PYQ' if selected_type == 'pyq' else 'MCQ' }} Type</h2>
+  <div class="flex items-center gap-4 mb-6">
+      <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type=selected_type) }}" class="text-sm font-bold text-gray-400 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">&larr; Back</a>
+      <h2 class="text-2xl font-display font-bold text-ink">Choose {{ 'PYQ' if selected_type == 'pyq' else 'MCQ' }} Type</h2>
+  </div>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type=selected_type, category='topic') }}" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-indigo-600 hover:shadow-lg transition-all text-left group">
           <h3 class="text-xl font-bold text-ink mb-1 group-hover:text-indigo-600">Topic-Wise</h3>
@@ -209,7 +216,7 @@
       <div class="flex items-center justify-between mb-6">
           <div>
               <h2 class="text-2xl font-display font-bold text-ink">📁 Folder List</h2>
-              <p class="text-sm text-gray-500 font-medium mt-1">Manage folders for {{ 'Topic-Wise' if selected_category == 'topic' else 'Random' }} {{ 'PYQ' if selected_type == 'pyq' else 'MCQ' }}s.</p>
+              <p class="text-sm text-gray-500 font-medium mt-1">Manage folders for <span class="capitalize">{{ selected_category }}</span> {{ 'PYQ' if selected_type == 'pyq' else 'MCQ' }}s.</p>
           </div>
           <button @click="openCreate()" class="text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-xl transition-colors shadow-md flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Add New Folder
@@ -326,8 +333,8 @@
                       </button>
                       <div x-show="menuOpen" x-cloak class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden origin-top-right">
                           <!-- EDIT -> Goes to Deep Page -->
-                          <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type=selected_type, category=selected_category, folder=selected_folder, set=s.name) }}" class="flex items-center gap-2 px-4 py-3 text-sm font-bold text-indigo-700 hover:bg-indigo-50 border-b border-gray-50 transition-colors">
-                              📝 Edit / Upload More
+                          <a href="{{ url_for('admin.questions_set_manage', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type=selected_type, category=selected_category, folder=selected_folder, set=s.name) }}" class="flex items-center gap-2 px-4 py-3 text-sm font-bold text-indigo-700 hover:bg-indigo-50 border-b border-gray-50 transition-colors">
+                              📝 Edit / Upload
                           </a>
                           <button @click.prevent="openRename('{{ s.name|escape }}'); menuOpen = false" class="w-full flex items-center gap-2 text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition-colors">
                               ✏️ Rename
@@ -344,8 +351,7 @@
                       <span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded">M: {{ s.marks }}</span>
                       <span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded">N: -{{ s.negative_marks }}</span>
                   </div>
-                  <!-- Click anywhere on card bottom to open Edit page -->
-                  <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type=selected_type, category=selected_category, folder=selected_folder, set=s.name) }}" class="text-sm font-bold text-indigo-600 hover:underline">
+                  <a href="{{ url_for('admin.questions_set_manage', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type=selected_type, category=selected_category, folder=selected_folder, set=s.name) }}" class="text-sm font-bold text-indigo-600 hover:underline">
                       Open Quiz &rarr;
                   </a>
               </div>
@@ -367,7 +373,18 @@
               <p class="text-sm font-medium text-gray-500 mb-6">e.g., "Basic Math - 1"</p>
               
               <label class="block text-sm font-bold text-indigo-900 mb-2">{{ 'PYQ Name' if selected_type == 'pyq' else 'MCQ Name' }} <span class="text-red-500">*</span></label>
-              <input type="text" x-model="newName" placeholder="Enter quiz name..." class="w-full rounded-xl border-2 border-gray-200 px-4 py-3.5 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-6 text-lg">
+              <input type="text" x-model="newName" placeholder="Enter quiz name..." class="w-full rounded-xl border-2 border-gray-200 px-4 py-3.5 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-4">
+              
+              <div class="grid grid-cols-2 gap-4 mb-6">
+                  <div>
+                      <label class="block text-sm font-bold text-indigo-900 mb-2">Marks</label>
+                      <input type="number" x-model.number="form.marks" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
+                  </div>
+                  <div>
+                      <label class="block text-sm font-bold text-indigo-900 mb-2">Negative Marks</label>
+                      <input type="number" step="0.25" x-model.number="form.negative" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
+                  </div>
+              </div>
               
               <div class="flex gap-3">
                   <button @click="createOpen = false" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
@@ -495,7 +512,12 @@
               try {
                   const res = await fetch('/admin/questions/folder/create', {
                       method: 'POST', headers: {'Content-Type': 'application/json'},
-                      body: JSON.stringify({name: this.newName})
+                      body: JSON.stringify({
+                          name: this.newName, 
+                          chapter_id: '{{ selected_chapter_id }}', 
+                          type: '{{ selected_type }}', 
+                          category: '{{ selected_category }}'
+                      })
                   });
                   const data = await res.json();
                   if(data.ok) {
@@ -511,7 +533,12 @@
               try {
                   const res = await fetch('/admin/questions/folder/rename', {
                       method: 'POST', headers: {'Content-Type': 'application/json'},
-                      body: JSON.stringify({ old_name: this.oldName, new_name: this.newName, chapter_id: '{{ selected_chapter_id }}', type: '{{ selected_type }}' })
+                      body: JSON.stringify({ 
+                          old_name: this.oldName, new_name: this.newName, 
+                          chapter_id: '{{ selected_chapter_id }}', 
+                          type: '{{ selected_type }}', 
+                          category: '{{ selected_category }}' 
+                      })
                   });
                   const data = await res.json();
                   if(data.ok) window.location.reload(); else alert(data.error);
@@ -523,7 +550,12 @@
               try {
                   const res = await fetch('/admin/questions/folder/delete', {
                       method: 'POST', headers: {'Content-Type': 'application/json'},
-                      body: JSON.stringify({ folder_name: this.targetName, chapter_id: '{{ selected_chapter_id }}', type: '{{ selected_type }}' })
+                      body: JSON.stringify({ 
+                          folder_name: this.targetName, 
+                          chapter_id: '{{ selected_chapter_id }}', 
+                          type: '{{ selected_type }}', 
+                          category: '{{ selected_category }}' 
+                      })
                   });
                   const data = await res.json();
                   if(data.ok) window.location.reload(); else alert(data.error);
@@ -538,8 +570,9 @@
       return {
           createOpen: false, renameOpen: false, deleteOpen: false,
           newName: '', oldName: '', targetName: '', isSaving: false,
+          form: { name: '', marks: 4, negative: 1 },
           
-          openCreate() { this.newName = ''; this.createOpen = true; },
+          openCreate() { this.form.name = ''; this.createOpen = true; },
           openRename(name) { this.oldName = name; this.newName = name; this.renameOpen = true; },
           openDelete(name) { this.targetName = name; this.deleteOpen = true; },
 
@@ -550,12 +583,20 @@
                       method: 'POST', headers: {'Content-Type': 'application/json'},
                       body: JSON.stringify({
                           chapter_id: '{{ selected_chapter_id }}', type: '{{ selected_type }}',
-                          folder_name: '{{ selected_folder }}', set_name: this.newName
+                          category: '{{ selected_category }}', folder_name: '{{ selected_folder }}', 
+                          set_name: this.form.name
                       })
                   });
                   const data = await res.json();
                   if(data.ok) {
-                      const url = new URL(window.location.href);
+                      // Redirect to the Deep Manage view
+                      const url = new URL(window.location.origin + '/admin/questions/set-manage');
+                      url.searchParams.set('stream_id', '{{ selected_stream_id }}');
+                      url.searchParams.set('subject_id', '{{ selected_subject_id }}');
+                      url.searchParams.set('chapter_id', '{{ selected_chapter_id }}');
+                      url.searchParams.set('type', '{{ selected_type }}');
+                      url.searchParams.set('category', '{{ selected_category }}');
+                      url.searchParams.set('folder', '{{ selected_folder }}');
                       url.searchParams.set('set', data.set_name);
                       window.location.href = url.toString();
                   } else alert(data.error);
@@ -569,7 +610,8 @@
                       method: 'POST', headers: {'Content-Type': 'application/json'},
                       body: JSON.stringify({
                           chapter_id: '{{ selected_chapter_id }}', type: '{{ selected_type }}',
-                          folder_name: '{{ selected_folder }}', old_name: this.oldName, new_name: this.newName
+                          category: '{{ selected_category }}', folder_name: '{{ selected_folder }}', 
+                          old_name: this.oldName, new_name: this.newName
                       })
                   });
                   const data = await res.json();
@@ -584,7 +626,8 @@
                       method: 'POST', headers: {'Content-Type': 'application/json'},
                       body: JSON.stringify({
                           chapter_id: '{{ selected_chapter_id }}', type: '{{ selected_type }}',
-                          folder_name: '{{ selected_folder }}', set_name: this.targetName
+                          category: '{{ selected_category }}', folder_name: '{{ selected_folder }}', 
+                          set_name: this.targetName
                       })
                   });
                   const data = await res.json();
