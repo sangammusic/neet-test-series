@@ -1,16 +1,23 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ chapter.name }} — {{ 'PYQ' if mode == 'pyq' else 'MCQ' }}{% endblock %}
+
 {% block content %}
 <section class="max-w-2xl mx-auto px-6 pt-12 pb-24">
   <p class="text-gold font-semibold text-sm mb-2">{{ chapter.name }}</p>
-  <h1 class="font-display text-2xl font-semibold text-ink mb-8">{{ 'PYQ Practice' if mode == 'pyq' else 'MCQ Practice' }}</h1>
+  <h1 class="font-display text-2xl font-semibold text-ink mb-8">
+    {{ 'PYQ Practice' if mode == 'pyq' else 'MCQ Practice' }}
+  </h1>
+  
   <div class="grid sm:grid-cols-2 gap-6">
-    <a href="{{ url_for('user.practice_topics', slug=stream.slug, chapter_id=chapter.id, mode=mode) }}"
+    <!-- TOPIC-WISE BUTTON (Points to Folders list with category='topic') -->
+    <a href="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category='topic') }}"
        class="block p-8 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-md transition-all bg-white text-center">
       <p class="font-display text-lg font-semibold text-ink">Topic-wise Practice</p>
       <p class="text-sm text-ink/60 mt-1">Pick a specific topic to drill</p>
     </a>
-    <a href="{{ url_for('user.practice_run', slug=stream.slug, chapter_id=chapter.id, mode=mode) }}"
+    
+    <!-- RANDOM BUTTON (Points to Folders list with category='random') -->
+    <a href="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category='random') }}"
        class="block p-8 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-md transition-all bg-white text-center">
       <p class="font-display text-lg font-semibold text-ink">Random {{ 'PYQ' if mode == 'pyq' else 'Chapter' }} Practice</p>
       <p class="text-sm text-ink/60 mt-1">Mixed questions from the whole chapter</p>
