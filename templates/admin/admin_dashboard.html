@@ -1,8 +1,12 @@
 {% extends "shared/base.html" %}
 {% block title %}Admin Dashboard — SANGAM STUDY{% endblock %}
 
+<!-- SANGAM FIX: Override default student nav with admin nav -->
+{% block nav %}
+    {% include "admin/_admin_nav.html" %}
+{% endblock %}
+
 {% block content %}
-{% include "admin/_admin_nav.html" %}
 
 <!-- PREMIUM DARK WRAPPER - Inspired by your UI Design -->
 <div class="bg-[#080b12] min-h-screen -mt-2 pb-24 font-body text-gray-200 relative overflow-hidden">
