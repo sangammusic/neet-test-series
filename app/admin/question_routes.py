@@ -2,10 +2,11 @@
 Chapter-wise question bank admin (`questions` table).
 
 Upgraded for SANGAM STUDY HUB:
-- "Alaukik" Architecture: Folder -> Quiz -> Deep Questions Edit
+- Folder-in-Folder Architecture (Topic = Folder)
+- Inline API creation for Streams, Subjects, Chapters
+- Item Management APIs (Rename & Safe Delete)
 - Deep Storage Cleanup for Folder & Chapter Deletion
 - Strict Subject/Topic Locking during Bulk Upload
-- Inline Item Management APIs (Create, Rename & Safe Delete)
 """
 import json
 import logging
@@ -49,7 +50,7 @@ def _delete_image_from_storage(image_url):
 def _validate_bulk_question(raw, difficulty_ids, chapter_id, default_marks=4.0, default_negative=1.0):
     """
     Validates + normalizes one question dict from the bulk-paste JSON.
-    SANGAM FIX: Removed pyq_year validation completely to support the new unified UI.
+    Enforces the MCQ vs PYQ rule, and handles Custom Book/Topic names seamlessly.
     """
     if not isinstance(raw, dict):
         return None, "not a JSON object"
@@ -74,10 +75,18 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id, default_marks=4.0, 
         return None, f"question_type must be 'mcq' or 'pyq', got {raw.get('question_type')!r}"
     is_pyq = (question_type == "pyq")
 
-    # EXAM YEAR LOGIC COMPLETELY REMOVED (As per new UI rules, forces None)
-    pyq_year = None
+    pyq_year = raw.get("pyq_year")
+    if is_pyq:
+        if pyq_year in (None, ""):
+            return None, "question_type is 'pyq' but pyq_year is missing"
+        try:
+            pyq_year = int(pyq_year)
+        except (TypeError, ValueError):
+            return None, f"pyq_year must be an integer, got {pyq_year!r}"
+    else:
+        pyq_year = None
 
-    # Topic Name acts as the Combined Folder::Quiz mapping string
+    # Topic Name acts as the Virtual FOLDER
     topic_name = str(raw.get("topic_name", "")).strip() or "General / Uncategorized"
 
     image_url = str(raw.get("image_url", "")).strip() if raw.get("image_url") else None
@@ -239,7 +248,6 @@ def questions_bulk_upload():
 @admin_bp.route("/questions/folder/rename", methods=["POST"])
 @admin_required
 def questions_folder_rename():
-    """Handles renaming of the newly structured Folder::Quiz format"""
     data = request.json
     old_name = str(data.get("old_name", "")).strip()
     new_name = str(data.get("new_name", "")).strip()
@@ -258,7 +266,6 @@ def questions_folder_rename():
 @admin_bp.route("/questions/folder/delete", methods=["POST"])
 @admin_required
 def questions_folder_delete():
-    """Nuclear wipe of a specific Folder::Quiz structure and its bucket images"""
     data = request.json
     folder_name = str(data.get("folder_name", "")).strip()
     chapter_id = data.get("chapter_id")
@@ -378,6 +385,7 @@ def api_delete_stream():
     stream_id = request.json.get("id")
     if not stream_id: return jsonify({"ok": False, "error": "Stream ID required"}), 400
     try:
+        # Prevent accidental mass wipe
         subs = supabase_admin.table("subjects").select("id").eq("stream_id", stream_id).execute().data
         if subs:
             return jsonify({"ok": False, "error": f"Blocked: Stream contains {len(subs)} subjects. Please delete them first."}), 400
@@ -392,6 +400,7 @@ def api_delete_subject():
     subject_id = request.json.get("id")
     if not subject_id: return jsonify({"ok": False, "error": "Subject ID required"}), 400
     try:
+        # Prevent accidental mass wipe
         chaps = supabase_admin.table("chapters").select("id").eq("subject_id", subject_id).execute().data
         if chaps:
             return jsonify({"ok": False, "error": f"Blocked: Subject contains {len(chaps)} chapters. Please delete them first."}), 400
@@ -406,18 +415,22 @@ def api_delete_chapter():
     chapter_id = request.json.get("id")
     if not chapter_id: return jsonify({"ok": False, "error": "Chapter ID required"}), 400
     try:
+        # Complete Deep Wipe: Questions & Storage Images
         qs = supabase_admin.table("questions").select("id, image_url").eq("chapter_id", chapter_id).execute().data
         
+        # 1. Delete images from bucket
         img_paths = [q["image_url"].split("question-images/")[1].split("?")[0] for q in qs if q.get("image_url") and "question-images/" in q["image_url"]]
         if img_paths:
             for j in range(0, len(img_paths), 50):
                 try: supabase_admin.storage.from_(BUCKET_NAME).remove(img_paths[j:j+50])
                 except: pass
         
+        # 2. Batch delete question rows
         q_ids = [q["id"] for q in qs]
         for i in range(0, len(q_ids), 40):
             supabase_admin.table("questions").delete().in_("id", q_ids[i:i+40]).execute()
             
+        # 3. Finally delete the chapter
         supabase_admin.table("chapters").delete().eq("id", chapter_id).execute()
         return jsonify({"ok": True})
     except Exception as e:
