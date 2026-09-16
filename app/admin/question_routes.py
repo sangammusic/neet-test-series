@@ -15,6 +15,8 @@ the old topic_name system, just one level deeper.
 - Item Management APIs (Rename & Safe Delete)
 - Deep Storage Cleanup for Folder & Quiz & Chapter Deletion
 - Strict Subject/Topic Locking during Bulk Upload
+- SANGAM FIX: Category Isolation (Topic-wise vs Random)
+- SANGAM FIX: Undo Chunk Route added for seamless error correction
 """
 import json
 import logging
@@ -90,17 +92,15 @@ def _bulk_delete_questions_and_images(question_rows):
     return len(question_ids)
 
 
-def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_name,
+def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_name, category,
                              default_marks=4.0, default_negative=1.0):
     """
     Validates + normalizes one question dict from the bulk-paste JSON.
-    Enforces the MCQ vs PYQ rule. folder_name/set_name come from the
+    Enforces the MCQ vs PYQ rule. folder_name/set_name/category come from the
     route (the quiz the admin is currently inside), NOT from the
-    pasted JSON, so a stray field in someone's paste can never move a
-    question into the wrong quiz.
+    pasted JSON.
 
-    PYQ year is a per-question OPTIONAL field — never mandatory at
-    the form/quiz level (admin explicitly asked to remove it there).
+    PYQ year is a per-question OPTIONAL field.
     """
     if not isinstance(raw, dict):
         return None, "not a JSON object"
@@ -150,9 +150,10 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_na
     payload = {
         "chapter_id": chapter_id,
         "difficulty_id": difficulty_id,
+        "category": category, # Strictly mapped from route
         "folder_name": folder_name,
         "set_name": set_name,
-        "topic_name": set_name,  # kept in sync for backward-compat with any old reads
+        "topic_name": set_name,  # kept in sync for backward-compat
         "question_text": str(raw["question_text"]).strip(),
         "option_a": str(raw["option_a"]).strip(),
         "option_b": str(raw["option_b"]).strip(),
@@ -171,19 +172,19 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_na
     return payload, None
 
 
-def _fetch_set_questions(chapter_id, is_pyq, folder_name, set_name):
-    """Shared fetch for the question list inside one quiz (set)."""
+def _fetch_set_questions(chapter_id, is_pyq, category, folder_name, set_name):
+    """Shared fetch for the question list inside one quiz (set) strictly by category."""
     try:
         return supabase_admin.table("questions").select(
-            "id, question_text, is_pyq, pyq_year, folder_name, set_name, is_premium, "
+            "id, question_text, is_pyq, pyq_year, category, folder_name, set_name, is_premium, "
             "difficulty_id, has_image, image_url, marks, negative_marks"
-        ).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("folder_name", folder_name).eq("set_name", set_name).order("created_at", desc=True).execute().data
+        ).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).order("created_at", desc=True).execute().data
     except Exception as e:
         if "marks" in str(e) or "column" in str(e).lower():
             return supabase_admin.table("questions").select(
-                "id, question_text, is_pyq, pyq_year, folder_name, set_name, is_premium, "
+                "id, question_text, is_pyq, pyq_year, category, folder_name, set_name, is_premium, "
                 "difficulty_id, has_image, image_url"
-            ).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("folder_name", folder_name).eq("set_name", set_name).order("created_at", desc=True).execute().data
+            ).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).order("created_at", desc=True).execute().data
         raise
 
 
@@ -199,7 +200,7 @@ def questions_list():
     subject_id = request.args.get("subject_id")
     chapter_id = request.args.get("chapter_id")
     q_type = request.args.get("type")          # 'mcq' or 'pyq'
-    category = request.args.get("category")    # 'topic' or 'random' (informational only, no DB column)
+    category = request.args.get("category")    # 'topic' or 'random'
     folder_name = request.args.get("folder")   # VIEW 1 -> VIEW 2
     set_name = request.args.get("set")         # VIEW 2 -> VIEW 3 (redirects to set-manage page)
 
@@ -215,12 +216,12 @@ def questions_list():
     if chapter_id:
         chapter = supabase_admin.table("chapters").select("id, name").eq("id", chapter_id).single().execute().data
 
-    if chapter_id and q_type:
+    if chapter_id and q_type and category:
         is_pyq = (q_type == "pyq")
 
         if not folder_name:
-            # VIEW 1: Folder List — distinct folder_name values for this chapter+type
-            rows = supabase_admin.table("questions").select("folder_name").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).execute().data
+            # VIEW 1: Folder List — strictly filtered by category
+            rows = supabase_admin.table("questions").select("folder_name").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).execute().data
             seen = []
             for r in rows:
                 fn = r.get("folder_name") or DEFAULT_FOLDER
@@ -229,8 +230,8 @@ def questions_list():
             folders = sorted(seen)
 
         elif not set_name:
-            # VIEW 2: Quiz (Set) List — distinct set_name values inside this folder
-            rows = supabase_admin.table("questions").select("set_name, marks, negative_marks").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("folder_name", folder_name).execute().data
+            # VIEW 2: Quiz (Set) List — inside folder and category
+            rows = supabase_admin.table("questions").select("set_name, marks, negative_marks").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).execute().data
             grouped = {}
             for r in rows:
                 sn = r.get("set_name") or DEFAULT_FOLDER
@@ -240,8 +241,7 @@ def questions_list():
             sets = sorted(grouped.values(), key=lambda x: x["name"])
 
         else:
-            # A direct link landed on VIEW 3 params — send to the
-            # dedicated set-manage page instead of rendering it here.
+            # A direct link landed on VIEW 3 params — send to the dedicated page
             return redirect(url_for(
                 "admin.questions_set_manage",
                 stream_id=stream_id, subject_id=subject_id, chapter_id=chapter_id,
@@ -275,13 +275,13 @@ def questions_set_manage():
     folder_name = request.args.get("folder")
     set_name = request.args.get("set")
 
-    if not all([chapter_id, q_type, folder_name, set_name]):
+    if not all([chapter_id, q_type, category, folder_name, set_name]):
         flash("Missing quiz context — please open a quiz from the folder list.", "error")
         return redirect(url_for("admin.questions_list", stream_id=stream_id, subject_id=subject_id, chapter_id=chapter_id))
 
     chapter = supabase_admin.table("chapters").select("id, name").eq("id", chapter_id).single().execute().data
     is_pyq = (q_type == "pyq")
-    questions = _fetch_set_questions(chapter_id, is_pyq, folder_name, set_name)
+    questions = _fetch_set_questions(chapter_id, is_pyq, category, folder_name, set_name)
     difficulty_levels = supabase_admin.table("difficulty_levels").select("id, name").order("display_order").execute().data
 
     return render_template(
@@ -301,6 +301,7 @@ def questions_set_manage():
 def questions_bulk_upload():
     if request.is_json:
         chapter_id = request.json.get("chapter_id")
+        category = request.json.get("category")
         folder_name = str(request.json.get("folder_name", "")).strip()
         set_name = str(request.json.get("set_name", "")).strip()
         default_marks = request.json.get("marks", 4)
@@ -309,6 +310,7 @@ def questions_bulk_upload():
         raw_json = json.dumps(raw_json_data) if isinstance(raw_json_data, list) else str(raw_json_data or "").strip()
     else:
         chapter_id = request.form.get("chapter_id")
+        category = request.form.get("category")
         folder_name = str(request.form.get("folder_name", "")).strip()
         set_name = str(request.form.get("set_name", "")).strip()
         default_marks = request.form.get("marks", 4)
@@ -318,8 +320,8 @@ def questions_bulk_upload():
     if not chapter_id:
         return jsonify({"ok": False, "error": "Chapter must be selected before uploading."}), 400
 
-    if not folder_name or not set_name:
-        return jsonify({"ok": False, "error": "Folder and Quiz must be selected before uploading."}), 400
+    if not folder_name or not set_name or not category:
+        return jsonify({"ok": False, "error": "Folder, Category, and Quiz must be selected before uploading."}), 400
 
     try:
         parsed = json.loads(raw_json)
@@ -333,17 +335,15 @@ def questions_bulk_upload():
 
     valid_payloads, errors = [], []
     for i, raw in enumerate(parsed, start=1):
-        payload, error = _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_name, default_marks, default_negative)
+        payload, error = _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_name, category, default_marks, default_negative)
         if error:
             errors.append(f"row {i}: {error}")
         else:
             valid_payloads.append(payload)
 
-    # DUPLICATE DETECTION LOGIC — scoped to this exact quiz/set, so
-    # the same question text can legitimately exist in two different
-    # quizzes without tripping this check.
+    # DUPLICATE DETECTION LOGIC — scoped to this exact quiz/set/category
     if valid_payloads:
-        existing_questions = supabase_admin.table("questions").select("question_text").eq("chapter_id", chapter_id).eq("folder_name", folder_name).eq("set_name", set_name).execute().data
+        existing_questions = supabase_admin.table("questions").select("question_text").eq("chapter_id", chapter_id).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).execute().data
         existing_texts = {q["question_text"].strip().lower() for q in existing_questions if q.get("question_text")}
 
         incoming_texts = set()
@@ -373,10 +373,35 @@ def questions_bulk_upload():
             else:
                 return jsonify({"ok": False, "error": f"DB Upload failed: {exc}"}), 500
 
-    resp = {"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "errors": errors}
+    resp = {"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "inserted_ids": inserted_ids, "errors": errors}
     if warning_msg:
         resp["warning"] = warning_msg
     return jsonify(resp)
+
+
+# ==========================================
+# SANGAM FIX: UNDO CHUNK ROUTE
+# ==========================================
+@admin_bp.route("/questions/set/undo-chunk", methods=["POST"])
+@admin_required
+def questions_undo_chunk():
+    """
+    PERMANENT DELETION ROUTE. 
+    Accepts an array of question_ids and wipes them from the database, 
+    AND deletes any attached images from the Storage Bucket.
+    """
+    payload = request.json or {}
+    question_ids = payload.get("question_ids")
+    
+    if not question_ids or not isinstance(question_ids, list):
+        return jsonify({"ok": False, "error": "No valid question IDs provided for undo."}), 400
+    
+    try:
+        rows = supabase_admin.table("questions").select("id, image_url").in_("id", question_ids).execute().data
+        _bulk_delete_questions_and_images(rows)
+        return jsonify({"ok": True, "message": "Chunk successfully undone and wiped."})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 # ==========================================
@@ -385,13 +410,6 @@ def questions_bulk_upload():
 @admin_bp.route("/questions/folder/create", methods=["POST"])
 @admin_required
 def questions_folder_create():
-    """
-    A folder only becomes a real row once the first quiz/question is
-    saved into it (there is no standalone folders table). 'Create'
-    here just validates the name and hands it back; the frontend then
-    routes straight into that (empty) Quiz List, from where the admin
-    creates the first quiz.
-    """
     data = request.json or {}
     name = str(data.get("name", "")).strip()
     if not name:
@@ -407,13 +425,14 @@ def questions_folder_rename():
     new_name = str(data.get("new_name", "")).strip()
     chapter_id = data.get("chapter_id")
     q_type = data.get("type")
+    category = data.get("category")
 
-    if not all([old_name, new_name, chapter_id, q_type]):
+    if not all([old_name, new_name, chapter_id, q_type, category]):
         return jsonify({"ok": False, "error": "Missing required data."}), 400
 
     try:
         is_pyq = (q_type == "pyq")
-        supabase_admin.table("questions").update({"folder_name": new_name}).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("folder_name", old_name).execute()
+        supabase_admin.table("questions").update({"folder_name": new_name}).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", old_name).execute()
         return jsonify({"ok": True})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
@@ -426,13 +445,14 @@ def questions_folder_delete():
     folder_name = str(data.get("folder_name", "")).strip()
     chapter_id = data.get("chapter_id")
     q_type = data.get("type")
+    category = data.get("category")
 
-    if not folder_name or not chapter_id or not q_type:
+    if not all([folder_name, chapter_id, q_type, category]):
         return jsonify({"ok": False, "error": "Missing folder or chapter data."}), 400
 
     try:
         is_pyq = (q_type == "pyq")
-        rows = supabase_admin.table("questions").select("id, image_url").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("folder_name", folder_name).execute().data
+        rows = supabase_admin.table("questions").select("id, image_url").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).execute().data
         _bulk_delete_questions_and_images(rows)
         return jsonify({"ok": True})
     except Exception as exc:
@@ -445,25 +465,19 @@ def questions_folder_delete():
 @admin_bp.route("/questions/set/create", methods=["POST"])
 @admin_required
 def questions_set_create():
-    """
-    Like folders, a quiz/set only becomes a real row once the first
-    question is uploaded into it. 'Create' here validates the name is
-    unique within the folder and hands it back; the frontend then
-    routes into the (empty) Deep Question Edit page for that set,
-    where the upload box lives.
-    """
     data = request.json or {}
     chapter_id = data.get("chapter_id")
     folder_name = str(data.get("folder_name", "")).strip()
     set_name = str(data.get("set_name", "")).strip()
     q_type = data.get("type")
+    category = data.get("category")
 
-    if not all([chapter_id, folder_name, set_name, q_type]):
+    if not all([chapter_id, folder_name, set_name, q_type, category]):
         return jsonify({"ok": False, "error": "Missing required data."}), 400
 
     try:
         is_pyq = (q_type == "pyq")
-        existing = supabase_admin.table("questions").select("id").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("folder_name", folder_name).eq("set_name", set_name).limit(1).execute().data
+        existing = supabase_admin.table("questions").select("id").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).limit(1).execute().data
         if existing:
             return jsonify({"ok": False, "error": f"A quiz named '{set_name}' already exists in this folder."}), 400
         return jsonify({"ok": True, "set_name": set_name})
@@ -480,16 +494,17 @@ def questions_set_rename():
     old_name = str(data.get("old_name", "")).strip()
     new_name = str(data.get("new_name", "")).strip()
     q_type = data.get("type")
+    category = data.get("category")
 
-    if not all([chapter_id, folder_name, old_name, new_name, q_type]):
+    if not all([chapter_id, folder_name, old_name, new_name, q_type, category]):
         return jsonify({"ok": False, "error": "Missing required data."}), 400
 
     try:
         is_pyq = (q_type == "pyq")
-        existing = supabase_admin.table("questions").select("id").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("folder_name", folder_name).eq("set_name", new_name).limit(1).execute().data
+        existing = supabase_admin.table("questions").select("id").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", new_name).limit(1).execute().data
         if existing:
             return jsonify({"ok": False, "error": f"A quiz named '{new_name}' already exists in this folder."}), 400
-        supabase_admin.table("questions").update({"set_name": new_name, "topic_name": new_name}).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("folder_name", folder_name).eq("set_name", old_name).execute()
+        supabase_admin.table("questions").update({"set_name": new_name, "topic_name": new_name}).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", old_name).execute()
         return jsonify({"ok": True})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
@@ -503,13 +518,14 @@ def questions_set_delete():
     folder_name = str(data.get("folder_name", "")).strip()
     set_name = str(data.get("set_name", "")).strip()
     q_type = data.get("type")
+    category = data.get("category")
 
-    if not all([chapter_id, folder_name, set_name, q_type]):
+    if not all([chapter_id, folder_name, set_name, q_type, category]):
         return jsonify({"ok": False, "error": "Missing required data."}), 400
 
     try:
         is_pyq = (q_type == "pyq")
-        rows = supabase_admin.table("questions").select("id, image_url").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("folder_name", folder_name).eq("set_name", set_name).execute().data
+        rows = supabase_admin.table("questions").select("id, image_url").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).execute().data
         _bulk_delete_questions_and_images(rows)
         return jsonify({"ok": True})
     except Exception as exc:
@@ -646,10 +662,10 @@ def api_delete_chapter():
 @admin_required
 def questions_edit(question_id):
     raw = request.json
-    old_q = supabase_admin.table("questions").select("chapter_id, folder_name, set_name, image_url, has_image").eq("id", question_id).single().execute().data
+    old_q = supabase_admin.table("questions").select("chapter_id, folder_name, set_name, category, image_url, has_image").eq("id", question_id).single().execute().data
     difficulty_ids = {d["id"] for d in supabase_admin.table("difficulty_levels").select("id").execute().data}
 
-    payload, error = _validate_bulk_question(raw, difficulty_ids, old_q["chapter_id"], old_q["folder_name"], old_q["set_name"])
+    payload, error = _validate_bulk_question(raw, difficulty_ids, old_q["chapter_id"], old_q["folder_name"], old_q["set_name"], old_q["category"])
     if error: return jsonify({"ok": False, "error": error}), 400
 
     if old_q.get("image_url") and not payload.get("has_image"):
