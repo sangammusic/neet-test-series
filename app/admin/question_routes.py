@@ -4,7 +4,8 @@ Chapter-wise question bank admin (`questions` table).
 Upgraded for SANGAM STUDY HUB:
 - Folder-in-Folder Architecture (Topic = Folder)
 - Inline API creation for Streams, Subjects, Chapters
-- Deep Storage Cleanup for Folder Deletion
+- Item Management APIs (Rename & Safe Delete)
+- Deep Storage Cleanup for Folder & Chapter Deletion
 - Strict Subject/Topic Locking during Bulk Upload
 """
 import json
@@ -169,9 +170,6 @@ def questions_list():
 @admin_bp.route("/questions/bulk-upload", methods=["POST"])
 @admin_required
 def questions_bulk_upload():
-    """
-    SANGAM STUDY HUB: Secure AJAX 25-Chunk Upload with Duplicate Detection
-    """
     is_ajax = request.args.get("ajax") == "1"
 
     if request.is_json:
@@ -245,12 +243,11 @@ def questions_bulk_upload():
 
 
 # ==========================================
-# FOLDER MANAGEMENT APIs (SANGAM EXCLUSIVE)
+# FOLDER MANAGEMENT APIs
 # ==========================================
 @admin_bp.route("/questions/folder/rename", methods=["POST"])
 @admin_required
 def questions_folder_rename():
-    """Renames a Virtual Folder by bulk updating 'topic_name' for that chapter."""
     data = request.json
     old_name = str(data.get("old_name", "")).strip()
     new_name = str(data.get("new_name", "")).strip()
@@ -269,10 +266,6 @@ def questions_folder_rename():
 @admin_bp.route("/questions/folder/delete", methods=["POST"])
 @admin_required
 def questions_folder_delete():
-    """
-    NUCLEAR FOLDER WIPE: Deletes all questions in a Topic Folder and completely 
-    erases all associated images from the Storage Bucket.
-    """
     data = request.json
     folder_name = str(data.get("folder_name", "")).strip()
     chapter_id = data.get("chapter_id")
@@ -281,7 +274,6 @@ def questions_folder_delete():
         return jsonify({"ok": False, "error": "Missing folder or chapter data."}), 400
 
     try:
-        # 1. Fetch images to destroy from bucket
         questions = supabase_admin.table("questions").select("id, image_url").eq("chapter_id", chapter_id).eq("topic_name", folder_name).execute().data
         question_ids = [q["id"] for q in questions]
         
@@ -291,15 +283,11 @@ def questions_folder_delete():
                 clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
                 image_paths.append(clean_path)
 
-        # 2. Batch wipe images from Supabase Storage (50 at a time)
         if image_paths:
             for i in range(0, len(image_paths), 50):
-                try:
-                    supabase_admin.storage.from_(BUCKET_NAME).remove(image_paths[i:i+50])
-                except Exception as e:
-                    logger.warning(f"Bucket delete error during folder wipe: {e}")
+                try: supabase_admin.storage.from_(BUCKET_NAME).remove(image_paths[i:i+50])
+                except Exception as e: logger.warning(f"Bucket delete error during folder wipe: {e}")
 
-        # 3. Batch delete rows from DB (40 at a time to prevent URI Too Long)
         if question_ids:
             for i in range(0, len(question_ids), 40):
                 chunk = question_ids[i:i+40]
@@ -311,8 +299,11 @@ def questions_folder_delete():
 
 
 # ==========================================
-# INLINE CREATION APIs (Quick Add)
+# INLINE ITEM MANAGEMENT APIs (SANGAM EXCLUSIVE)
+# (Create, Rename, Safe-Delete for Streams/Subjects/Chapters)
 # ==========================================
+
+# ----- CREATE APIS -----
 @admin_bp.route("/api/streams/create", methods=["POST"])
 @admin_required
 def api_create_stream():
@@ -344,6 +335,103 @@ def api_create_chapter():
     if not name or not subject_id: return jsonify({"ok": False, "error": "Name and Subject required"}), 400
     try:
         supabase_admin.table("chapters").insert({"name": name, "slug": _slugify(name), "subject_id": subject_id}).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ----- RENAME APIS -----
+@admin_bp.route("/api/streams/edit", methods=["POST"])
+@admin_required
+def api_edit_stream():
+    id = request.json.get("id")
+    name = request.json.get("name", "").strip()
+    if not id or not name: return jsonify({"ok": False, "error": "ID and Name required"}), 400
+    try:
+        supabase_admin.table("streams").update({"name": name, "slug": _slugify(name)}).eq("id", id).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@admin_bp.route("/api/subjects/edit", methods=["POST"])
+@admin_required
+def api_edit_subject():
+    id = request.json.get("id")
+    name = request.json.get("name", "").strip()
+    if not id or not name: return jsonify({"ok": False, "error": "ID and Name required"}), 400
+    try:
+        supabase_admin.table("subjects").update({"name": name, "slug": _slugify(name)}).eq("id", id).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@admin_bp.route("/api/chapters/edit", methods=["POST"])
+@admin_required
+def api_edit_chapter():
+    id = request.json.get("id")
+    name = request.json.get("name", "").strip()
+    if not id or not name: return jsonify({"ok": False, "error": "ID and Name required"}), 400
+    try:
+        supabase_admin.table("chapters").update({"name": name, "slug": _slugify(name)}).eq("id", id).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ----- SAFE DELETE APIS -----
+@admin_bp.route("/api/streams/delete", methods=["POST"])
+@admin_required
+def api_delete_stream():
+    stream_id = request.json.get("id")
+    if not stream_id: return jsonify({"ok": False, "error": "Stream ID required"}), 400
+    try:
+        # Prevent accidental mass wipe
+        subs = supabase_admin.table("subjects").select("id").eq("stream_id", stream_id).execute().data
+        if subs:
+            return jsonify({"ok": False, "error": f"Blocked: Stream contains {len(subs)} subjects. Please delete them first."}), 400
+        supabase_admin.table("streams").delete().eq("id", stream_id).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@admin_bp.route("/api/subjects/delete", methods=["POST"])
+@admin_required
+def api_delete_subject():
+    subject_id = request.json.get("id")
+    if not subject_id: return jsonify({"ok": False, "error": "Subject ID required"}), 400
+    try:
+        # Prevent accidental mass wipe
+        chaps = supabase_admin.table("chapters").select("id").eq("subject_id", subject_id).execute().data
+        if chaps:
+            return jsonify({"ok": False, "error": f"Blocked: Subject contains {len(chaps)} chapters. Please delete them first."}), 400
+        supabase_admin.table("subjects").delete().eq("id", subject_id).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@admin_bp.route("/api/chapters/delete", methods=["POST"])
+@admin_required
+def api_delete_chapter():
+    chapter_id = request.json.get("id")
+    if not chapter_id: return jsonify({"ok": False, "error": "Chapter ID required"}), 400
+    try:
+        # Complete Deep Wipe: Questions & Storage Images
+        qs = supabase_admin.table("questions").select("id, image_url").eq("chapter_id", chapter_id).execute().data
+        
+        # 1. Delete images from bucket
+        img_paths = [q["image_url"].split("question-images/")[1].split("?")[0] for q in qs if q.get("image_url") and "question-images/" in q["image_url"]]
+        if img_paths:
+            for j in range(0, len(img_paths), 50):
+                try: supabase_admin.storage.from_(BUCKET_NAME).remove(img_paths[j:j+50])
+                except: pass
+        
+        # 2. Batch delete question rows
+        q_ids = [q["id"] for q in qs]
+        for i in range(0, len(q_ids), 40):
+            supabase_admin.table("questions").delete().in_("id", q_ids[i:i+40]).execute()
+            
+        # 3. Finally delete the chapter
+        supabase_admin.table("chapters").delete().eq("id", chapter_id).execute()
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
