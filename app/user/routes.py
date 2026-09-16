@@ -1,11 +1,10 @@
 from flask import render_template, request, redirect, url_for, session, jsonify, abort, flash
 
 from app.user import user_bp
-from app.extensions import supabase_admin
+from app.extensions import supabase_admin, supabase_public
 from app.shared.models import (
     get_active_streams, get_streams_for_user_or_guest, get_stream_by_slug,
     get_subjects_for_stream, get_chapters_for_subject, get_chapter_by_id,
-    get_topics_for_chapter, get_questions_for_practice,
     get_all_tests_for_stream, get_test_by_id, get_test_syllabus,
     user_has_access_to_test, get_mock_questions_for_test,
     get_mock_question_ids_for_test, create_test_attempt, get_attempt_by_id,
@@ -101,7 +100,9 @@ def my_dashboard():
     return redirect(url_for("user.stream_select"))
 
 
-# ---------- Menu 1: Chapter-wise MCQ Practice ----------
+# ==========================================
+# MENU 1: CHAPTER-WISE MCQ/PYQ PRACTICE (8-LEVEL SANGAM FLOW)
+# ==========================================
 
 @user_bp.route("/streams/<slug>/practice")
 def practice_subjects(slug):
@@ -118,39 +119,100 @@ def practice_chapters(slug, subject_id):
 
 
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>")
-def practice_chapter_detail(slug, chapter_id):
+def practice_type(slug, chapter_id):
+    """Level 4: Select MCQ or PYQ"""
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
-    return render_template("practice_chapter_detail.html", stream=stream, chapter=chapter)
+    return render_template("practice_type.html", stream=stream, chapter=chapter)
 
 
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>")
-def practice_mode_select(slug, chapter_id, mode):
+def practice_category(slug, chapter_id, mode):
+    """Level 5: Select Topic-wise or Random"""
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
-    return render_template("practice_mode_select.html", stream=stream, chapter=chapter, mode=mode)
+    return render_template("practice_category.html", stream=stream, chapter=chapter, mode=mode)
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/topics")
-def practice_topics(slug, chapter_id, mode):
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>")
+def practice_folders(slug, chapter_id, mode, category):
+    """Level 6: Show Folders for the specific category"""
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
-    topics = get_topics_for_chapter(chapter_id, is_pyq=(mode == "pyq"))
-    return render_template("practice_topics.html", stream=stream, chapter=chapter, mode=mode, topics=topics)
+    is_pyq = (mode == "pyq")
+    
+    rows = supabase_public.table("questions").select("folder_name").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).execute().data
+    folders = sorted(list(set([r["folder_name"] for r in rows if r.get("folder_name")])))
+    
+    return render_template("practice_folders.html", stream=stream, chapter=chapter, mode=mode, category=category, folders=folders)
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/run")
-def practice_run(slug, chapter_id, mode):
-    topic_name = request.args.get("topic")
-    questions = get_questions_for_practice(chapter_id, is_pyq=(mode == "pyq"), topic_name=topic_name)
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>")
+def practice_sets(slug, chapter_id, mode, category, folder):
+    """Level 7: Show Quizzes inside the Folder"""
+    stream = get_stream_by_slug(slug)
+    chapter = get_chapter_by_id(chapter_id)
+    is_pyq = (mode == "pyq")
+    
+    rows = supabase_public.table("questions").select("set_name, is_premium").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder).execute().data
 
-    if any(q["is_premium"] for q in questions) and not is_logged_in():
+    set_dict = {}
+    for r in rows:
+        sn = r["set_name"]
+        if not sn: continue
+        if sn not in set_dict:
+            set_dict[sn] = {"name": sn, "count": 0, "is_premium": False}
+        set_dict[sn]["count"] += 1
+        if r.get("is_premium"):
+            set_dict[sn]["is_premium"] = True
+
+    sets = sorted(list(set_dict.values()), key=lambda x: x["name"])
+    return render_template("practice_sets.html", stream=stream, chapter=chapter, mode=mode, category=category, folder=folder, sets=sets)
+
+
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>")
+def practice_overview(slug, chapter_id, mode, category, folder, set_name):
+    """Level 8: Test Overview Page (Prevents answer leak, provides 'Start' button)"""
+    stream = get_stream_by_slug(slug)
+    chapter = get_chapter_by_id(chapter_id)
+    is_pyq = (mode == "pyq")
+
+    questions = supabase_public.table("questions").select("id, is_premium, marks").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder).eq("set_name", set_name).execute().data
+
+    if not questions:
+        abort(404)
+
+    is_premium = any(q.get("is_premium") for q in questions)
+    if is_premium and not is_logged_in():
         return render_template("practice_locked.html")
 
-    return render_template("practice_run.html", questions=questions, topic_name=topic_name)
+    total_questions = len(questions)
+    total_marks = sum(q.get("marks", 4) for q in questions)
+
+    return render_template("practice_overview.html", stream=stream, chapter=chapter, mode=mode, category=category, folder=folder, set_name=set_name, total_questions=total_questions, total_marks=total_marks, is_premium=is_premium)
 
 
-# ---------- Menu 2: Mock Test Series (PHASE 4: STRICT ISOLATION) ----------
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>/run")
+def practice_run(slug, chapter_id, mode, category, folder, set_name):
+    """Level 9: Actual Test Runner for Practice (No DB Saves)"""
+    stream = get_stream_by_slug(slug)
+    chapter = get_chapter_by_id(chapter_id)
+    is_pyq = (mode == "pyq")
+
+    questions = supabase_public.table("questions").select("*").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder).eq("set_name", set_name).order("id").execute().data
+
+    if not questions:
+        abort(404)
+
+    if any(q.get("is_premium") for q in questions) and not is_logged_in():
+        return render_template("practice_locked.html")
+
+    return render_template("practice_runner.html", stream=stream, chapter=chapter, mode=mode, category=category, folder=folder, set_name=set_name, questions=questions)
+
+
+# ==========================================
+# MENU 2: MOCK TEST SERIES (PHASE 4: STRICT ISOLATION)
+# ==========================================
 
 @user_bp.route("/streams/<slug>/tests")
 def tests_feed(slug):
