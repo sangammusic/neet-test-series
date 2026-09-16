@@ -528,7 +528,8 @@
                   if(data.ok) {
                       const url = new URL(window.location.href);
                       url.searchParams.set('folder', data.folder_name);
-                      window.location.href = url.toString();
+                      // SANGAM FIX: Use window.location.replace() to prevent history stacking
+                      window.location.replace(url.toString());
                   } else alert(data.error);
               } catch(e) { alert('Network Error'); }
               this.isSaving = false;
@@ -603,7 +604,8 @@
                       url.searchParams.set('category', '{{ selected_category }}');
                       url.searchParams.set('folder', '{{ selected_folder }}');
                       url.searchParams.set('set', data.set_name);
-                      window.location.href = url.toString();
+                      // SANGAM FIX: Use window.location.replace() to prevent history stacking
+                      window.location.replace(url.toString());
                   } else alert(data.error);
               } catch(e) { alert('Network Error'); }
               this.isSaving = false;
