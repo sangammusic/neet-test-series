@@ -434,6 +434,62 @@
 </div>
 
 <!-- ==========================================
+     QUICK-ADD & ITEM-MANAGE MODALS (SANGAM FIX ADDED HERE)
+     ========================================== -->
+
+<!-- 1. Quick Add Modal (Stream / Subject / Chapter) -->
+<div x-show="quickAdd.isOpen" x-cloak class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="quickAdd.isOpen = false">
+    <div class="bg-white rounded-3xl border border-gray-200 p-8 w-full max-w-md shadow-2xl relative">
+        <h3 class="font-display text-2xl font-bold text-ink mb-1" x-text="'Add New ' + quickAdd.type.charAt(0).toUpperCase() + quickAdd.type.slice(1)"></h3>
+        <p class="text-sm font-medium text-gray-500 mb-6">Enter the name for the new <span x-text="quickAdd.type"></span>.</p>
+        <input type="text" x-model="quickAdd.name" placeholder="Name..." class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-6 text-lg" @keyup.enter="submitQuickAdd()">
+        <div class="flex gap-3">
+            <button @click="quickAdd.isOpen = false" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
+            <button @click="submitQuickAdd()" :disabled="!quickAdd.name.trim() || quickAdd.isSaving" class="flex-1 bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md">
+                <span x-text="quickAdd.isSaving ? 'Creating...' : 'Create'"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 2. Item Manage Modal (Rename / Delete Stream, Subject, Chapter) -->
+<div x-show="itemManage.isOpen" x-cloak class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="itemManage.isOpen = false">
+    <div class="bg-white rounded-3xl border border-gray-200 p-8 w-full max-w-md shadow-2xl relative">
+        <!-- RENAME VIEW -->
+        <template x-if="itemManage.mode === 'rename'">
+            <div>
+                <h3 class="font-display text-2xl font-bold text-ink mb-1">Rename <span x-text="itemManage.type.charAt(0).toUpperCase() + itemManage.type.slice(1)"></span></h3>
+                <p class="text-sm font-medium text-gray-500 mb-6">Update the name below.</p>
+                <input type="text" x-model="itemManage.newName" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-6 text-lg" @keyup.enter="submitItemManage()">
+                <div class="flex gap-3">
+                    <button @click="itemManage.isOpen = false" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
+                    <button @click="submitItemManage()" :disabled="!itemManage.newName.trim() || itemManage.isSaving" class="flex-1 bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md">
+                        <span x-text="itemManage.isSaving ? 'Saving...' : 'Save Changes'"></span>
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <!-- DELETE VIEW -->
+        <template x-if="itemManage.mode === 'delete'">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200 text-red-600 text-3xl">⚠️</div>
+                <h3 class="font-display text-2xl font-bold text-red-600 mb-2">Delete <span x-text="itemManage.type.charAt(0).toUpperCase() + itemManage.type.slice(1)"></span>?</h3>
+                <p class="text-sm font-bold text-gray-600 mb-6 leading-relaxed">
+                    You are about to delete <span class="text-ink font-black bg-gray-100 px-2 rounded">"<span x-text="itemManage.oldName"></span>"</span>.<br><span class="text-red-600">This action cannot be undone. Proceed?</span>
+                </p>
+                <div class="flex gap-3">
+                    <button @click="itemManage.isOpen = false" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
+                    <button @click="submitItemManage()" :disabled="itemManage.isSaving" class="flex-1 bg-red-600 text-white font-bold py-3.5 rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors shadow-md">
+                        <span x-text="itemManage.isSaving ? 'Deleting...' : 'Yes, Delete'"></span>
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+
+<!-- ==========================================
      SCRIPTS & ALPINE.JS LOGIC
      ========================================== -->
 <script>
