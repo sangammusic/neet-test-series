@@ -10,13 +10,6 @@ values of the `folder_name` / `set_name` text columns on `questions`
 (see sql/migration_folder_set.sql). A folder or quiz only becomes
 visible once it has at least one question in it — same behavior as
 the old topic_name system, just one level deeper.
-
-- Inline API creation for Streams, Subjects, Chapters
-- Item Management APIs (Rename & Safe Delete)
-- Deep Storage Cleanup for Folder & Quiz & Chapter Deletion
-- Strict Subject/Topic Locking during Bulk Upload
-- SANGAM FIX: Category Isolation (Topic-wise vs Random)
-- SANGAM FIX: Undo Chunk Route added for seamless error correction
 """
 import json
 import logging
@@ -94,14 +87,6 @@ def _bulk_delete_questions_and_images(question_rows):
 
 def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_name, category,
                              default_marks=4.0, default_negative=1.0):
-    """
-    Validates + normalizes one question dict from the bulk-paste JSON.
-    Enforces the MCQ vs PYQ rule. folder_name/set_name/category come from the
-    route (the quiz the admin is currently inside), NOT from the
-    pasted JSON.
-
-    PYQ year is a per-question OPTIONAL field.
-    """
     if not isinstance(raw, dict):
         return None, "not a JSON object"
 
@@ -199,10 +184,10 @@ def questions_list():
     stream_id = request.args.get("stream_id")
     subject_id = request.args.get("subject_id")
     chapter_id = request.args.get("chapter_id")
-    q_type = request.args.get("type")          # 'mcq' or 'pyq'
-    category = request.args.get("category")    # 'topic' or 'random'
-    folder_name = request.args.get("folder")   # VIEW 1 -> VIEW 2
-    set_name = request.args.get("set")         # VIEW 2 -> VIEW 3 (redirects to set-manage page)
+    q_type = request.args.get("type")          
+    category = request.args.get("category")    
+    folder_name = request.args.get("folder")   
+    set_name = request.args.get("set")         
 
     subjects, chapters, chapter = [], [], None
     folders, sets = [], []
@@ -241,7 +226,6 @@ def questions_list():
             sets = sorted(grouped.values(), key=lambda x: x["name"])
 
         else:
-            # A direct link landed on VIEW 3 params — send to the dedicated page
             return redirect(url_for(
                 "admin.questions_set_manage",
                 stream_id=stream_id, subject_id=subject_id, chapter_id=chapter_id,
@@ -262,7 +246,7 @@ def questions_list():
 
 
 # ==========================================
-# VIEW 3 PAGE ROUTE — Deep Question Edit (inside one quiz)
+# VIEW 3 PAGE ROUTE — Deep Question Edit
 # ==========================================
 @admin_bp.route("/questions/set-manage")
 @admin_required
@@ -341,7 +325,6 @@ def questions_bulk_upload():
         else:
             valid_payloads.append(payload)
 
-    # DUPLICATE DETECTION LOGIC — scoped to this exact quiz/set/category
     if valid_payloads:
         existing_questions = supabase_admin.table("questions").select("question_text").eq("chapter_id", chapter_id).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).execute().data
         existing_texts = {q["question_text"].strip().lower() for q in existing_questions if q.get("question_text")}
@@ -379,17 +362,9 @@ def questions_bulk_upload():
     return jsonify(resp)
 
 
-# ==========================================
-# SANGAM FIX: UNDO CHUNK ROUTE
-# ==========================================
 @admin_bp.route("/questions/set/undo-chunk", methods=["POST"])
 @admin_required
 def questions_undo_chunk():
-    """
-    PERMANENT DELETION ROUTE. 
-    Accepts an array of question_ids and wipes them from the database, 
-    AND deletes any attached images from the Storage Bucket.
-    """
     payload = request.json or {}
     question_ids = payload.get("question_ids")
     
@@ -405,7 +380,7 @@ def questions_undo_chunk():
 
 
 # ==========================================
-# FOLDER MANAGEMENT APIs (Level 1)
+# FOLDER MANAGEMENT APIs
 # ==========================================
 @admin_bp.route("/questions/folder/create", methods=["POST"])
 @admin_required
@@ -414,6 +389,8 @@ def questions_folder_create():
     name = str(data.get("name", "")).strip()
     if not name:
         return jsonify({"ok": False, "error": "Folder name is required."}), 400
+    # SANGAM NOTE: Folder is ONLY verified here, NOT saved to DB. 
+    # Frontend JS redirects to upload to make the folder "real".
     return jsonify({"ok": True, "folder_name": name})
 
 
@@ -460,7 +437,7 @@ def questions_folder_delete():
 
 
 # ==========================================
-# QUIZ / SET MANAGEMENT APIs (Level 2 — inside a Folder)
+# QUIZ / SET MANAGEMENT APIs
 # ==========================================
 @admin_bp.route("/questions/set/create", methods=["POST"])
 @admin_required
@@ -533,11 +510,9 @@ def questions_set_delete():
 
 
 # ==========================================
-# INLINE ITEM MANAGEMENT APIs (SANGAM EXCLUSIVE)
-# (Create, Rename, Safe-Delete for Streams/Subjects/Chapters)
+# INLINE ITEM MANAGEMENT APIs
 # ==========================================
 
-# ----- CREATE APIS -----
 @admin_bp.route("/api/streams/create", methods=["POST"])
 @admin_required
 def api_create_stream():
@@ -574,7 +549,6 @@ def api_create_chapter():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-# ----- RENAME APIS -----
 @admin_bp.route("/api/streams/edit", methods=["POST"])
 @admin_required
 def api_edit_stream():
@@ -612,7 +586,6 @@ def api_edit_chapter():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-# ----- SAFE DELETE APIS -----
 @admin_bp.route("/api/streams/delete", methods=["POST"])
 @admin_required
 def api_delete_stream():
