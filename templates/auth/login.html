@@ -6,14 +6,17 @@
   <p class="text-ink/60 mb-8">Log in to continue your prep.</p>
 
   <form method="POST" class="space-y-5">
+    
+    <!-- SANGAM FIX: Changed to Username -->
     <div>
-      <label class="block text-sm font-medium text-ink mb-1">Email</label>
-      <input type="email" name="email" required
+      <label class="block text-sm font-medium text-ink mb-1">Username</label>
+      <input type="text" name="username" required placeholder="Enter your username"
              class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
     </div>
+
     <div>
       <label class="block text-sm font-medium text-ink mb-1">Password</label>
-      <input type="password" name="password" required
+      <input type="password" name="password" required placeholder="Enter your password"
              class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
     </div>
     <button type="submit"
