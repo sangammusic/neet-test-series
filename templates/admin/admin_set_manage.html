@@ -36,15 +36,18 @@
       <h1 class="font-display text-4xl text-ink font-bold mb-1">📝 {{ selected_set }}</h1>
       <p class="text-ink/60 text-sm font-medium">Deep Edit View: Manage questions, upload JSON chunks, and handle diagrams.</p>
     </div>
-    <div class="text-right">
-        <span class="text-xs bg-indigo-100 text-indigo-800 border border-indigo-200 px-3 py-1.5 rounded-lg font-bold shadow-sm">
-            Folder: 📁 {{ selected_folder }}
+    <div class="text-right flex flex-col items-end gap-2">
+        <span class="text-xs bg-indigo-100 text-indigo-800 border border-indigo-200 px-3 py-1.5 rounded-lg font-bold shadow-sm uppercase tracking-wider">
+            📁 {{ selected_folder }}
+        </span>
+        <span class="text-xs bg-gray-100 text-gray-600 border border-gray-200 px-3 py-1.5 rounded-lg font-bold shadow-sm uppercase tracking-wider">
+            {{ selected_category }}
         </span>
     </div>
   </div>
 
   <!-- ==========================================
-       UPLOAD ENGINE (25-CHUNK)
+       UPLOAD ENGINE (25-CHUNK WITH UNDO/REDO)
        ========================================== -->
   <div x-data="setUploader()" class="mb-14">
     <div class="bg-white border-2 border-indigo-100 rounded-2xl shadow-sm overflow-hidden">
@@ -85,13 +88,46 @@
                     Detected: <span x-text="qCount"></span> questions
                 </p>
                 <p x-show="errorMsg" class="text-red-600 font-bold bg-red-50 px-3 py-1 rounded shadow-sm border border-red-100" x-text="errorMsg"></p>
+                <p x-show="successMsg" class="text-green-700 font-bold bg-green-50 px-3 py-1 rounded shadow-sm border border-green-200" x-text="successMsg"></p>
             </div>
 
-            <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25"
-                    class="w-full md:w-auto bg-indigo-600 text-white font-bold py-3.5 px-10 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-3 text-lg ml-auto">
-                <svg x-show="isSaving" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                <span x-text="isSaving ? 'Uploading to DB...' : 'Upload & Save'"></span>
-            </button>
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4 mt-8 pt-6 border-t-2 border-gray-200">
+                <p class="text-sm font-bold text-gray-500">
+                    Session Uploads: <span x-text="sessionSaved" class="text-indigo-600 text-xl ml-2 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100"></span>
+                </p>
+                
+                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <!-- UPLOAD BUTTON -->
+                    <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25"
+                            class="flex-1 md:flex-none bg-indigo-600 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-3 text-lg">
+                        <svg x-show="isSaving" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span x-text="isSaving ? 'Saving...' : 'Upload Chunk'"></span>
+                    </button>
+
+                    <!-- UNDO BUTTON -->
+                    <button @click="undoLast()" 
+                            :disabled="isSaving || history.length === 0"
+                            class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white border-2 border-gray-300 text-gray-700 font-bold py-3.5 px-5 rounded-xl hover:bg-red-50 hover:text-red-700 hover:border-red-300 disabled:opacity-40 transition-all shadow-sm group" title="Undo last upload">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="transition-transform group-hover:-rotate-45" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/></svg>
+                        Undo
+                    </button>
+
+                    <!-- REDO BUTTON -->
+                    <button @click="redoLast()" 
+                            :disabled="isSaving || undoneHistory.length === 0"
+                            class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white border-2 border-gray-300 text-gray-700 font-bold py-3.5 px-5 rounded-xl hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 disabled:opacity-40 transition-all shadow-sm group" title="Redo last undo">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="transition-transform group-hover:rotate-45" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+                        Redo
+                    </button>
+
+                    <!-- REFRESH TO SEE EDITS BUTTON -->
+                    <button @click="window.location.reload()" 
+                            x-show="sessionSaved > 0" x-cloak
+                            class="w-full md:w-auto bg-emerald-600 text-white font-bold py-3.5 px-6 rounded-xl hover:bg-emerald-700 transition-all shadow-md flex items-center justify-center gap-2 border-2 border-emerald-700">
+                        🔄 Refresh List Below
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
   </div>
@@ -100,10 +136,10 @@
        QUESTIONS LIST & LIVE EDIT
        ========================================== -->
   <div class="mb-10">
-      <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center justify-between mb-6 border-b-2 border-gray-200 pb-4">
           <div>
             <h2 class="font-display text-3xl font-bold text-ink">Manage Uploaded Questions</h2>
-            <p class="text-sm font-bold text-gray-500 mt-1">Total Questions: {{ questions|length }}</p>
+            <p class="text-sm font-bold text-gray-500 mt-1">Total Questions in DB: {{ questions|length }}</p>
           </div>
           {% set pending = questions|selectattr('has_image')|rejectattr('image_url')|list %}
           {% if pending %}
@@ -128,14 +164,17 @@
                       {% if q.is_pyq %}<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-purple-100 text-purple-800 border border-purple-200 shadow-sm">PYQ {{ q.pyq_year }}</span>{% endif %}
                       {% if q.is_premium %}<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-yellow-100 text-yellow-800 border border-yellow-300 shadow-sm">💎 Premium</span>{% endif %}
                   </div>
-                  <p class="text-base font-medium text-ink leading-relaxed">{{ q.question_text }}</p>
+                  <!-- SANGAM STUDY HUB: Safe font rendering for long question texts without breaking layout -->
+                  <div class="text-sm font-medium text-ink bg-gray-50 p-4 rounded-xl border border-gray-200 overflow-hidden break-words leading-relaxed font-mono shadow-inner">
+                      {{ q.question_text | striptags | truncate(150) }}
+                  </div>
                   
                   <!-- Image Zone -->
                   <div class="mt-4" data-image-zone="true">
                     {% if q.has_image %}
                       {% if q.image_url %}
                       <div class="flex items-center gap-4 bg-white p-3 rounded-xl border-2 border-gray-100 shadow-sm w-fit" data-image-uploaded>
-                        <img src="{{ q.image_url }}" alt="" class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1">
+                        <img src="{{ q.image_url }}" alt="" class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1 bg-white">
                         <div class="flex flex-col gap-2">
                           <label class="text-xs font-bold bg-gray-50 border border-gray-300 shadow-sm text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 cursor-pointer transition-colors text-center">
                             🔄 Replace Image
@@ -235,13 +274,15 @@
       }, 4000);
   }
 
-  // APP 1: UPLOAD ENGINE
+  // APP 1: UPLOAD ENGINE WITH UNDO/REDO LOGIC
   function setUploader() {
     return {
-      jsonText: '', qCount: 0, showFormat: false, isSaving: false, errorMsg: '',
+      jsonText: '', qCount: 0, showFormat: false, isSaving: false, errorMsg: '', successMsg: '',
+      sessionSaved: 0,
+      history: [], undoneHistory: [], 
       
       validateInput() {
-        this.errorMsg = '';
+        this.errorMsg = ''; this.successMsg = '';
         try {
           if (this.jsonText.trim() === '' || this.jsonText.trim() === '[]') { this.qCount = 0; return; }
           const parsed = JSON.parse(this.jsonText);
@@ -250,14 +291,24 @@
         } catch (e) { this.errorMsg = 'Invalid JSON Syntax'; this.qCount = 0; }
       },
 
-      async saveChunk() {
-        if (this.qCount === 0 || this.qCount > 25) return;
-        this.isSaving = true; this.errorMsg = '';
+      async saveChunk(isRedo = false, redoPayload = null) {
+        let rawText = isRedo ? JSON.stringify(redoPayload) : this.jsonText.trim();
+        if (!rawText || rawText === '[]') return;
+
+        let parsedData;
         try {
-          const parsedData = JSON.parse(this.jsonText);
-          
-          // No need to inject subject_name here. The backend routes now explicitly
-          // handle chapter_id, folder_name, set_name dynamically.
+            parsedData = JSON.parse(rawText);
+        } catch(e) {
+            this.errorMsg = "Invalid JSON Syntax."; return;
+        }
+
+        if (parsedData.length > 25) {
+            this.errorMsg = "SANGAM RULES: Maximum 25 questions per chunk."; return;
+        }
+
+        this.isSaving = true; this.errorMsg = ''; this.successMsg = '';
+        
+        try {
           const payload = {
               chapter_id: '{{ selected_chapter_id }}',
               folder_name: '{{ selected_folder }}',
@@ -273,7 +324,27 @@
           const data = await res.json();
           
           if (data.ok) {
-            window.location.reload(); 
+            // Check if backend returned inserted_ids for Undo support
+            const insertedIds = data.inserted_ids || []; 
+            if (insertedIds.length === 0) {
+                console.warn("Backend did not return inserted_ids. Undo will not work correctly.");
+            }
+
+            this.history.push({
+                jsonPayload: parsedData,
+                insertedIds: insertedIds
+            });
+
+            if (!isRedo) {
+                this.undoneHistory = [];
+                this.jsonText = '[]';
+                this.qCount = 0;
+            }
+
+            this.sessionSaved += data.inserted;
+            this.successMsg = `✅ Uploaded ${data.inserted} questions! You can Undo, or refresh the page to view them below.`;
+            showSangamToast(this.successMsg);
+
           } else { 
             this.errorMsg = data.error || 'Server error occurred.'; 
           }
@@ -282,6 +353,50 @@
         } finally { 
             this.isSaving = false; 
         }
+      },
+
+      async undoLast() {
+          if (this.history.length === 0) return;
+          const lastAction = this.history.pop();
+          this.isSaving = true; this.errorMsg = ''; this.successMsg = '';
+
+          // If backend didn't return IDs, we can't undo via API
+          if (!lastAction.insertedIds || lastAction.insertedIds.length === 0) {
+              this.errorMsg = "Cannot Undo: Backend did not return inserted IDs. Please update backend.";
+              this.history.push(lastAction);
+              this.isSaving = false;
+              return;
+          }
+
+          try {
+              const res = await fetch(`/admin/questions/set/undo-chunk`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ question_ids: lastAction.insertedIds })
+              });
+              const data = await res.json();
+
+              if (data.ok) {
+                  this.undoneHistory.push(lastAction);
+                  this.sessionSaved -= lastAction.insertedIds.length;
+                  this.successMsg = "⏪ Undo successful. Chunk wiped from DB and Storage.";
+                  showSangamToast(this.successMsg);
+              } else {
+                  this.history.push(lastAction);
+                  this.errorMsg = "Failed to undo: " + (data.error || "Unknown error");
+              }
+          } catch(e) {
+              this.history.push(lastAction);
+              this.errorMsg = "Network Error during Undo.";
+          } finally {
+              this.isSaving = false;
+          }
+      },
+
+      async redoLast() {
+          if (this.undoneHistory.length === 0) return;
+          const redoAction = this.undoneHistory.pop();
+          await this.saveChunk(true, redoAction.jsonPayload);
       }
     };
   }
@@ -327,13 +442,13 @@
         const imgZone = row.querySelector('[data-image-zone]');
         imgZone.innerHTML = `
             <div class="flex items-center gap-4 bg-white p-3 rounded-xl border-2 border-gray-100 shadow-sm w-fit" data-image-uploaded>
-                <img src="${newImgUrl}" alt="Question Image" class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1">
+                <img src="${newImgUrl}" alt="Question Image" class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1 bg-white">
                 <div class="flex flex-col gap-2">
-                    <label class="text-xs font-bold bg-gray-50 border border-gray-300 shadow-sm text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 cursor-pointer transition-colors text-center">
-                        🔄 Replace Image
-                        <input type="file" accept="image/*" class="hidden" data-image-input>
-                    </label>
-                    <button type="button" class="text-xs font-bold text-red-600 hover:text-red-800 text-left px-1" data-remove-image>🗑️ Remove Image</button>
+                  <label class="text-xs font-bold bg-gray-50 border border-gray-300 shadow-sm text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 cursor-pointer transition-colors text-center">
+                    🔄 Replace Image
+                    <input type="file" accept="image/*" class="hidden" data-image-input>
+                  </label>
+                  <button type="button" class="text-xs font-bold text-red-600 hover:text-red-800 text-left px-1" data-remove-image>🗑️ Remove Image</button>
                 </div>
             </div>
         `;
@@ -368,8 +483,8 @@
                     <p class="text-xs text-amber-700 mt-0.5" data-upload-status>No image uploaded yet.</p>
                 </div>
                 <label class="text-xs bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 shadow-md cursor-pointer whitespace-nowrap transition-colors">
-                    Upload Image
-                    <input type="file" accept="image/*" class="hidden" data-image-input>
+                  Upload Image
+                  <input type="file" accept="image/*" class="hidden" data-image-input>
                 </label>
             </div>
         `;
