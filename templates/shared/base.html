@@ -84,6 +84,9 @@
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
     {% block extra_head %}{% endblock %}
+
+    <!-- SANGAM FIX: GLOBALLY FIX ALPINE.JS FLASHING BUG -->
+    <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body class="bg-paper text-ink font-body antialiased">
 
