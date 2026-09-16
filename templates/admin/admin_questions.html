@@ -20,12 +20,12 @@
   <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
       <div>
           <h1 class="font-display text-4xl font-bold text-ink mb-2">Chapter-wise Practice Engine</h1>
-          <p class="text-gray-500 font-medium">Create Folders (HC Verma, Worksheets, Class Notes) & Manage Question Banks.</p>
+          <p class="text-gray-500 font-medium">Create Folders, Manage Quizzes, and Edit Questions deep inside.</p>
       </div>
   </div>
 
   <!-- ==========================================
-       BREADCRUMB NAVIGATION
+       GLOBAL BREADCRUMB NAVIGATION (Stream > Subject)
        ========================================== -->
   <nav class="flex items-center gap-3 text-sm font-bold text-gray-500 mb-10 bg-white px-5 py-4 rounded-xl shadow-sm border-2 border-gray-100 overflow-x-auto whitespace-nowrap">
       <a href="{{ url_for('admin.questions_list') }}" class="hover:text-indigo-600 transition-colors flex items-center gap-2">
@@ -51,12 +51,14 @@
 
       {% if selected_chapter_id %}
       <span class="text-gray-300">/</span>
-      <span class="text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 shadow-sm">{{ chapter.name }}</span>
+      <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}" class="text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors">
+          {{ chapter.name }}
+      </a>
       {% endif %}
   </nav>
 
   <!-- ==========================================
-       VISUAL GOOGLE-DRIVE STYLE DRILLDOWN
+       LEVEL 1 & 2: STREAM & SUBJECT DRILLDOWN
        ========================================== -->
   {% if not selected_stream_id %}
       <div class="flex justify-between items-center mb-5">
@@ -80,8 +82,8 @@
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
                   </button>
                   <div x-show="menuOpen" x-cloak class="absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-xl border border-gray-100 z-[100] overflow-hidden">
-                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'rename', type: 'stream', id: '{{ s.id }}', name: '{{ s.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50">✏️ Rename</button>
-                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'delete', type: 'stream', id: '{{ s.id }}', name: '{{ s.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50">🗑️ Delete</button>
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'rename', type: 'stream', id: '{{ s.id }}', name: '{{ s.name|replace("'", "\\'") }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50">✏️ Rename</button>
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'delete', type: 'stream', id: '{{ s.id }}', name: '{{ s.name|replace("'", "\\'") }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50">🗑️ Delete</button>
                   </div>
               </div>
           </div>
@@ -110,8 +112,8 @@
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
                   </button>
                   <div x-show="menuOpen" x-cloak class="absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-xl border border-gray-100 z-[100] overflow-hidden">
-                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'rename', type: 'subject', id: '{{ s.id }}', name: '{{ s.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-600 border-b border-gray-50">✏️ Rename</button>
-                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'delete', type: 'subject', id: '{{ s.id }}', name: '{{ s.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50">🗑️ Delete</button>
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'rename', type: 'subject', id: '{{ s.id }}', name: '{{ s.name|replace("'", "\\'") }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-600 border-b border-gray-50">✏️ Rename</button>
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'delete', type: 'subject', id: '{{ s.id }}', name: '{{ s.name|replace("'", "\\'") }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50">🗑️ Delete</button>
                   </div>
               </div>
           </div>
@@ -138,8 +140,8 @@
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
                   </button>
                   <div x-show="menuOpen" x-cloak class="absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-xl border border-gray-100 z-[100] overflow-hidden">
-                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'rename', type: 'chapter', id: '{{ c.id }}', name: '{{ c.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50">✏️ Rename</button>
-                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'delete', type: 'chapter', id: '{{ c.id }}', name: '{{ c.name|escape }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50">🗑️ Delete</button>
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'rename', type: 'chapter', id: '{{ c.id }}', name: '{{ c.name|replace("'", "\\'") }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50">✏️ Rename</button>
+                      <button @click.prevent="$dispatch('open-item-manage', {mode: 'delete', type: 'chapter', id: '{{ c.id }}', name: '{{ c.name|replace("'", "\\'") }}'}); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50">🗑️ Delete</button>
                   </div>
               </div>
           </div>
@@ -149,302 +151,286 @@
   {% else %}
   
   <!-- ==========================================
-       THE DPP/WORKSHEET UPLOAD ENGINE
+       THE "ALAUKIK" ARCHITECTURE (FOLDERS -> QUIZZES -> QUESTIONS)
        ========================================== -->
-  <div x-data="chapterUploader()" class="mb-14" @open-upload-more.window="openUploadMore($event.detail)">
-    
-    <!-- STEP 1: THE NESTED "ANDAR" SPLIT (MCQ vs PYQ -> Topic vs Random) -->
-    <div x-show="step === 'mode'" x-transition class="animate-fade-in bg-white border-2 border-gray-200 rounded-2xl p-8 shadow-sm">
-        
-        <!-- Level 1: Choose MCQ or PYQ -->
-        <div x-show="!mainMode" x-transition>
-            <h2 class="text-2xl font-display font-bold text-ink mb-6 flex items-center gap-3 border-b border-gray-100 pb-4">
-                <span class="text-indigo-600">⚡</span> Step 1: Select Practice Mode
-            </h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <button @click="mainMode = 'mcq'" class="bg-indigo-50 border-2 border-indigo-100 rounded-2xl p-8 hover:border-indigo-500 hover:shadow-md transition-all group flex flex-col items-center justify-center text-center">
-                    <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center text-indigo-600 mb-4 group-hover:scale-110 transition-transform shadow-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                    </div>
-                    <h3 class="text-2xl font-bold text-indigo-900 mb-2">MCQ Practice</h3>
-                    <p class="text-sm font-medium text-indigo-700/70">Upload regular Multiple Choice Questions.</p>
-                </button>
+  
+  <!-- JINJA LOGIC: Grouping DB questions by Folder and Quiz (Delimiter "::") -->
+  {% set folder_groups = {} %}
+  {% for q in questions %}
+      {% set parts = q.topic_name.split('::') if q.topic_name else ['General'] %}
+      {% set fname = parts[0] %}
+      {% set qname = parts[1] if parts|length > 1 else 'Default Quiz' %}
+      
+      {% if fname not in folder_groups %}
+          {% set _ = folder_groups.update({fname: {}}) %}
+      {% endif %}
+      {% if qname not in folder_groups[fname] %}
+          {% set _ = folder_groups[fname].update({qname: []}) %}
+      {% endif %}
+      {% set _ = folder_groups[fname][qname].append(q) %}
+  {% endfor %}
 
-                <button @click="mainMode = 'pyq'" class="bg-amber-50 border-2 border-amber-100 rounded-2xl p-8 hover:border-amber-500 hover:shadow-md transition-all group flex flex-col items-center justify-center text-center">
-                    <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center text-amber-600 mb-4 group-hover:scale-110 transition-transform shadow-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </div>
-                    <h3 class="text-2xl font-bold text-amber-900 mb-2">PYQ Practice</h3>
-                    <p class="text-sm font-medium text-amber-700/70">Upload Previous Year Questions (with Exam Year).</p>
-                </button>
-            </div>
-        </div>
+  <div x-data="chapterEngine()">
+      
+      <!-- ALPINE BREADCRUMB (Dynamic inside Chapter) -->
+      <nav class="flex items-center gap-2 text-sm font-bold text-gray-400 mb-6 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200 w-fit">
+          <button @click="activeFolder = null; activeQuiz = null; uploadMode = false" class="hover:text-indigo-600 transition-colors">All Folders</button>
+          <span x-show="activeFolder">/</span>
+          <button x-show="activeFolder" @click="activeQuiz = null; uploadMode = false" class="text-indigo-600 hover:text-indigo-800 transition-colors" x-text="activeFolder"></button>
+          <span x-show="activeQuiz">/</span>
+          <span x-show="activeQuiz" class="text-ink bg-white px-2 py-0.5 rounded shadow-sm border border-gray-200" x-text="activeQuiz"></span>
+      </nav>
 
-        <!-- Level 2: Inside MCQ -->
-        <div x-show="mainMode === 'mcq'" x-cloak x-transition>
-            <div class="flex items-center gap-4 mb-6 border-b border-gray-100 pb-4">
-                <button @click="mainMode = null" class="text-sm font-bold text-gray-400 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">&larr; Back</button>
-                <h2 class="text-2xl font-display font-bold text-ink">Step 2: Choose MCQ Type</h2>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <button @click="selectMode('mcq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-indigo-600 hover:shadow-lg transition-all text-left group">
-                    <h3 class="text-xl font-bold text-ink mb-1 group-hover:text-indigo-600">Topic-Wise MCQ</h3>
-                    <p class="text-sm text-gray-500 font-medium">Create a folder for specific notes (e.g., Electric Flux MCQs).</p>
-                </button>
-                <button @click="selectMode('mcq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-blue-500 hover:shadow-lg transition-all text-left group">
-                    <h3 class="text-xl font-bold text-ink mb-1 group-hover:text-blue-600">Custom Book / Random MCQ</h3>
-                    <p class="text-sm text-gray-500 font-medium">Create a custom module folder (e.g., HC Verma Part 1).</p>
-                </button>
-            </div>
-        </div>
-
-        <!-- Level 2: Inside PYQ -->
-        <div x-show="mainMode === 'pyq'" x-cloak x-transition>
-            <div class="flex items-center gap-4 mb-6 border-b border-gray-100 pb-4">
-                <button @click="mainMode = null" class="text-sm font-bold text-gray-400 hover:text-amber-600 bg-gray-100 hover:bg-amber-50 px-3 py-1.5 rounded-lg transition-colors">&larr; Back</button>
-                <h2 class="text-2xl font-display font-bold text-ink">Step 2: Choose PYQ Type</h2>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <button @click="selectMode('pyq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-amber-500 hover:shadow-lg transition-all text-left group">
-                    <h3 class="text-xl font-bold text-ink mb-1 group-hover:text-amber-600">Topic-Wise PYQ</h3>
-                    <p class="text-sm text-gray-500 font-medium">Group Previous Year Questions by specific sub-topics.</p>
-                </button>
-                <button @click="selectMode('pyq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-emerald-500 hover:shadow-lg transition-all text-left group">
-                    <h3 class="text-xl font-bold text-ink mb-1 group-hover:text-emerald-600">Random PYQ</h3>
-                    <p class="text-sm text-gray-500 font-medium">Upload mixed PYQs covering the entire chapter randomly.</p>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- STEP 2: THE FOLDER SETUP -->
-    <div x-show="step === 'setup'" x-cloak class="animate-fade-in bg-white border-2 border-indigo-100 rounded-2xl p-8 shadow-xl relative overflow-hidden">
-        <div class="absolute top-0 right-0 p-4 opacity-5"><svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" fill="currentColor" viewBox="0 0 16 16"><path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3zm-8.322.12C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139z"/></svg></div>
-        
-        <div class="flex justify-between items-center mb-6 border-b border-gray-100 pb-4 relative z-10">
-            <div>
-                <h3 class="font-bold text-2xl text-ink">Set Folder Details</h3>
-                <p class="text-sm text-gray-500 font-medium mt-1">This configures all questions uploaded inside this folder.</p>
-            </div>
-            <button @click="step = 'mode'" class="text-sm font-bold text-gray-400 hover:text-indigo-600 px-4 py-2 border border-gray-200 rounded-lg bg-white shadow-sm">Cancel</button>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 relative z-10">
-            <div class="md:col-span-2">
-                <label class="block text-sm font-bold text-indigo-900 mb-2">
-                    Folder Name / Topic Title <span class="text-red-500">*</span>
-                </label>
-                <input type="text" x-model="folderSetup.name" :placeholder="modeParams.category === 'topic' ? 'e.g., Charges and Field' : 'e.g., HC Verma Part 1'" class="w-full rounded-xl border-2 border-gray-200 px-5 py-4 focus:border-indigo-600 focus:ring-0 outline-none text-xl font-bold bg-gray-50 shadow-inner">
-            </div>
-
-            <div x-show="modeParams.type === 'pyq'">
-                <label class="block text-sm font-bold text-indigo-900 mb-2">Exam Year <span class="text-red-500">*</span></label>
-                <input type="number" x-model="folderSetup.year" placeholder="e.g. 2023" class="w-full rounded-xl border-2 border-gray-200 px-5 py-3.5 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
-            </div>
-
-            <div>
-                <label class="block text-sm font-bold text-indigo-900 mb-2">Correct Marks (Per Q)</label>
-                <input type="number" x-model.number="folderSetup.marks" class="w-full rounded-xl border-2 border-gray-200 px-5 py-3.5 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
-            </div>
-            <div>
-                <label class="block text-sm font-bold text-indigo-900 mb-2">Negative Marks</label>
-                <input type="number" step="0.25" x-model.number="folderSetup.negative" class="w-full rounded-xl border-2 border-gray-200 px-5 py-3.5 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50">
-            </div>
-        </div>
-
-        <button @click="finalizeSetup()" :disabled="!folderSetup.name" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg relative z-10 flex justify-center items-center gap-2">
-            Proceed to Upload Engine &rarr;
-        </button>
-    </div>
-
-    <!-- STEP 3: THE JSON UPLOADER ENGINE -->
-    <div x-show="step === 'upload'" x-cloak class="animate-fade-in bg-white border-2 border-gray-200 rounded-2xl shadow-xl overflow-hidden" id="upload-engine-box">
-        
-        <div class="bg-indigo-50 border-b-2 border-indigo-100 px-8 py-5 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <span class="text-3xl">📂</span>
-                <div>
-                    <h3 class="font-black text-xl text-indigo-900 leading-tight" x-text="folderSetup.name"></h3>
-                    <p class="text-xs font-bold text-indigo-600 uppercase tracking-widest mt-0.5">Active Folder <span x-show="modeParams.type === 'pyq'" x-text="'· PYQ ' + folderSetup.year"></span></p>
-                </div>
-            </div>
-            <button @click="step = 'setup'" class="text-sm font-bold text-indigo-600 bg-white hover:bg-indigo-100 px-4 py-2 border border-indigo-200 rounded-lg shadow-sm transition-colors">Edit Settings</button>
-        </div>
-
-        <div class="p-8 bg-gray-50/50">
-            <div class="flex justify-between items-center mb-3">
-                <label class="font-bold text-ink text-lg">Paste JSON Array <span class="text-xs font-bold text-white bg-indigo-500 px-2 py-1 rounded shadow-sm ml-2">Max 25 Questions</span></label>
-            </div>
-
-            <textarea x-model="jsonText" @input="validateInput" rows="12" placeholder="[{ ... }]"
-                      class="w-full rounded-xl border-2 border-gray-300 p-5 font-mono text-sm mb-4 outline-none focus:border-indigo-500 bg-white shadow-inner resize-y"></textarea>
-            
-            <div class="text-sm flex justify-between items-center mb-6 px-2">
-                <p :class="qCount > 25 ? 'text-red-600 font-bold' : 'text-gray-500 font-bold'" x-show="jsonText.length > 0">
-                    Detected: <span x-text="qCount"></span> questions
-                </p>
-                <p x-show="errorMsg" class="text-red-600 font-bold bg-red-50 px-3 py-1 rounded shadow-sm border border-red-100" x-text="errorMsg"></p>
-                <p x-show="successMsg" class="text-green-600 font-bold bg-green-50 px-3 py-1 rounded shadow-sm border border-green-100" x-text="successMsg"></p>
-            </div>
-
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t-2 border-gray-200">
-                <p class="text-sm font-bold text-gray-500">Total Uploaded to this Folder: <span x-text="totalSaved" class="text-indigo-600 text-2xl ml-2 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100"></span></p>
-                
-                <div class="flex gap-3 w-full sm:w-auto">
-                    <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25"
-                            class="flex-1 sm:flex-none bg-indigo-600 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-2 text-lg">
-                        <svg x-show="isSaving" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        <span x-text="isSaving ? 'Uploading...' : 'Save Chunk'"></span>
-                    </button>
-                    <!-- Redirects down to the EXACT FOLDER in Manage Questions list -->
-                    <button type="button" @click="doneUploading()"
-                            class="flex-1 sm:flex-none bg-emerald-500 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-emerald-600 transition-all shadow-md text-lg border-2 border-emerald-600">
-                        DONE
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-  </div>
-
-  <!-- ==========================================
-       CHAPTER QUESTIONS LIST & LIVE EDIT (FOLDERS UI)
-       ========================================== -->
-  <div id="manage-questions" class="scroll-mt-10">
-      <div class="flex items-center justify-between mb-8 pb-4 border-b-2 border-gray-200">
-          <div>
-            <h2 class="font-display text-3xl font-bold text-ink">Manage Folders & Questions</h2>
-            <p class="text-sm font-bold text-gray-500 mt-1">Upload images, edit JSON, or manage specific topic folders.</p>
+      <!-- VIEW 1: FOLDER LIST -->
+      <div x-show="!activeFolder && !uploadMode" x-transition class="animate-fade-in">
+          <div class="flex justify-between items-center mb-6">
+              <h2 class="text-2xl font-bold text-ink">Topic Folders</h2>
+              <button @click="openNewFolder()" class="text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Add New Folder
+              </button>
           </div>
-          {% set pending = questions|selectattr('has_image')|rejectattr('image_url')|list %}
-          {% if pending %}
-          <div class="bg-red-50 border border-red-200 px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm">
-            <span class="text-xl">⚠️</span>
-            <div>
-              <p class="text-sm font-bold text-red-800 leading-none">Action Required</p>
-              <p class="text-xs font-semibold text-red-600">{{ pending|length }} image(s) pending upload</p>
-            </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {% for fname, quizzes in folder_groups.items() %}
+              <div @click="activeFolder = '{{ fname|replace("'", "\\'") }}'" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-indigo-500 hover:shadow-lg transition-all cursor-pointer group flex items-center gap-4">
+                  <div class="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 text-2xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">📁</div>
+                  <div>
+                      <h3 class="font-bold text-xl text-ink group-hover:text-indigo-600 transition-colors">{{ fname }}</h3>
+                      <p class="text-sm font-bold text-gray-400 mt-1">{{ quizzes|length }} Quizzes inside</p>
+                  </div>
+              </div>
+              {% endfor %}
+              
+              <!-- Placeholder for newly created empty folders (Alpine state) -->
+              <template x-for="folder in newFolders" :key="folder">
+                  <div @click="activeFolder = folder" class="bg-white border-2 border-dashed border-indigo-300 rounded-2xl p-6 hover:border-indigo-500 hover:shadow-lg transition-all cursor-pointer group flex items-center gap-4">
+                      <div class="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 text-2xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">📁</div>
+                      <div>
+                          <h3 class="font-bold text-xl text-ink group-hover:text-indigo-600 transition-colors" x-text="folder"></h3>
+                          <p class="text-sm font-bold text-emerald-500 mt-1">New / Empty</p>
+                      </div>
+                  </div>
+              </template>
+          </div>
+
+          <!-- Empty State (No Folders at all) -->
+          {% if not folder_groups %}
+          <div x-show="newFolders.length === 0" class="text-center py-16 bg-white border-2 border-gray-100 rounded-2xl shadow-sm mt-4">
+              <div class="text-4xl mb-4">📂</div>
+              <p class="text-xl font-bold text-ink">No Folders Created</p>
+              <p class="text-gray-500 mt-2">Click "+ Add New Folder" to create your first folder (e.g., Alaukik).</p>
           </div>
           {% endif %}
       </div>
 
-      <!-- JINJA LOGIC: Grouping Questions by Folder (topic_name) -->
-      {% set folders = {} %}
-      {% for q in questions %}
-          {% set f_name = q.topic_name if q.topic_name else 'General / Uncategorized' %}
-          {% if f_name not in folders %}
-              {% set _ = folders.update({f_name: []}) %}
-          {% endif %}
-          {% set _ = folders[f_name].append(q) %}
-      {% endfor %}
-
-      {% if folders %}
-      <div class="space-y-10">
-          {% for folder_name, qs in folders.items() %}
-          {% set f_type = 'pyq' if qs[0].is_pyq else 'mcq' %}
-          <div class="bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden" id="folder-{{ folder_name.split() | join('-') | lower }}">
-              
-              <!-- FOLDER HEADER with Actions -->
-              <div class="bg-indigo-50/50 px-6 py-4 flex justify-between items-center border-b-2 border-indigo-100 group">
-                  <div class="flex items-center gap-4">
-                      <div class="w-12 h-12 bg-white rounded-xl shadow-sm border border-indigo-100 flex items-center justify-center text-indigo-500 text-2xl">📁</div>
-                      <div>
-                          <h3 class="font-display text-xl font-bold text-indigo-900 leading-tight">{{ folder_name }}</h3>
-                          <p class="text-xs font-bold text-indigo-600 uppercase tracking-widest mt-0.5">{{ qs|length }} Questions Uploaded</p>
-                      </div>
-                  </div>
-                  
-                  <!-- Folder Management Menu -->
-                  <div class="relative" x-data="{ menuOpen: false }">
-                      <button @click.prevent="menuOpen = !menuOpen" @click.outside="menuOpen = false" class="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors focus:outline-none">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
-                      </button>
-                      <div x-show="menuOpen" x-transition x-cloak class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-20 overflow-hidden">
-                          <!-- The new "Upload More Here" Button -->
-                          <button @click.prevent="$dispatch('open-upload-more', { folderName: '{{ folder_name|escape }}', type: '{{ f_type }}' }); menuOpen = false" class="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 border-b border-gray-50 transition-colors text-left">
-                              ➕ Add More Questions
-                          </button>
-                          <button @click.prevent="$dispatch('open-rename-folder', { oldName: '{{ folder_name|escape }}', chapterId: '{{ selected_chapter_id }}' }); menuOpen = false" class="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 border-b border-gray-50 transition-colors text-left">
-                              ✏️ Rename Folder
-                          </button>
-                          <button @click.prevent="$dispatch('open-delete-folder', { folderName: '{{ folder_name|escape }}', chapterId: '{{ selected_chapter_id }}' }); menuOpen = false" class="w-full flex items-center gap-2 text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors">
-                              🗑️ Delete Folder
-                          </button>
-                      </div>
-                  </div>
+      <!-- VIEW 2: INSIDE FOLDER (QUIZ LIST) -->
+      <div x-show="activeFolder && !activeQuiz && !uploadMode" x-cloak x-transition class="animate-fade-in">
+          <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
+              <div>
+                  <h2 class="text-3xl font-display font-bold text-ink">Folder: <span class="text-indigo-600" x-text="activeFolder"></span></h2>
+                  <p class="text-sm font-bold text-gray-500 mt-1">Manage MCQ/PYQ quizzes inside this folder.</p>
               </div>
+              <button @click="openQuizCreate()" class="text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-600 px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Create Test / Add
+              </button>
+          </div>
 
-              <!-- FOLDER CONTENT (Questions List) -->
-              <div class="divide-y divide-gray-100">
-                  {% for q in qs %}
-                  <div class="px-6 py-5 gap-4 transition-colors hover:bg-gray-50 group/row flex flex-col md:flex-row md:items-start justify-between" data-question-row data-table="questions" data-question-id="{{ q.id }}">
-                    <div class="flex-1 min-w-0 pr-4">
-                        <div class="flex items-center gap-3 mb-2">
-                            <span class="text-xs font-bold px-2.5 py-1 rounded-md bg-gray-100 border border-gray-200 text-gray-600 shadow-inner">Q.{{ loop.index }}</span>
-                            {% if q.is_pyq %}<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-purple-100 text-purple-800 border border-purple-200 shadow-sm">PYQ {{ q.pyq_year }}</span>{% endif %}
-                            {% if q.is_premium %}<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-yellow-100 text-yellow-800 border border-yellow-300 shadow-sm">💎 Premium</span>{% endif %}
-                        </div>
-                        <p class="text-base font-medium text-ink leading-relaxed">{{ q.question_text }}</p>
-                        
-                        <!-- Image Zone -->
-                        <div class="mt-4" data-image-zone="true">
-                          {% if q.has_image %}
-                            {% if q.image_url %}
-                            <div class="flex items-center gap-4 bg-white p-3 rounded-xl border-2 border-gray-100 shadow-sm w-fit" data-image-uploaded>
-                              <img src="{{ q.image_url }}" alt="" class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1">
-                              <div class="flex flex-col gap-2">
-                                <label class="text-xs font-bold bg-gray-50 border border-gray-300 shadow-sm text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 cursor-pointer transition-colors text-center">
-                                  🔄 Replace Image
-                                  <input type="file" accept="image/*" class="hidden" data-image-input>
-                                </label>
-                                <button type="button" class="text-xs font-bold text-red-600 hover:text-red-800 text-left px-1" data-remove-image>🗑️ Remove Image</button>
-                              </div>
-                            </div>
-                            {% else %}
-                            <div class="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4 max-w-md shadow-sm" data-image-pending>
-                              <div>
-                                  <p class="text-sm font-bold text-amber-900">📷 Diagram Required</p>
-                                  <p class="text-xs text-amber-700 mt-0.5" data-upload-status>No image uploaded yet.</p>
-                              </div>
-                              <label class="text-xs bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 shadow-md cursor-pointer whitespace-nowrap transition-colors">
-                                Upload Image
-                                <input type="file" accept="image/*" class="hidden" data-image-input>
-                              </label>
-                            </div>
-                            {% endif %}
-                          {% endif %}
-                        </div>
-                    </div>
-                    
-                    <!-- Row Actions -->
-                    <div class="flex flex-row md:flex-col items-center md:items-end gap-2 shrink-0 mt-4 md:mt-0 opacity-100 md:opacity-0 group-hover/row:opacity-100 transition-opacity">
-                        <button type="button" @click="$dispatch('open-edit-modal', { id: '{{ q.id }}' })"
-                                class="text-xs font-bold bg-white text-indigo-600 border border-gray-200 shadow-sm px-4 py-2 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition-colors w-full text-center">
-                          ✏️ Edit JSON
-                        </button>
-                        <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}"
-                              onsubmit="return confirm('⚠️ DANGER: Remove this question? Its image will be permanently wiped from storage.');" class="w-full m-0">
-                          <button class="text-xs font-bold bg-red-50 text-red-600 border border-red-100 shadow-sm px-4 py-2 rounded-lg hover:bg-red-100 hover:border-red-200 transition-colors w-full text-center">
-                              🗑️ Delete
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {% for fname, quizzes in folder_groups.items() %}
+              <div x-show="activeFolder === '{{ fname|replace("'", "\\'") }}'" class="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {% for qname, qs in quizzes.items() %}
+                  <div class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-all relative group flex items-start gap-4">
+                      <div class="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 text-xl font-bold shrink-0 shadow-inner">Q</div>
+                      <div class="flex-1">
+                          <h3 class="font-bold text-xl text-ink leading-tight mb-1">{{ qname }}</h3>
+                          <div class="flex items-center gap-3 mt-2">
+                              <span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded">{{ qs|length }} Questions</span>
+                              {% if qs[0].is_pyq %}<span class="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded">PYQ Set</span>{% endif %}
+                          </div>
+                      </div>
+                      
+                      <!-- Pencil Menu -->
+                      <div class="absolute top-4 right-4 z-20" x-data="{ menuOpen: false }">
+                          <button @click.prevent="menuOpen = !menuOpen" @click.outside="menuOpen = false" class="p-2 text-gray-400 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors border border-gray-200 shadow-sm">
+                              ✏️
                           </button>
-                        </form>
-                    </div>
+                          <div x-show="menuOpen" x-cloak class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-[100] overflow-hidden">
+                              <button @click="activeQuiz = '{{ qname|replace("'", "\\'") }}'; menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-indigo-700 hover:bg-indigo-50 border-b border-gray-50">📝 Edit Questions</button>
+                              <button @click.prevent="$dispatch('open-rename-quiz', { oldFolder: '{{ fname|replace("'", "\\'") }}', oldQuiz: '{{ qname|replace("'", "\\'") }}' }); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 border-b border-gray-50">✏️ Rename Quiz</button>
+                              <button @click.prevent="$dispatch('open-delete-quiz', { oldFolder: '{{ fname|replace("'", "\\'") }}', oldQuiz: '{{ qname|replace("'", "\\'") }}' }); menuOpen = false" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50">🗑️ Delete Quiz</button>
+                          </div>
+                      </div>
                   </div>
                   {% endfor %}
               </div>
+              {% endfor %}
           </div>
+          
+          <!-- Empty State (No Quizzes in new folder) -->
+          <div x-show="newFolders.includes(activeFolder)" class="text-center py-16 bg-white border-2 border-gray-100 rounded-2xl shadow-sm mt-4">
+              <div class="text-4xl mb-4">📄</div>
+              <p class="text-xl font-bold text-ink">Folder is Empty</p>
+              <p class="text-gray-500 mt-2">Click "+ Create Test / Add" to upload your first MCQ/PYQ set here.</p>
+          </div>
+      </div>
+
+      <!-- VIEW 3: DEEP QUESTION EDIT (Inside Quiz) -->
+      <div x-show="activeFolder && activeQuiz && !uploadMode" x-cloak x-transition class="animate-fade-in">
+          <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
+              <div>
+                  <h2 class="text-3xl font-display font-bold text-ink">Quiz: <span class="text-indigo-600" x-text="activeQuiz"></span></h2>
+                  <p class="text-sm font-bold text-gray-500 mt-1">Edit JSON, upload images, or add more questions.</p>
+              </div>
+              <button @click="openAddMore()" class="text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2">
+                  ➕ Add More Questions
+              </button>
+          </div>
+
+          {% for fname, quizzes in folder_groups.items() %}
+              {% for qname, qs in quizzes.items() %}
+              <div x-show="activeFolder === '{{ fname|replace("'", "\\'") }}' && activeQuiz === '{{ qname|replace("'", "\\'") }}'" class="bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                  <div class="divide-y divide-gray-100">
+                      {% for q in qs %}
+                      <div class="px-6 py-5 gap-4 transition-colors hover:bg-gray-50 group/row flex flex-col md:flex-row md:items-start justify-between" data-question-row data-table="questions" data-question-id="{{ q.id }}">
+                        <div class="flex-1 min-w-0 pr-4">
+                            <div class="flex items-center gap-3 mb-2">
+                                <span class="text-xs font-bold px-2.5 py-1 rounded-md bg-gray-100 border border-gray-200 text-gray-600 shadow-inner">Q.{{ loop.index }}</span>
+                                {% if q.is_premium %}<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-yellow-100 text-yellow-800 border border-yellow-300 shadow-sm">💎 Premium</span>{% endif %}
+                            </div>
+                            <p class="text-base font-medium text-ink leading-relaxed">{{ q.question_text }}</p>
+                            
+                            <!-- Image Zone -->
+                            <div class="mt-4" data-image-zone="true">
+                              {% if q.has_image %}
+                                {% if q.image_url %}
+                                <div class="flex items-center gap-4 bg-white p-3 rounded-xl border-2 border-gray-100 shadow-sm w-fit" data-image-uploaded>
+                                  <img src="{{ q.image_url }}" alt="" class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1">
+                                  <div class="flex flex-col gap-2">
+                                    <label class="text-xs font-bold bg-gray-50 border border-gray-300 shadow-sm text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 cursor-pointer transition-colors text-center">
+                                      🔄 Replace Image
+                                      <input type="file" accept="image/*" class="hidden" data-image-input>
+                                    </label>
+                                    <button type="button" class="text-xs font-bold text-red-600 hover:text-red-800 text-left px-1" data-remove-image>🗑️ Remove Image</button>
+                                  </div>
+                                </div>
+                                {% else %}
+                                <div class="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4 max-w-md shadow-sm" data-image-pending>
+                                  <div>
+                                      <p class="text-sm font-bold text-amber-900">📷 Diagram Required</p>
+                                      <p class="text-xs text-amber-700 mt-0.5" data-upload-status>No image uploaded yet.</p>
+                                  </div>
+                                  <label class="text-xs bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 shadow-md cursor-pointer whitespace-nowrap transition-colors">
+                                    Upload Image
+                                    <input type="file" accept="image/*" class="hidden" data-image-input>
+                                  </label>
+                                </div>
+                                {% endif %}
+                              {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Row Actions -->
+                        <div class="flex flex-row md:flex-col items-center md:items-end gap-2 shrink-0 mt-4 md:mt-0 opacity-100 md:opacity-0 group-hover/row:opacity-100 transition-opacity">
+                            <button type="button" @click="$dispatch('open-edit-modal', { id: '{{ q.id }}' })" class="text-xs font-bold bg-white text-indigo-600 border border-gray-200 shadow-sm px-4 py-2 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition-colors w-full text-center">
+                              ✏️ Edit JSON
+                            </button>
+                            <form method="POST" action="{{ url_for('admin.questions_delete', question_id=q.id, stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id) }}" onsubmit="return confirm('⚠️ DANGER: Remove this question? Its image will be permanently wiped from storage.');" class="w-full m-0">
+                              <button class="text-xs font-bold bg-red-50 text-red-600 border border-red-100 shadow-sm px-4 py-2 rounded-lg hover:bg-red-100 hover:border-red-200 transition-colors w-full text-center">
+                                  🗑️ Delete
+                              </button>
+                            </form>
+                        </div>
+                      </div>
+                      {% endfor %}
+                  </div>
+              </div>
+              {% endfor %}
           {% endfor %}
       </div>
-      {% else %}
-      <!-- Empty State -->
-      <div class="px-6 py-20 text-center bg-white border-2 border-gray-100 rounded-2xl shadow-sm">
-          <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-200">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+
+      <!-- VIEW 4: THE UPLOAD ENGINE (Forms) -->
+      <div x-show="uploadMode" x-cloak x-transition class="animate-fade-in bg-white border-2 border-gray-200 rounded-2xl shadow-xl overflow-hidden mb-14">
+          
+          <!-- STEP 1: THE 4 DIBBE (Only if creating a New Test) -->
+          <div x-show="uploadType === 'new' && step === 'mode'" class="p-8">
+              <h2 class="text-2xl font-bold text-ink mb-6 flex items-center gap-3">
+                  <span class="text-indigo-600">⚡</span> Step 1: Select Format
+              </h2>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <button @click="selectMode('mcq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-indigo-600 hover:shadow-md transition-all text-left flex items-center gap-4">
+                      <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-xl shrink-0">📄</div>
+                      <div><h3 class="text-lg font-bold text-ink">Topic-Wise MCQ</h3><p class="text-xs text-gray-500 font-bold">Standard chapter questions.</p></div>
+                  </button>
+                  <button @click="selectMode('mcq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-blue-500 hover:shadow-md transition-all text-left flex items-center gap-4">
+                      <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-xl shrink-0">📘</div>
+                      <div><h3 class="text-lg font-bold text-ink">Custom Book / Random</h3><p class="text-xs text-gray-500 font-bold">e.g., HC Verma Part 1.</p></div>
+                  </button>
+                  <button @click="selectMode('pyq', 'topic')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-amber-500 hover:shadow-md transition-all text-left flex items-center gap-4">
+                      <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-xl shrink-0">🕰️</div>
+                      <div><h3 class="text-lg font-bold text-ink">Topic-Wise PYQ</h3><p class="text-xs text-gray-500 font-bold">Previous year questions grouped.</p></div>
+                  </button>
+                  <button @click="selectMode('pyq', 'random')" class="bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-emerald-500 hover:shadow-md transition-all text-left flex items-center gap-4">
+                      <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-xl shrink-0">🎲</div>
+                      <div><h3 class="text-lg font-bold text-ink">Random PYQ</h3><p class="text-xs text-gray-500 font-bold">Mixed PYQs for the chapter.</p></div>
+                  </button>
+              </div>
+              <button @click="uploadMode = false" class="mt-8 text-sm font-bold text-gray-500 hover:text-gray-800">Cancel Upload</button>
           </div>
-          <p class="text-2xl font-display font-bold text-ink mb-2">No Folders Yet</p>
-          <p class="text-base font-medium text-gray-500 max-w-sm mx-auto">Use the Action panel above to create your first Topic Folder or Custom Book for this chapter.</p>
+
+          <!-- STEP 2: NAME & MARKS SETUP -->
+          <div x-show="step === 'setup'" class="p-8">
+              <h3 class="font-display font-bold text-2xl text-ink mb-1">Set Test Details</h3>
+              <p class="text-sm font-bold text-gray-500 mb-6 border-b pb-4">Inside Folder: <span class="text-indigo-600" x-text="activeFolder"></span></p>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                  <div class="md:col-span-2">
+                      <label class="block text-sm font-bold text-indigo-900 mb-2">
+                          <span x-text="modeParams.type === 'pyq' ? 'PYQ Name / Title' : 'MCQ Name / Title'"></span> <span class="text-red-500">*</span>
+                      </label>
+                      <input type="text" x-model="quizSetup.name" placeholder="e.g., Basic math - 1" class="w-full rounded-xl border-2 border-gray-200 px-5 py-4 focus:border-indigo-600 focus:ring-0 outline-none text-xl font-bold bg-gray-50 shadow-inner">
+                  </div>
+                  <!-- EXAM YEAR COMPLETELY REMOVED HERE AS REQUESTED -->
+                  <div>
+                      <label class="block text-sm font-bold text-indigo-900 mb-2">Correct Marks</label>
+                      <input type="number" x-model.number="quizSetup.marks" class="w-full rounded-xl border-2 border-gray-200 px-5 py-3 focus:border-indigo-600 outline-none font-bold bg-gray-50">
+                  </div>
+                  <div>
+                      <label class="block text-sm font-bold text-indigo-900 mb-2">Negative Marks</label>
+                      <input type="number" step="0.25" x-model.number="quizSetup.negative" class="w-full rounded-xl border-2 border-gray-200 px-5 py-3 focus:border-indigo-600 outline-none font-bold bg-gray-50">
+                  </div>
+              </div>
+              <div class="flex gap-4">
+                  <button @click="step = 'mode'" x-show="uploadType === 'new'" class="px-6 py-4 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors border-2 border-gray-200">Back</button>
+                  <button @click="step = 'upload'" :disabled="!quizSetup.name" class="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">Proceed to Paste JSON &rarr;</button>
+              </div>
+          </div>
+
+          <!-- STEP 3: JSON UPLOAD -->
+          <div x-show="step === 'upload'" class="p-8 bg-gray-50/50">
+              <div class="flex justify-between items-center mb-4">
+                  <div>
+                      <h3 class="font-black text-xl text-indigo-900" x-text="quizSetup.name"></h3>
+                      <p class="text-xs font-bold text-indigo-600 uppercase">Folder: <span x-text="activeFolder"></span></p>
+                  </div>
+                  <button x-show="uploadType === 'new'" @click="step = 'setup'" class="text-sm font-bold text-indigo-600 px-4 py-2 border border-indigo-200 rounded-lg bg-white shadow-sm hover:bg-indigo-50">Edit Details</button>
+              </div>
+
+              <textarea x-model="jsonText" @input="validateInput" rows="12" placeholder="[{ ... }]" class="w-full rounded-xl border-2 border-gray-300 p-5 font-mono text-sm mb-4 outline-none focus:border-indigo-500 bg-white shadow-inner resize-y"></textarea>
+              
+              <div class="text-sm flex justify-between items-center mb-6">
+                  <p :class="qCount > 25 ? 'text-red-600 font-bold' : 'text-gray-500 font-bold'" x-show="jsonText.length > 0">Detected: <span x-text="qCount"></span> questions</p>
+                  <p x-show="errorMsg" class="text-red-600 font-bold" x-text="errorMsg"></p>
+              </div>
+
+              <div class="flex gap-3 justify-end pt-4 border-t-2 border-gray-200">
+                  <button type="button" @click="uploadMode = false" class="px-8 py-3.5 font-bold text-gray-500 hover:bg-gray-100 border-2 border-gray-200 rounded-xl transition-colors">Cancel</button>
+                  <button type="button" @click="saveChunk()" :disabled="isSaving || qCount === 0 || qCount > 25" class="bg-indigo-600 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md flex items-center gap-2">
+                      <span x-text="isSaving ? 'Uploading...' : 'Save Questions'"></span>
+                  </button>
+                  <button type="button" @click="doneUploading()" class="bg-emerald-500 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-emerald-600 transition-all shadow-md border-2 border-emerald-600">DONE</button>
+              </div>
+          </div>
       </div>
-      {% endif %}
   </div>
   {% endif %}
 
@@ -458,10 +444,8 @@
           <button @click="closeQuickAdd()" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
           <h3 class="font-display text-2xl font-bold text-ink mb-1">Add New <span class="capitalize text-indigo-600" x-text="quickAdd.type"></span></h3>
           <p class="text-sm font-medium text-gray-500 mb-6">Create instantly without leaving this page.</p>
-          
           <input type="text" x-model="quickAdd.name" :placeholder="'Enter ' + quickAdd.type + ' name...'" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-6 text-lg">
-          
-          <button @click="submitQuickAdd()" :disabled="!quickAdd.name.trim() || quickAdd.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg flex items-center justify-center gap-2">
+          <button @click="submitQuickAdd()" :disabled="!quickAdd.name.trim() || quickAdd.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">
               <span x-text="quickAdd.isSaving ? 'Creating...' : 'Create ' + quickAdd.type"></span>
           </button>
       </div>
@@ -475,7 +459,7 @@
           <div x-show="itemManage.mode === 'rename'">
               <h3 class="font-display text-2xl font-bold text-ink mb-1">Rename <span class="capitalize" x-text="itemManage.type"></span></h3>
               <p class="text-sm font-medium text-gray-500 mb-6">Update the name across the system.</p>
-              <input type="text" x-model="itemManage.newName" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-6 text-lg">
+              <input type="text" x-model="itemManage.newName" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 outline-none font-bold bg-gray-50 mb-6 text-lg">
               <button @click="submitItemManage()" :disabled="!itemManage.newName.trim() || itemManage.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">
                   <span x-text="itemManage.isSaving ? 'Saving...' : 'Save New Name'"></span>
               </button>
@@ -497,31 +481,31 @@
       </div>
   </div>
 
-  <!-- Rename Folder Modal -->
-  <div x-show="folderManage.renameOpen" x-cloak @open-rename-folder.window="folderManage.oldName = $event.detail.oldName; folderManage.newName = $event.detail.oldName; folderManage.chapterId = $event.detail.chapterId; folderManage.renameOpen = true;" class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="folderManage.renameOpen = false">
+  <!-- Rename Quiz Modal (Reused for the new Quiz structure) -->
+  <div x-show="quizManage.renameOpen" x-cloak @open-rename-quiz.window="quizManage.oldFolder = $event.detail.oldFolder; quizManage.oldQuiz = $event.detail.oldQuiz; quizManage.newName = $event.detail.oldQuiz; quizManage.renameOpen = true;" class="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="quizManage.renameOpen = false">
       <div class="bg-white rounded-3xl border border-gray-200 p-8 w-full max-w-md shadow-2xl relative">
-          <button @click="folderManage.renameOpen = false" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-          <h3 class="font-display text-2xl font-bold text-ink mb-1">Rename Folder</h3>
-          <p class="text-sm font-medium text-gray-500 mb-6">This will update the topic name for all questions inside.</p>
-          <input type="text" x-model="folderManage.newName" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-6 text-lg">
-          <button @click="submitFolderRename()" :disabled="!folderManage.newName.trim() || folderManage.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">
-              <span x-text="folderManage.isSaving ? 'Saving...' : 'Save New Name'"></span>
+          <button @click="quizManage.renameOpen = false" class="absolute top-6 right-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2 rounded-full transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+          <h3 class="font-display text-2xl font-bold text-ink mb-1">Rename Quiz</h3>
+          <p class="text-sm font-medium text-gray-500 mb-6">This will update the MCQ Name for all questions inside.</p>
+          <input type="text" x-model="quizManage.newName" class="w-full rounded-xl border-2 border-gray-200 px-4 py-4 focus:border-indigo-600 outline-none font-bold bg-gray-50 mb-6 text-lg">
+          <button @click="submitQuizRename()" :disabled="!quizManage.newName.trim() || quizManage.isSaving" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md text-lg">
+              <span x-text="quizManage.isSaving ? 'Saving...' : 'Save New Name'"></span>
           </button>
       </div>
   </div>
 
-  <!-- Delete Folder Modal -->
-  <div x-show="folderManage.deleteOpen" x-cloak @open-delete-folder.window="folderManage.oldName = $event.detail.folderName; folderManage.chapterId = $event.detail.chapterId; folderManage.deleteOpen = true;" class="fixed inset-0 bg-red-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="folderManage.deleteOpen = false">
+  <!-- Delete Quiz Modal -->
+  <div x-show="quizManage.deleteOpen" x-cloak @open-delete-quiz.window="quizManage.oldFolder = $event.detail.oldFolder; quizManage.oldQuiz = $event.detail.oldQuiz; quizManage.deleteOpen = true;" class="fixed inset-0 bg-red-900/90 flex items-center justify-center z-[200] p-4 backdrop-blur-sm" @click.self="quizManage.deleteOpen = false">
       <div class="bg-white rounded-3xl border-2 border-red-500 p-8 w-full max-w-md shadow-2xl relative">
           <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200 text-red-600 text-3xl">⚠️</div>
-          <h3 class="font-display text-2xl font-bold text-red-600 mb-2 text-center">Delete Folder?</h3>
+          <h3 class="font-display text-2xl font-bold text-red-600 mb-2 text-center">Delete Quiz?</h3>
           <p class="text-sm font-bold text-gray-600 mb-6 text-center leading-relaxed">
-              You are about to delete <span class="text-ink font-black bg-gray-100 px-2 rounded">"<span x-text="folderManage.oldName"></span>"</span>.<br>This will permanently wipe ALL questions and bucket images inside it. <span class="text-red-600">This cannot be undone.</span>
+              You are about to delete quiz <span class="text-ink font-black bg-gray-100 px-2 rounded">"<span x-text="quizManage.oldQuiz"></span>"</span>.<br>This will permanently wipe ALL questions and bucket images inside it. <span class="text-red-600">This cannot be undone.</span>
           </p>
           <div class="flex gap-3">
-              <button @click="folderManage.deleteOpen = false" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
-              <button @click="submitFolderDelete()" :disabled="folderManage.isSaving" class="flex-1 bg-red-600 text-white font-bold py-3.5 rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors shadow-md">
-                  <span x-text="folderManage.isSaving ? 'Wiping...' : 'Yes, Delete All'"></span>
+              <button @click="quizManage.deleteOpen = false" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
+              <button @click="submitQuizDelete()" :disabled="quizManage.isSaving" class="flex-1 bg-red-600 text-white font-bold py-3.5 rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors shadow-md">
+                  <span x-text="quizManage.isSaving ? 'Wiping...' : 'Yes, Delete All'"></span>
               </button>
           </div>
       </div>
@@ -547,7 +531,7 @@
 </div>
 
 <!-- ==========================================
-     SCRIPTS & MASTER ALPINE.JS APP
+     SCRIPTS & ALPINE.JS LOGIC
      ========================================== -->
 <style>
     .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
@@ -567,19 +551,15 @@
       }, 4000);
   }
 
-  function slugify(text) {
-      return text.toString().toLowerCase().trim().split(/\s+/).join('-');
-  }
-
-  // MASTER APP (Modals for Quick Add & Item Manage)
+  // APP 1: GLOBALS (Modals for Quick Add & Item Manage)
   function adminQuestionsApp() {
       return {
           currentStreamId: '{{ selected_stream_id or "" }}',
           currentSubjectId: '{{ selected_subject_id or "" }}',
+          chapterId: '{{ selected_chapter_id or "" }}',
           
           quickAdd: { isOpen: false, type: '', name: '', isSaving: false },
           itemManage: { isOpen: false, mode: '', type: '', id: '', oldName: '', newName: '', isSaving: false },
-          folderManage: { renameOpen: false, deleteOpen: false, oldName: '', newName: '', chapterId: '', isSaving: false },
 
           openQuickAdd(type) { this.quickAdd.type = type; this.quickAdd.name = ''; this.quickAdd.isOpen = true; },
           closeQuickAdd() { this.quickAdd.isOpen = false; },
@@ -612,8 +592,8 @@
           async submitItemManage() {
               this.itemManage.isSaving = true;
               const type = this.itemManage.type;
-              const mode = this.itemManage.mode; // 'rename' or 'delete'
-              let endpoint = `/admin/api/${type}s/${mode}`; // e.g., /admin/api/streams/edit
+              const mode = this.itemManage.mode; 
+              let endpoint = `/admin/api/${type}s/${mode}`;
               if (mode === 'rename') endpoint = `/admin/api/${type}s/edit`;
               
               let payload = { id: this.itemManage.id, name: this.itemManage.newName };
@@ -621,104 +601,133 @@
               try {
                   const res = await fetch(endpoint, { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                   const data = await res.json();
-                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Endpoint pending backend implementation.'); }
+                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Endpoint error.'); }
               } catch(e) { alert('Network Error.'); }
               this.itemManage.isSaving = false;
-          },
-
-          async submitFolderRename() {
-              this.folderManage.isSaving = true;
-              try {
-                  const res = await fetch('/admin/questions/folder/rename', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({ old_name: this.folderManage.oldName, new_name: this.folderManage.newName, chapter_id: this.folderManage.chapterId }) });
-                  const data = await res.json();
-                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Error renaming folder.'); }
-              } catch(e) { alert('Network error.'); }
-              this.folderManage.isSaving = false;
-          },
-
-          async submitFolderDelete() {
-              this.folderManage.isSaving = true;
-              try {
-                  const res = await fetch('/admin/questions/folder/delete', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({ folder_name: this.folderManage.oldName, chapter_id: this.folderManage.chapterId }) });
-                  const data = await res.json();
-                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Error deleting folder.'); }
-              } catch(e) { alert('Network error.'); }
-              this.folderManage.isSaving = false;
           }
       };
   }
 
-  // UPLOAD ENGINE APP (Modified for "Andar" Logic and "Add More")
-  function chapterUploader() {
-    return {
-      selectedChapterId: '{{ selected_chapter_id or "" }}',
-      step: 'mode', // 'mode' -> 'setup' -> 'upload'
-      mainMode: null, // 'mcq' or 'pyq'
-      modeParams: { type: 'mcq', category: 'topic' },
-      folderSetup: { name: '', year: '', marks: 4, negative: 1 },
-      jsonText: '[]', qCount: 0, totalSaved: 0, isSaving: false, errorMsg: '', successMsg: '',
-      
-      init() {
-        this.validateInput();
-        if (window.location.hash.includes('folder-')) { showSangamToast('✅ Successfully uploaded! Manage images below.'); }
-      },
+  // APP 2: THE "ALAUKIK" ARCHITECTURE ENGINE (Folders > Quizzes > Questions)
+  function chapterEngine() {
+      return {
+          activeFolder: null,
+          activeQuiz: null,
+          
+          uploadMode: false,
+          uploadType: 'new', // 'new' or 'add_more'
+          
+          step: 'mode',
+          mainMode: null,
+          modeParams: { type: 'mcq', category: 'topic' },
+          quizSetup: { name: '', marks: 4, negative: 1 },
+          
+          jsonText: '[]', qCount: 0, totalSaved: 0, isSaving: false, errorMsg: '', successMsg: '',
+          
+          newFolders: [], // Holds newly created empty folders temporarily
 
-      selectMode(type, category) {
-          this.modeParams.type = type; this.modeParams.category = category;
-          this.folderSetup.name = ''; this.folderSetup.year = '';
-          this.step = 'setup';
-      },
-      
-      // Inject directly into existing folder (The "Add More" Button)
-      openUploadMore(detail) {
-          this.modeParams.type = detail.type;
-          this.modeParams.category = 'topic'; // defaults to topic behavior
-          this.folderSetup.name = detail.folderName;
-          this.step = 'upload';
-          window.scrollTo({ top: document.getElementById('upload-engine-box').offsetTop - 20, behavior: 'smooth' });
-      },
+          // Quiz Management Modals State
+          quizManage: { renameOpen: false, deleteOpen: false, oldFolder: '', oldQuiz: '', newName: '', isSaving: false },
 
-      finalizeSetup() { if (!this.folderSetup.name.trim()) return; this.step = 'upload'; },
+          openNewFolder() {
+              let fname = prompt("Enter new folder name (e.g., Alaukik, Class 8):");
+              if (fname && fname.trim()) {
+                  this.newFolders.push(fname.trim());
+                  this.activeFolder = fname.trim(); // Auto-open it
+              }
+          },
 
-      doneUploading() {
-          const folderId = 'folder-' + slugify(this.folderSetup.name);
-          const currentUrl = new URL(window.location.href);
-          currentUrl.hash = folderId;
-          window.location.href = currentUrl.toString();
-          window.location.reload(); 
-      },
+          openQuizCreate() {
+              this.uploadMode = true;
+              this.uploadType = 'new';
+              this.step = 'mode';
+              this.mainMode = null;
+              this.quizSetup.name = '';
+          },
 
-      validateInput() {
-        this.errorMsg = ''; this.successMsg = '';
-        try {
-          if (this.jsonText.trim() === '' || this.jsonText.trim() === '[]') { this.qCount = 0; return; }
-          const parsed = JSON.parse(this.jsonText);
-          if (!Array.isArray(parsed)) { this.errorMsg = 'Must be a JSON array []'; this.qCount = 0; return; }
-          this.qCount = parsed.length;
-        } catch (e) { this.errorMsg = 'Invalid JSON Syntax'; this.qCount = 0; }
-      },
+          openAddMore() {
+              this.uploadMode = true;
+              this.uploadType = 'add_more';
+              this.quizSetup.name = this.activeQuiz;
+              this.modeParams.type = 'mcq'; // default fallback
+              this.step = 'upload';
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+          },
 
-      async saveChunk() {
-        if (!this.selectedChapterId || this.qCount === 0 || this.qCount > 25) return;
-        this.isSaving = true; this.errorMsg = ''; this.successMsg = '';
-        try {
-          const parsedData = JSON.parse(this.jsonText);
-          parsedData.forEach(item => {
-              item.question_type = this.modeParams.type;
-              item.topic_name = this.folderSetup.name; 
-              if (this.modeParams.type === 'pyq') { item.pyq_year = this.folderSetup.year ? parseInt(this.folderSetup.year, 10) : null; }
-          });
-          const payload = { stream_id: '{{ selected_stream_id }}', subject_id: '{{ selected_subject_id }}', chapter_id: this.selectedChapterId, bulk_json: parsedData, marks: parseFloat(this.folderSetup.marks) || 4, negative_marks: parseFloat(this.folderSetup.negative) || 1 };
-          const res = await fetch("{{ url_for('admin.questions_bulk_upload') }}?ajax=1", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-          const data = await res.json();
-          if (data.ok) {
-            this.totalSaved += data.inserted;
-            this.jsonText = '[]'; this.qCount = 0;
-            showSangamToast(`🔥 ${data.inserted} questions locked into folder '${this.folderSetup.name}'!`);
-          } else { this.errorMsg = data.error || 'Server error occurred.'; }
-        } catch (err) { this.errorMsg = 'Connection error. Check your network.'; } finally { this.isSaving = false; }
-      }
-    };
+          selectMode(type, category) {
+              this.modeParams.type = type; 
+              this.modeParams.category = category;
+              this.step = 'setup';
+          },
+
+          validateInput() {
+              this.errorMsg = ''; this.successMsg = '';
+              try {
+                  if (this.jsonText.trim() === '' || this.jsonText.trim() === '[]') { this.qCount = 0; return; }
+                  const parsed = JSON.parse(this.jsonText);
+                  if (!Array.isArray(parsed)) { this.errorMsg = 'Must be a JSON array []'; this.qCount = 0; return; }
+                  this.qCount = parsed.length;
+              } catch (e) { this.errorMsg = 'Invalid JSON Syntax'; this.qCount = 0; }
+          },
+
+          async saveChunk() {
+              if (this.qCount === 0 || this.qCount > 25) return;
+              this.isSaving = true; this.errorMsg = '';
+              try {
+                  const parsedData = JSON.parse(this.jsonText);
+                  // THE MAGIC ZERO-DB-CHANGE MAPPING: Folder Name :: Quiz Name
+                  const combinedTopicName = `${this.activeFolder}::${this.quizSetup.name}`;
+                  
+                  parsedData.forEach(item => {
+                      item.question_type = this.modeParams.type;
+                      item.topic_name = combinedTopicName; 
+                      // Notice: pyq_year is completely removed!
+                  });
+                  
+                  const payload = { 
+                      stream_id: '{{ selected_stream_id }}', subject_id: '{{ selected_subject_id }}', chapter_id: '{{ selected_chapter_id }}', 
+                      bulk_json: parsedData, marks: parseFloat(this.quizSetup.marks) || 4, negative_marks: parseFloat(this.quizSetup.negative) || 1 
+                  };
+                  
+                  const res = await fetch("{{ url_for('admin.questions_bulk_upload') }}?ajax=1", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                  const data = await res.json();
+                  if (data.ok) {
+                      this.totalSaved += data.inserted;
+                      this.jsonText = '[]'; this.qCount = 0;
+                      showSangamToast(`🔥 ${data.inserted} questions locked into '${this.quizSetup.name}'!`);
+                  } else { this.errorMsg = data.error || 'Server error occurred.'; }
+              } catch (err) { this.errorMsg = 'Connection error.'; } finally { this.isSaving = false; }
+          },
+
+          doneUploading() {
+              window.location.reload(); 
+          },
+
+          async submitQuizRename() {
+              this.quizManage.isSaving = true;
+              try {
+                  // Construct old and new combined names for backend
+                  const oldTopic = `${this.quizManage.oldFolder}::${this.quizManage.oldQuiz}`;
+                  const newTopic = `${this.quizManage.oldFolder}::${this.quizManage.newName}`;
+                  
+                  const res = await fetch('/admin/questions/folder/rename', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({ old_name: oldTopic, new_name: newTopic, chapter_id: '{{ selected_chapter_id }}' }) });
+                  const data = await res.json();
+                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Error renaming quiz.'); }
+              } catch(e) { alert('Network error.'); }
+              this.quizManage.isSaving = false;
+          },
+
+          async submitQuizDelete() {
+              this.quizManage.isSaving = true;
+              try {
+                  const targetTopic = `${this.quizManage.oldFolder}::${this.quizManage.oldQuiz}`;
+                  const res = await fetch('/admin/questions/folder/delete', { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify({ folder_name: targetTopic, chapter_id: '{{ selected_chapter_id }}' }) });
+                  const data = await res.json();
+                  if(data.ok) { window.location.reload(); } else { alert(data.error || 'Error deleting quiz.'); }
+              } catch(e) { alert('Network error.'); }
+              this.quizManage.isSaving = false;
+          }
+      };
   }
 
   // SINGLE QUESTION JSON EDIT MODAL
@@ -746,7 +755,7 @@
     if (!input || !input.files[0]) return;
     const row = input.closest('[data-question-row]');
     const formData = new FormData(); formData.append('image', input.files[0]);
-    showSangamToast('Uploading image to bucket...');
+    showSangamToast('Uploading image...');
     try {
       const res = await fetch(`/admin/questions/${row.dataset.table}/${row.dataset.questionId}/upload-image`, { method: 'POST', body: formData });
       const data = await res.json();
