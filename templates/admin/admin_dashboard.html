@@ -4,85 +4,85 @@
 {% block content %}
 {% include "admin/_admin_nav.html" %}
 
-<!-- PREMIUM DARK WRAPPER -->
-<div class="bg-[#0a0f1c] min-h-screen -mt-2 pb-20 font-body text-gray-200">
+<!-- PREMIUM DARK WRAPPER - Inspired by your UI Design -->
+<div class="bg-[#080b12] min-h-screen -mt-2 pb-24 font-body text-gray-200 relative overflow-hidden">
   
-  <div class="max-w-6xl mx-auto px-6 py-12">
+  <!-- Abstract Background Glows -->
+  <div class="absolute top-0 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+  <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+
+  <div class="max-w-6xl mx-auto px-6 py-12 relative z-10">
     
     <!-- ==========================================
-         HERO SECTION (From Wireframe)
+         HERO SECTION (From Your Wireframe)
          ========================================== -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 relative">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 relative border-b border-white/5 pb-12">
       <div class="z-10">
-        <p class="text-gray-400 font-medium tracking-wide mb-1 text-sm md:text-base">Welcome Back,</p>
-        <h1 class="text-5xl md:text-6xl font-display font-bold text-white mb-4">
-          Admin <span class="text-gold inline-block origin-bottom-left hover:rotate-12 transition-transform duration-300">👋</span>
+        <p class="text-gray-400 font-medium tracking-widest uppercase mb-2 text-sm">Welcome Back,</p>
+        <h1 class="text-5xl md:text-6xl font-display font-bold text-white mb-4 tracking-tight">
+          Admin <span class="text-indigo-500 inline-block origin-bottom-left hover:rotate-12 transition-transform duration-300">👋</span>
         </h1>
-        <p class="text-gray-400 font-medium text-sm md:text-base max-w-sm leading-relaxed border-l-2 border-gold/50 pl-4">
-          Your NEET journey matters. Keep going, You're closer than you think.
+        <p class="text-gray-400 font-medium text-base max-w-md leading-relaxed border-l-2 border-indigo-500/50 pl-4">
+          Your NEET & JEE platform control center. Manage uploads, track system health, and wipe garbage data effortlessly.
         </p>
       </div>
       
       <!-- Decorative Text -->
-      <div class="hidden md:block transform -rotate-6 opacity-80 mt-6 md:mt-0">
-        <p class="font-display italic text-3xl text-gold leading-tight">Dream<br>Study<br>Achieve.</p>
-        <svg class="w-8 h-8 text-white mt-2 ml-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+      <div class="hidden md:block transform rotate-2 opacity-60 mt-6 md:mt-0 bg-white/5 border border-white/10 p-6 rounded-2xl backdrop-blur-sm">
+        <p class="font-display italic text-2xl text-indigo-400 leading-tight">Better Prep.<br>Bigger Dreams.</p>
+        <div class="w-10 h-0.5 bg-indigo-500/50 mt-3"></div>
       </div>
     </div>
 
     <!-- ==========================================
          THE "BIG 3" ACTION CARDS
          ========================================== -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-24">
       
-      <!-- CARD 1: Mock Test Upload (Gold Accent) -->
-      <a href="{{ url_for('admin.test_series_list') }}" class="group relative bg-[#131c2f] border border-white/5 rounded-3xl p-8 hover:-translate-y-2 hover:border-gold/30 hover:shadow-[0_10px_40px_-10px_rgba(212,160,23,0.2)] transition-all duration-300 overflow-hidden flex flex-col h-full">
-        <!-- Abstract Bg Glow -->
-        <div class="absolute top-0 right-0 w-32 h-32 bg-gold/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-gold/20 transition-colors duration-500"></div>
+      <!-- CARD 1: Mock Test Upload (Untouched Flow as requested) -->
+      <a href="{{ url_for('admin.test_series_list') }}" class="group relative bg-[#111622] border border-white/10 rounded-3xl p-8 hover:-translate-y-2 hover:border-gold/40 hover:shadow-[0_10px_40px_-10px_rgba(212,160,23,0.3)] transition-all duration-300 overflow-hidden flex flex-col h-full shadow-xl">
+        <div class="absolute top-0 right-0 w-40 h-40 bg-gold/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-gold/20 transition-colors duration-500"></div>
         
-        <div class="w-14 h-14 bg-gold/10 border border-gold/20 rounded-2xl flex items-center justify-center mb-6 shadow-inner relative z-10 group-hover:scale-110 transition-transform duration-300">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+        <div class="w-16 h-16 bg-[#1a1f2e] border border-white/5 rounded-2xl flex items-center justify-center mb-6 relative z-10 group-hover:scale-110 group-hover:border-gold/30 transition-all duration-300">
+          <svg class="w-8 h-8 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
         </div>
         
-        <h3 class="text-2xl font-bold text-white mb-3 relative z-10">Mock Test Upload</h3>
-        <p class="text-gray-400 text-sm leading-relaxed mb-8 flex-grow relative z-10">Upload, manage and access strictly verified NTA-pattern mock tests in VIP folders.</p>
+        <h3 class="text-2xl font-display font-bold text-white mb-3 relative z-10">Mock Test Upload</h3>
+        <p class="text-gray-400 text-sm leading-relaxed mb-8 flex-grow relative z-10">Upload, manage and access strictly verified NTA-pattern mock tests in VIP series folders.</p>
         
-        <div class="flex items-center gap-2 text-sm font-bold text-white bg-white/5 border border-white/10 w-fit px-5 py-2.5 rounded-full group-hover:bg-gold group-hover:text-ink group-hover:border-gold transition-all duration-300 relative z-10">
+        <div class="flex items-center gap-2 text-sm font-bold text-white bg-white/5 border border-white/10 w-fit px-6 py-3 rounded-xl group-hover:bg-gold group-hover:text-ink group-hover:border-gold transition-all duration-300 relative z-10">
           Get Started <span class="group-hover:translate-x-1 transition-transform">&rarr;</span>
         </div>
       </a>
 
-      <!-- CARD 2: Chapterwise Upload (Indigo Accent) -->
-      <!-- Points to subjects_list currently, which we will upgrade to the new drill-down system next -->
-      <a href="{{ url_for('admin.subjects_list') }}" class="group relative bg-[#131c2f] border border-white/5 rounded-3xl p-8 hover:-translate-y-2 hover:border-indigo-500/30 hover:shadow-[0_10px_40px_-10px_rgba(99,102,241,0.2)] transition-all duration-300 overflow-hidden flex flex-col h-full">
-        <!-- Abstract Bg Glow -->
-        <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-indigo-500/20 transition-colors duration-500"></div>
+      <!-- CARD 2: Chapterwise Upload (FIXED: Now points to the master Engine) -->
+      <a href="{{ url_for('admin.questions_list') }}" class="group relative bg-[#111622] border border-white/10 rounded-3xl p-8 hover:-translate-y-2 hover:border-indigo-500/40 hover:shadow-[0_10px_40px_-10px_rgba(99,102,241,0.3)] transition-all duration-300 overflow-hidden flex flex-col h-full shadow-xl">
+        <div class="absolute top-0 right-0 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-indigo-500/20 transition-colors duration-500"></div>
         
-        <div class="w-14 h-14 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-center mb-6 shadow-inner relative z-10 group-hover:scale-110 transition-transform duration-300">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+        <div class="w-16 h-16 bg-[#1a1f2e] border border-white/5 rounded-2xl flex items-center justify-center mb-6 relative z-10 group-hover:scale-110 group-hover:border-indigo-500/30 transition-all duration-300">
+          <svg class="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
         </div>
         
-        <h3 class="text-2xl font-bold text-white mb-3 relative z-10">Chapterwise Upload</h3>
-        <p class="text-gray-400 text-sm leading-relaxed mb-8 flex-grow relative z-10">Create Daily Practice Papers (DPPs), topic-wise MCQs, and specific custom books.</p>
+        <h3 class="text-2xl font-display font-bold text-white mb-3 relative z-10">Chapterwise Upload</h3>
+        <p class="text-gray-400 text-sm leading-relaxed mb-8 flex-grow relative z-10">Access the Master Engine to create DPPs, Topic-wise folders, custom books, and practice materials.</p>
         
-        <div class="flex items-center gap-2 text-sm font-bold text-white bg-white/5 border border-white/10 w-fit px-5 py-2.5 rounded-full group-hover:bg-indigo-500 group-hover:text-white group-hover:border-indigo-500 transition-all duration-300 relative z-10">
+        <div class="flex items-center gap-2 text-sm font-bold text-white bg-white/5 border border-white/10 w-fit px-6 py-3 rounded-xl group-hover:bg-indigo-500 group-hover:text-white group-hover:border-indigo-500 transition-all duration-300 relative z-10">
           Get Started <span class="group-hover:translate-x-1 transition-transform">&rarr;</span>
         </div>
       </a>
 
       <!-- CARD 3: System Stats (Emerald Accent) -->
-      <a href="#stats-section" class="group relative bg-[#131c2f] border border-white/5 rounded-3xl p-8 hover:-translate-y-2 hover:border-emerald-500/30 hover:shadow-[0_10px_40px_-10px_rgba(16,185,129,0.2)] transition-all duration-300 overflow-hidden flex flex-col h-full">
-        <!-- Abstract Bg Glow -->
-        <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-emerald-500/20 transition-colors duration-500"></div>
+      <a href="#stats-section" class="group relative bg-[#111622] border border-white/10 rounded-3xl p-8 hover:-translate-y-2 hover:border-emerald-500/40 hover:shadow-[0_10px_40px_-10px_rgba(16,185,129,0.3)] transition-all duration-300 overflow-hidden flex flex-col h-full shadow-xl">
+        <div class="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-emerald-500/20 transition-colors duration-500"></div>
         
-        <div class="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center mb-6 shadow-inner relative z-10 group-hover:scale-110 transition-transform duration-300">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+        <div class="w-16 h-16 bg-[#1a1f2e] border border-white/5 rounded-2xl flex items-center justify-center mb-6 relative z-10 group-hover:scale-110 group-hover:border-emerald-500/30 transition-all duration-300">
+          <svg class="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
         </div>
         
-        <h3 class="text-2xl font-bold text-white mb-3 relative z-10">System Stats</h3>
-        <p class="text-gray-400 text-sm leading-relaxed mb-8 flex-grow relative z-10">Track database health, manage storage buckets, and wipe junk data.</p>
+        <h3 class="text-2xl font-display font-bold text-white mb-3 relative z-10">System Stats</h3>
+        <p class="text-gray-400 text-sm leading-relaxed mb-8 flex-grow relative z-10">Track database health, manage storage buckets, and wipe junk data efficiently.</p>
         
-        <div class="flex items-center gap-2 text-sm font-bold text-white bg-white/5 border border-white/10 w-fit px-5 py-2.5 rounded-full group-hover:bg-emerald-500 group-hover:text-white group-hover:border-emerald-500 transition-all duration-300 relative z-10">
+        <div class="flex items-center gap-2 text-sm font-bold text-white bg-white/5 border border-white/10 w-fit px-6 py-3 rounded-xl group-hover:bg-emerald-500 group-hover:text-white group-hover:border-emerald-500 transition-all duration-300 relative z-10">
           View Stats &darr;
         </div>
       </a>
@@ -90,82 +90,64 @@
     </div>
 
     <!-- ==========================================
-         PRESERVED SYSTEM STATS SECTION (Dark Mode)
+         SYSTEM STATS & GARBAGE DISPOSAL SECTION
          ========================================== -->
     <div id="stats-section" class="scroll-mt-10">
         
-        <div class="flex items-center gap-4 mb-8">
-            <div class="h-[1px] flex-1 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-            <h2 class="font-display text-2xl font-bold text-white uppercase tracking-widest text-center">System Overview</h2>
-            <div class="h-[1px] flex-1 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+        <div class="flex items-center gap-4 mb-10">
+            <h2 class="font-display text-3xl font-bold text-white tracking-wide">System Control Panel</h2>
+            <div class="h-[1px] flex-1 bg-gradient-to-r from-white/20 to-transparent ml-4"></div>
         </div>
         
-        <!-- 1. MAIN CONTENT COUNTS -->
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            {% for label, key in [('Streams','streams'), ('Subjects','subjects'), ('Chapters','chapters'), ('Questions','questions'), ('Tests','tests')] %}
-            <div class="bg-[#131c2f] border border-white/5 rounded-2xl p-5 shadow-sm hover:border-white/10 transition-colors relative overflow-hidden">
-                <div class="absolute -right-4 -top-4 w-16 h-16 bg-white/5 rounded-full blur-xl"></div>
-                <p class="text-3xl font-display font-bold text-white relative z-10">{{ counts[key] }}</p>
-                <p class="text-xs font-bold text-gray-500 mt-1 uppercase tracking-wider relative z-10">{{ label }}</p>
-            </div>
-            {% endfor %}
-        </div>
-
-        {% if counts.questions == 0 %}
-        <div class="mb-10 bg-gold/10 border border-gold/30 rounded-xl p-5 text-sm text-gold-light flex items-center gap-3">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            <p>
-            No questions yet — the site will show "Coming Soon" placeholders until content exists.
-            Start with <a href="{{ url_for('admin.subjects_list') }}" class="font-bold underline hover:text-white">Subjects</a> →
-            <a href="{{ url_for('admin.chapters_list') }}" class="font-bold underline hover:text-white">Chapters</a> → Questions.
-            </p>
-        </div>
-        {% endif %}
-
         <div class="grid md:grid-cols-2 gap-8">
             
-            <!-- 2. SYSTEM HEALTH & GARBAGE CLEANUP (PILLAR 4) -->
-            <div class="bg-[#131c2f] border border-white/5 rounded-3xl p-8 shadow-sm flex flex-col">
-                <div class="mb-6 border-b border-white/10 pb-5">
-                    <h2 class="font-display text-xl font-bold text-white mb-1">Database Cleanup</h2>
-                    <p class="text-sm text-gray-400">Permanently wipe junk attempts to save database rows.</p>
+            <!-- 1. DATABASE CLEANUP (The Nuclear Options) -->
+            <div class="bg-[#111622] border border-white/10 rounded-3xl p-8 shadow-xl flex flex-col relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-red-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div class="mb-8 border-b border-white/10 pb-5">
+                    <h2 class="font-display text-2xl font-bold text-white mb-2 flex items-center gap-3">
+                        <svg class="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        Garbage Disposal
+                    </h2>
+                    <p class="text-sm text-gray-400 font-medium">Permanently wipe junk attempts and orphaned data to optimize database speed.</p>
                 </div>
 
                 <div class="space-y-4 flex-1">
                     <!-- Guest Attempts -->
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#0a0f1c] rounded-2xl border border-white/5 gap-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-[#080b12] rounded-2xl border border-white/5 gap-4 hover:border-white/10 transition-colors">
                         <div>
-                            <p class="font-bold text-white">{{ garbage_info.guest_attempts }} Guest Attempts</p>
-                            <p class="text-xs text-gray-500 mt-0.5">Tests taken by unregistered users.</p>
+                            <p class="font-bold text-white text-lg">{{ garbage_info.guest_attempts }} Guest Attempts</p>
+                            <p class="text-xs text-gray-500 mt-1 font-medium">Temporary tests taken by unregistered users.</p>
                         </div>
-                        <form method="POST" action="{{ url_for('admin.cleanup_guest_attempts') }}" onsubmit="return confirm('⚠️ DANGER: This will instantly wipe all {{ garbage_info.guest_attempts }} guest attempts and their millions of linked answers. Proceed?');" class="shrink-0">
-                            <button type="submit" class="w-full text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:text-red-300 px-4 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" {{ 'disabled' if garbage_info.guest_attempts == 0 }}>
+                        <form method="POST" action="{{ url_for('admin.cleanup_guest_attempts') }}" onsubmit="return confirm('⚠️ DANGER: This will instantly wipe all {{ garbage_info.guest_attempts }} guest attempts and their millions of linked answers. Proceed?');" class="shrink-0 w-full sm:w-auto">
+                            <button type="submit" class="w-full text-sm font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white px-5 py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed" {{ 'disabled' if garbage_info.guest_attempts == 0 }}>
                             Wipe Guests
                             </button>
                         </form>
                     </div>
 
                     <!-- Incomplete Attempts -->
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#0a0f1c] rounded-2xl border border-white/5 gap-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-[#080b12] rounded-2xl border border-white/5 gap-4 hover:border-white/10 transition-colors">
                         <div>
-                            <p class="font-bold text-white">{{ garbage_info.incomplete_attempts }} Abandoned Tests</p>
-                            <p class="text-xs text-gray-500 mt-0.5">Tests started but never submitted.</p>
+                            <p class="font-bold text-white text-lg">{{ garbage_info.incomplete_attempts }} Abandoned Tests</p>
+                            <p class="text-xs text-gray-500 mt-1 font-medium">Tests that were started but never submitted.</p>
                         </div>
-                        <form method="POST" action="{{ url_for('admin.cleanup_incomplete_attempts') }}" onsubmit="return confirm('⚠️ DANGER: This will instantly wipe all {{ garbage_info.incomplete_attempts }} abandoned tests. Proceed?');" class="shrink-0">
-                            <button type="submit" class="w-full text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:text-red-300 px-4 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" {{ 'disabled' if garbage_info.incomplete_attempts == 0 }}>
+                        <form method="POST" action="{{ url_for('admin.cleanup_incomplete_attempts') }}" onsubmit="return confirm('⚠️ DANGER: This will instantly wipe all {{ garbage_info.incomplete_attempts }} abandoned tests. Proceed?');" class="shrink-0 w-full sm:w-auto">
+                            <button type="submit" class="w-full text-sm font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white px-5 py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed" {{ 'disabled' if garbage_info.incomplete_attempts == 0 }}>
                             Wipe Abandoned
                             </button>
                         </form>
                     </div>
 
                     <!-- Orphaned Mock Questions -->
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#0a0f1c] rounded-2xl border border-white/5 gap-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-[#080b12] rounded-2xl border border-white/5 gap-4 hover:border-white/10 transition-colors">
                         <div>
-                            <p class="font-bold text-white">{{ orphan_info.orphaned_mock_questions }} Orphaned Questions</p>
-                            <p class="text-xs text-gray-500 mt-0.5">Leftover from old deletes. Also wipes bucket images.</p>
+                            <p class="font-bold text-white text-lg">{{ orphan_info.orphaned_mock_questions }} Orphaned Questions</p>
+                            <p class="text-xs text-gray-500 mt-1 font-medium">Unlinked questions leftover from old deletions. Wipes bucket images too.</p>
                         </div>
-                        <form method="POST" action="{{ url_for('admin.cleanup_orphaned_mock_questions') }}" onsubmit="return confirm('⚠️ DANGER: This will permanently wipe all {{ orphan_info.orphaned_mock_questions }} orphaned questions and their images. Proceed?');" class="shrink-0">
-                            <button type="submit" class="w-full text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:text-red-300 px-4 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" {{ 'disabled' if orphan_info.orphaned_mock_questions == 0 }}>
+                        <form method="POST" action="{{ url_for('admin.cleanup_orphaned_mock_questions') }}" onsubmit="return confirm('⚠️ DANGER: This will permanently wipe all {{ orphan_info.orphaned_mock_questions }} orphaned questions and their images from storage. Proceed?');" class="shrink-0 w-full sm:w-auto">
+                            <button type="submit" class="w-full text-sm font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white px-5 py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed" {{ 'disabled' if orphan_info.orphaned_mock_questions == 0 }}>
                             Wipe Orphans
                             </button>
                         </form>
@@ -173,46 +155,52 @@
                 </div>
             </div>
 
-            <!-- 3. IMAGE STORAGE TRACKER (PILLAR 4) -->
-            <div class="bg-[#131c2f] border border-white/5 rounded-3xl p-8 shadow-sm flex flex-col">
-                <div class="mb-6 border-b border-white/10 pb-5">
-                    <h2 class="font-display text-xl font-bold text-white mb-1">Bucket Storage (1GB Free)</h2>
-                    <p class="text-sm text-gray-400">Live tracking of your compressed question diagrams.</p>
+            <!-- 2. IMAGE STORAGE TRACKER -->
+            <div class="bg-[#111622] border border-white/10 rounded-3xl p-8 shadow-xl flex flex-col">
+                <div class="mb-8 border-b border-white/10 pb-5">
+                    <h2 class="font-display text-2xl font-bold text-white mb-2 flex items-center gap-3">
+                        <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                        Storage Bucket Tracker
+                    </h2>
+                    <p class="text-sm text-gray-400 font-medium">Live tracking of your compressed question diagrams (1GB Free Tier).</p>
                 </div>
 
                 {% if storage_info.uploaded_count is none %}
-                <div class="bg-red-500/10 border border-red-500/30 rounded-2xl p-5 text-sm text-red-400 my-auto text-center">
-                    <strong class="text-base text-red-300 block mb-2">Storage bucket missing!</strong>
-                    Create a public bucket named <code class="bg-red-500/20 text-red-200 px-2 py-0.5 rounded font-mono">question-images</code> in your Supabase Dashboard.
+                <div class="bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-sm text-red-400 my-auto text-center">
+                    <strong class="text-lg text-red-300 block mb-2 font-display">Storage bucket missing!</strong>
+                    Create a public bucket named <code class="bg-red-500/20 text-red-200 px-2 py-1 rounded font-mono">question-images</code> in your Supabase Dashboard to enable diagram uploads.
                 </div>
                 {% else %}
-                <div class="grid grid-cols-2 gap-4 mb-8">
-                    <div class="bg-[#0a0f1c] p-5 rounded-2xl border border-white/5 text-center">
-                        <p class="text-4xl font-display font-bold text-white">{{ storage_info.uploaded_count }}</p>
-                        <p class="text-[10px] font-bold text-gray-500 mt-2 uppercase tracking-widest">Total Images</p>
+                <div class="grid grid-cols-2 gap-5 mb-10">
+                    <div class="bg-[#080b12] p-6 rounded-2xl border border-white/5 text-center shadow-inner">
+                        <p class="text-5xl font-display font-bold text-white mb-2">{{ storage_info.uploaded_count }}</p>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest">Total Images</p>
                     </div>
-                    <div class="bg-[#0a0f1c] p-5 rounded-2xl border border-white/5 text-center">
-                        <p class="text-4xl font-display font-bold text-emerald-400">~{{ storage_info.estimated_mb }}<span class="text-lg text-emerald-400/50 ml-1">MB</span></p>
-                        <p class="text-[10px] font-bold text-gray-500 mt-2 uppercase tracking-widest">Est. Used Space</p>
+                    <div class="bg-[#080b12] p-6 rounded-2xl border border-white/5 text-center shadow-inner">
+                        <p class="text-5xl font-display font-bold text-emerald-400 mb-2">~{{ storage_info.estimated_mb }}<span class="text-xl text-emerald-400/50 ml-1">MB</span></p>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest">Est. Space Used</p>
                     </div>
                 </div>
 
                 <!-- Progress Bar -->
-                <div class="mb-8">
-                    <div class="flex justify-between text-xs font-bold text-gray-400 mb-2">
+                <div class="mb-10">
+                    <div class="flex justify-between text-sm font-bold text-gray-400 mb-3">
                         <span>{{ storage_info.estimated_mb }} MB Used</span>
-                        <span>1024 MB Limit</span>
+                        <span>1024 MB Limit (1GB)</span>
                     </div>
-                    <div class="w-full bg-[#0a0f1c] rounded-full h-3 overflow-hidden border border-white/5">
-                        <div class="bg-emerald-500 h-3 rounded-full relative" style="width: {{ [(storage_info.estimated_mb / 1024 * 100), 100] | min }}%">
+                    <div class="w-full bg-[#080b12] rounded-full h-4 overflow-hidden border border-white/5 shadow-inner">
+                        <div class="bg-gradient-to-r from-emerald-500 to-emerald-400 h-full rounded-full relative" style="width: {{ [(storage_info.estimated_mb / 1024 * 100), 100] | min }}%">
                             <div class="absolute inset-0 bg-white/20 w-full animate-[pulse_2s_ease-in-out_infinite]"></div>
                         </div>
                     </div>
                 </div>
 
-                <div class="mt-auto bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex items-center justify-between">
-                    <p class="text-xs font-bold text-amber-500/80 uppercase tracking-wide">Images pending manual upload:</p>
-                    <p class="text-base font-black {{ 'text-red-400' if (storage_info.pending_questions + storage_info.pending_mock_questions) > 0 else 'text-emerald-400' }}">
+                <div class="mt-auto bg-[#080b12] border border-white/5 p-5 rounded-2xl flex items-center justify-between shadow-inner">
+                    <div>
+                        <p class="text-sm font-bold text-gray-300">Pending Manual Uploads</p>
+                        <p class="text-xs font-medium text-gray-500 mt-1">Questions marked "has_image" but empty.</p>
+                    </div>
+                    <p class="text-2xl font-black px-4 py-2 rounded-xl {{ 'bg-red-500/10 text-red-400 border border-red-500/20' if (storage_info.pending_questions + storage_info.pending_mock_questions) > 0 else 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' }}">
                         {{ storage_info.pending_questions + storage_info.pending_mock_questions }}
                     </p>
                 </div>
@@ -220,6 +208,19 @@
             </div>
 
         </div>
+
+        <!-- Minimalist Overall DB Stats (Consolidated at the bottom to remove clutter) -->
+        <div class="mt-8 flex flex-wrap items-center justify-center gap-6 bg-[#111622] border border-white/5 rounded-2xl p-6 shadow-sm">
+            <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">Database Content:</span>
+            {% for label, key in [('Streams','streams'), ('Subjects','subjects'), ('Chapters','chapters'), ('Questions','questions'), ('Tests','tests')] %}
+            <div class="flex items-center gap-2">
+                <span class="text-lg font-black text-white">{{ counts[key] }}</span>
+                <span class="text-xs font-medium text-gray-400">{{ label }}</span>
+            </div>
+            {% if not loop.last %}<div class="w-1 h-1 rounded-full bg-white/10 hidden sm:block"></div>{% endif %}
+            {% endfor %}
+        </div>
+
     </div>
     
   </div>
