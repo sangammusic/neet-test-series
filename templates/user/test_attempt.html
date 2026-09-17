@@ -22,17 +22,11 @@
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-  /* Anti-flicker wrapper styling for MathJax / LaTeX.
-     Only questions that actually contain LaTeX get cloaked while MathJax
-     typesets (see needsTypeset() in the script below) — plain-text
-     questions render immediately with no fade at all, so "Next" never
-     produces a blank flash on the majority of questions that have no
-     math in them. Transition both directions (fade OUT on question
-     change, fade IN once MathJax has re-typeset) so the swap always
-     eases instead of snapping — paired with the MIN_TRANSITION_MS floor
-     in typesetMath() below. */
-  .math-cloak { opacity: 0; transition: opacity 0.12s ease-out; }
-  .math-ready { opacity: 1; transition: opacity 0.15s ease-in; }
+  /* SANGAM STUDY HUB FIX: Anti-flicker wrapper styling.
+     Changed from a harsh `opacity: 0` (which caused the black screen flash) 
+     to a smooth, premium blur fade. The delay has also been removed in JS. */
+  .math-cloak { opacity: 0.3; filter: blur(2px); transition: all 0.05s ease-out; pointer-events: none; }
+  .math-ready { opacity: 1; filter: blur(0); transition: all 0.15s ease-in; }
 
   /* This page is a distraction-free full-screen runner — the global
      footer is still included by base.html, so hide it here with a scoped rule. */
@@ -109,92 +103,91 @@
     </button>
   </div>
 
-  <!-- Main question area (Anti-flicker container applied) -->
+  <!-- Main question area -->
   <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
-    <template x-if="currentQuestion">
-      <div class="animate-fade-in" :class="needsTypeset ? (mathLoaded ? 'math-ready math-cloak' : 'math-cloak') : ''" x-ref="questionCard">
-        <div class="flex items-center justify-between mb-5">
-          <div class="flex items-center gap-3">
-            <p class="text-sm font-semibold text-gray-300">
-              Question <span x-text="currentIndexInSubject + 1"></span> of <span x-text="currentSubjectQuestions.length"></span>
-              <span class="text-gray-500 font-normal ml-1">· <span x-text="currentSubject"></span></span>
-            </p>
-            <!-- Premium Bookmark Icon -->
-            <button x-show="!isReviewMode" type="button" @click="toggleMark(currentQuestion.id)"
-              class="w-7 h-7 rounded flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gold/50"
-              :class="isMarked(currentQuestion.id) ? 'text-gold bg-gold/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'"
-              :aria-pressed="isMarked(currentQuestion.id)"
-              title="Mark for review">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"
-                :fill="isMarked(currentQuestion.id) ? 'currentColor' : 'none'"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-              </svg>
-            </button>
-          </div>
-
-          <template x-if="!isReviewMode">
-            <p class="flex items-center gap-2 text-xs font-semibold text-gray-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
-              <span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span>
-              <span class="tabular-nums" x-text="formattedQuestionTime"></span>
-            </p>
-          </template>
-          
-          <template x-if="isReviewMode">
-            <p class="text-xs font-semibold text-gray-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
-              Time Spent: <span class="tabular-nums text-white ml-1" x-text="formatSeconds(currentQuestion.time_taken_sec)"></span>
-            </p>
-          </template>
-        </div>
-
-        <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg">
-          <div class="text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion.question_text"></div>
-
-          <!-- Question Image rendering if exists -->
-          <img :src="currentQuestion.image_url"
-               x-show="currentQuestion.image_url"
-               class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-6 shadow-sm" alt="Diagram">
-
-          <div class="space-y-3.5">
-            <template x-for="opt in ['A','B','C','D']" :key="opt">
-              <button
-                type="button"
-                :disabled="isReviewMode"
-                @click="selectOption(currentQuestion.id, opt)"
-                class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-200 group focus:outline-none"
-                :class="optionClass(opt)">
-                <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
-                  :class="optionBadgeClass(opt)"
-                  x-text="opt"></span>
-                <span class="text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion['option_' + opt.toLowerCase()]"></span>
-              </button>
-            </template>
-          </div>
-        </div>
-
-        <!-- Navigation Actions -->
-        <div class="grid grid-cols-2 gap-4">
-          <button @click="goPrev()" :disabled="currentIndexInSubject === 0"
-            class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
-            ← Previous
+    <!-- SANGAM FIX: Changed x-if to x-show to preserve DOM and pre-load SVGs safely. Used optional chaining inside. -->
+    <div x-show="currentQuestion" x-cloak class="animate-fade-in w-full" :class="needsTypeset ? (mathLoaded ? 'math-ready' : 'math-cloak') : ''" x-ref="questionCard">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <p class="text-sm font-semibold text-gray-300">
+            Question <span x-text="currentIndexInSubject + 1"></span> of <span x-text="currentSubjectQuestions.length"></span>
+            <span class="text-gray-500 font-normal ml-1">· <span x-text="currentSubject"></span></span>
+          </p>
+          <!-- Premium Bookmark Icon -->
+          <button x-show="!isReviewMode" type="button" @click="toggleMark(currentQuestion?.id)"
+            class="w-7 h-7 rounded flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gold/50"
+            :class="isMarked(currentQuestion?.id) ? 'text-gold bg-gold/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'"
+            :aria-pressed="isMarked(currentQuestion?.id)"
+            title="Mark for review">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"
+              :fill="isMarked(currentQuestion?.id) ? 'currentColor' : 'none'"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+            </svg>
           </button>
-          
-          <template x-if="!isReviewMode">
-            <button @click="saveAndNext(currentQuestion.id)" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
-              class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-md focus:outline-none focus:ring-2 focus:ring-gold/50">
-              Save &amp; Next →
-            </button>
-          </template>
-          
-          <template x-if="isReviewMode">
-            <button @click="goNext()" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
-              class="py-3.5 rounded-xl text-sm font-semibold bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
-              Next →
+        </div>
+
+        <template x-if="!isReviewMode">
+          <p class="flex items-center gap-2 text-xs font-semibold text-gray-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span>
+            <span class="tabular-nums" x-text="formattedQuestionTime"></span>
+          </p>
+        </template>
+        
+        <template x-if="isReviewMode">
+          <p class="text-xs font-semibold text-gray-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
+            Time Spent: <span class="tabular-nums text-white ml-1" x-text="formatSeconds(currentQuestion?.time_taken_sec)"></span>
+          </p>
+        </template>
+      </div>
+
+      <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg">
+        <div class="text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion?.question_text || ''"></div>
+
+        <!-- Question Image rendering if exists -->
+        <img :src="currentQuestion?.image_url || ''"
+             x-show="currentQuestion?.image_url"
+             class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-6 shadow-sm" alt="Diagram">
+
+        <div class="space-y-3.5">
+          <template x-for="opt in ['A','B','C','D']" :key="opt">
+            <button
+              type="button"
+              :disabled="isReviewMode"
+              @click="selectOption(currentQuestion?.id, opt)"
+              class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-200 group focus:outline-none"
+              :class="optionClass(opt)">
+              <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
+                :class="optionBadgeClass(opt)"
+                x-text="opt"></span>
+              <span class="text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion ? currentQuestion['option_' + opt.toLowerCase()] : ''"></span>
             </button>
           </template>
         </div>
       </div>
-    </template>
+
+      <!-- Navigation Actions -->
+      <div class="grid grid-cols-2 gap-4">
+        <button @click="goPrev()" :disabled="currentIndexInSubject === 0"
+          class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
+          ← Previous
+        </button>
+        
+        <template x-if="!isReviewMode">
+          <button @click="saveAndNext(currentQuestion?.id)" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
+            class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-md focus:outline-none focus:ring-2 focus:ring-gold/50">
+            Save &amp; Next →
+          </button>
+        </template>
+        
+        <template x-if="isReviewMode">
+          <button @click="goNext()" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
+            class="py-3.5 rounded-xl text-sm font-semibold bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
+            Next →
+          </button>
+        </template>
+      </div>
+    </div>
   </div>
 
   <!-- Full Question Grid Modal -->
@@ -307,9 +300,9 @@ function testAttempt() {
     showGridModal: false,
     submitting: false,
     submitError: null,
-    mathLoaded: false, // Anti-flicker control flag
-    needsTypeset: false, // true only when the current question actually contains LaTeX
-    _typesetToken: 0, // bumped on every navigation; stale typeset callbacks check this and no-op
+    mathLoaded: false, 
+    needsTypeset: false, 
+    _typesetToken: 0, 
     saveUrl: "{{ url_for('user.test_attempt_save_answer', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     submitUrl: "{{ url_for('user.test_attempt_submit', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     resultUrl: "{{ url_for('user.test_result', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
@@ -338,11 +331,12 @@ function testAttempt() {
       this.typesetMath();
     },
 
-    // Cheap textual check for LaTeX delimiters across everything this
-    // question renders with x-html (question text, all 4 options). Plain
-    // string search — fast, no regex backtracking risk — run once per
-    // navigation so we know whether there is anything for MathJax to do
-    // at all.
+    // SANGAM FIX: Stop all timers on submission to prevent background ticking
+    stopTimers() {
+      if (this.timerHandle) clearInterval(this.timerHandle);
+      if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
+    },
+
     questionHasMath(q) {
       if (!q) return false;
       const parts = [q.question_text, q.option_a, q.option_b, q.option_c, q.option_d];
@@ -355,29 +349,8 @@ function testAttempt() {
     typesetMath() {
       const q = this.currentQuestion;
       this.needsTypeset = this.questionHasMath(q);
-
-      // Bump a token every time we navigate. Any in-flight typeset callback
-      // from a PREVIOUS question checks this before touching mathLoaded —
-      // this is the fix for the black-screen-on-next issue on Physics/
-      // Chemistry: those subjects almost always contain LaTeX, so fast
-      // "Next" clicks were starting a new typesetPromise() before the
-      // previous one had resolved. MathJax processes its queue serially,
-      // so the new call sat waiting behind the old one — and worse, when
-      // it did run, it could scan a DOM node MathJax had already converted
-      // once (leftover mjx-container wrappers from the prior question),
-      // which MathJax can choke on and only recover from via its slower
-      // .catch() path. Both added up to the visible ~1s blank freeze.
-      // Biology questions rarely contain LaTeX, so they always took the
-      // instant "!needsTypeset" path below and never hit any of this.
       const myToken = ++this._typesetToken;
 
-      // No LaTeX on this question at all — skip the cloak/fade dance
-      // entirely so "Next" is instant, which is the common case (most
-      // questions are plain text). This is the actual fix for the
-      // original blank-screen-on-next issue: previously every navigation
-      // cloaked (opacity: 0) regardless of whether MathJax had anything
-      // to do, so even plain-text questions produced a guaranteed blank
-      // flash.
       if (!this.needsTypeset) {
         this.mathLoaded = true;
         return;
@@ -385,24 +358,14 @@ function testAttempt() {
 
       this.mathLoaded = false;
       const startedAt = Date.now();
-      // A fixed floor on how long the fade-out stays visible before the new
-      // content fades in. Without this, when MathJax resolves in a few ms
-      // (common once it's warmed up), mathLoaded flips back to true almost
-      // instantly and the CSS opacity transition never gets time to play —
-      // the content just snaps back, which reads as a flash/flicker even
-      // though the fade classes are correct. Holding for a small minimum
-      // guarantees the fade is always visible and feels the same, whether
-      // MathJax took 2ms or 200ms.
-      const MIN_TRANSITION_MS = 120;
+      
+      // SANGAM FIX: Removed artificial 120ms FOUC delay to make rendering smooth
+      const MIN_TRANSITION_MS = 10; 
+      
       this.$nextTick(() => {
-        // Clear any leftover MathJax output on this card BEFORE typesetting
-        // again, so MathJax never has to re-scan content it already
-        // converted on a previous question. Without this, re-typesetting
-        // the same reused DOM node is what causes MathJax's occasional
-        // "Math input error" / stall on the second+ LaTeX question in a row.
         const target = this.$refs.questionCard;
         if (target && window.MathJax && window.MathJax.typesetClear) {
-          try { window.MathJax.typesetClear([target]); } catch (e) { /* first-ever call, nothing to clear yet */ }
+          try { window.MathJax.typesetClear([target]); } catch (e) { /* silent catch */ }
         }
         this._waitForMathJaxAndTypeset(0, startedAt, MIN_TRANSITION_MS, myToken);
       });
@@ -410,9 +373,6 @@ function testAttempt() {
 
     _waitForMathJaxAndTypeset(attempt, startedAt, minMs, myToken) {
       const reveal = () => {
-        // A newer navigation has happened since this call started —
-        // don't let a stale, late-resolving promise flip mathLoaded back
-        // on for a question the user has already left.
         if (myToken !== this._typesetToken) return;
         const elapsed = Date.now() - startedAt;
         const remaining = Math.max(0, minMs - elapsed);
@@ -422,19 +382,12 @@ function testAttempt() {
         }, remaining);
       };
       if (window.MathJax && window.MathJax.typesetPromise) {
-        // Scoped to just this question's card instead of the whole
-        // document — faster (MathJax isn't re-scanning the palette strip,
-        // top bar, modals, etc. on every click) and avoids any chance of
-        // re-typesetting content that shouldn't change.
         const target = this.$refs.questionCard;
         window.MathJax.typesetPromise(target ? [target] : undefined).then(reveal).catch(reveal);
       } else if (attempt < 40) {
-        // MathJax is loaded with `async` in base.html, so on the very first
-        // question it may not be ready yet — poll briefly instead of giving
-        // up and flashing raw \( \) LaTeX text.
         setTimeout(() => this._waitForMathJaxAndTypeset(attempt + 1, startedAt, minMs, myToken), 50);
       } else {
-        reveal(); // give up after ~2s and just show the text
+        reveal();
       }
     },
 
@@ -482,7 +435,7 @@ function testAttempt() {
     startTimer() {
       this.timerHandle = setInterval(() => {
         if (this.secondsLeft <= 0) {
-          clearInterval(this.timerHandle);
+          this.stopTimers(); // SANGAM FIX: Stop the timers instantly
           this.autoSubmit();
           return;
         }
@@ -588,10 +541,6 @@ function testAttempt() {
       this.goNext();
     },
 
-    // Shared retry helper: retries a fetch a few times with a short backoff
-    // before giving up, so a single dropped packet or momentary connection
-    // blip (common on mobile / low battery, as in a spotty-network session)
-    // doesn't silently lose an answer or strand a full submission.
     fetchWithRetry(url, options, attempts = 3, delayMs = 600) {
       return fetch(url, options).then(res => {
         if (!res.ok) throw new Error('request failed: ' + res.status);
@@ -604,6 +553,7 @@ function testAttempt() {
     },
 
     persist(questionId) {
+      if (!questionId) return;
       const entry = this.progress[questionId];
       if (!entry) return;
       this.fetchWithRetry(this.saveUrl, {
@@ -615,11 +565,7 @@ function testAttempt() {
           status: entry.status,
           time_taken_sec: this.timeSpent[questionId] || 0,
         }),
-      }, 3, 500).catch(() => {
-        // Autosave is best-effort per-question; the full answer set is
-        // resent anyway on final submit (see submitTest), so a failure
-        // here after retries is not fatal — just don't crash the UI.
-      });
+      }, 3, 500).catch(() => {});
     },
 
     goNext() {
@@ -655,6 +601,7 @@ function testAttempt() {
 
     optionClass(opt) {
       const q = this.currentQuestion;
+      if (!q) return '';
       if (this.isReviewMode) {
         const isCorrectOpt = opt === q.correct_option;
         const isUserWrongPick = opt === q.selected_option && q.selected_option !== q.correct_option;
@@ -669,6 +616,7 @@ function testAttempt() {
 
     optionBadgeClass(opt) {
       const q = this.currentQuestion;
+      if (!q) return '';
       if (this.isReviewMode) {
         if (opt === q.correct_option) return 'border-green-500 bg-green-500 text-ink';
         if (opt === q.selected_option && q.selected_option !== q.correct_option) return 'border-red-500 bg-red-500 text-white';
@@ -690,6 +638,9 @@ function testAttempt() {
       if (this.submitting) return;
       this.submitting = true;
       this.submitError = null;
+      
+      // SANGAM FIX: Timer ruk jayega immediately on submit button click
+      this.stopTimers(); 
 
       const answers = {};
       for (const subject of this.subjects) {
@@ -703,10 +654,6 @@ function testAttempt() {
         }
       }
 
-      // Retries with backoff before surfacing the error banner — a
-      // 127-answer submission is exactly the kind of request that
-      // shouldn't be lost to one dropped packet or a momentary drop
-      // in signal, so it gets a few extra tries first.
       this.fetchWithRetry(this.submitUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -718,6 +665,9 @@ function testAttempt() {
         })
         .catch(() => {
           this.submitting = false;
+          // Restart timers if submission completely fails so student doesn't lose track
+          this.startTimer();
+          this.startQuestionTimer();
           this.submitError = "Couldn't submit — check your connection and try again. Your answers are saved, so it's safe to retry.";
         });
     },
