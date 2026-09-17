@@ -59,7 +59,7 @@
   <div class="bg-[#0f0f0f] border-b border-white/5 px-3 md:px-6 py-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar sticky top-[49px] z-10 shadow-sm w-full max-w-full">
     <template x-for="(q, idx) in questions" :key="'strip-' + q.id">
       <button @click="jumpTo(idx)"
-        class="w-8 h-8 shrink-0 rounded text-xs font-semibold flex items-center justify-center transition-transform hover:scale-105"
+        class="w-8 h-8 shrink-0 rounded text-xs font-semibold flex items-center justify-center transition-all duration-300 ease-out hover:scale-105"
         :class="[paletteClass(idx), currentIndex === idx ? 'ring-2 ring-gold ring-offset-1 ring-offset-[#0f0f0f]' : '']"
         x-text="idx + 1"></button>
     </template>
@@ -77,8 +77,8 @@
           </span>
         </p>
 
-        <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg">
-          <div class="transition-opacity duration-100" :class="mathReady ? 'opacity-100' : 'opacity-0'">
+        <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg overflow-hidden">
+          <div class="transition-all duration-200 ease-out" :class="mathReady ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'">
             <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion.question_text"></div>
 
             <div x-show="currentQuestion.image_url" class="my-6 mx-auto max-w-full flex justify-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
@@ -90,18 +90,23 @@
             <div class="space-y-3.5">
               <template x-for="opt in ['A','B','C','D']" :key="opt">
                 <button type="button" @click="selectOption(opt)"
-                  class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-200"
+                  class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-300 ease-out"
                   :class="optionClass(opt)">
-                  <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
+                  <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ease-out"
                     :class="optionBadgeClass(opt)" x-text="opt"></span>
                   <span class="option-text text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion['option_' + opt.toLowerCase()]"></span>
                 </button>
               </template>
             </div>
 
-            <!-- Instant feedback after answering -->
-            <div x-show="answers[currentQuestion.id] != null" x-cloak class="mt-5 pt-5 border-t border-white/10">
-              <p class="text-sm font-semibold" :class="answers[currentQuestion.id] === currentQuestion.correct_option ? 'text-green-400' : 'text-red-400'">
+            <!-- Instant feedback after answering — eases in instead of
+                 snapping into place, so the buttons below don't jump -->
+            <div x-show="answers[currentQuestion.id] != null"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 -translate-y-1"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-cloak class="mt-5 pt-5 border-t border-white/10">
+              <p class="text-sm font-semibold transition-colors duration-300" :class="answers[currentQuestion.id] === currentQuestion.correct_option ? 'text-green-400' : 'text-red-400'">
                 <span x-text="answers[currentQuestion.id] === currentQuestion.correct_option ? '✓ Correct!' : '✗ Incorrect.'"></span>
                 <span x-show="answers[currentQuestion.id] !== currentQuestion.correct_option">
                   Correct answer: <span x-text="currentQuestion.correct_option"></span>
@@ -137,8 +142,16 @@
   </div>
 
   <!-- Summary modal -->
-  <div x-show="showSummary" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4">
-    <div class="bg-[#161616] border border-white/10 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
+  <div x-show="showSummary"
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4">
+    <div x-show="showSummary"
+         x-transition:enter="transition ease-out duration-200 delay-75"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         class="bg-[#161616] border border-white/10 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
       <h3 class="font-display text-2xl font-bold text-white mb-2">Practice Complete</h3>
       <p class="text-4xl font-display font-bold text-gold my-4" x-text="score + ' / ' + questions.length"></p>
       <p class="text-sm text-gray-400 mb-4">questions answered correctly</p>
@@ -186,25 +199,36 @@ function practiceRunner() {
 
     typesetMath() {
       this.mathReady = false;
+      const startedAt = Date.now();
+      // A fixed floor on how long the fade-out stays visible before the new
+      // content fades in. Without this, when MathJax resolves in a few ms
+      // (common once it's warmed up), mathReady flips back to true almost
+      // instantly and the CSS opacity transition never gets time to play —
+      // the content just snaps, which reads as a "flash" even though the
+      // fade classes are correct. Holding for a small minimum guarantees
+      // the fade is always visible and always feels the same, whether
+      // MathJax took 2ms or 200ms.
+      const MIN_TRANSITION_MS = 120;
       this.$nextTick(() => {
-        this._waitForMathJaxAndTypeset(0);
+        this._waitForMathJaxAndTypeset(0, startedAt, MIN_TRANSITION_MS);
       });
     },
 
-    _waitForMathJaxAndTypeset(attempt) {
+    _waitForMathJaxAndTypeset(attempt, startedAt, minMs) {
+      const reveal = () => {
+        const elapsed = Date.now() - startedAt;
+        const remaining = Math.max(0, minMs - elapsed);
+        setTimeout(() => { this.mathReady = true; }, remaining);
+      };
       if (window.MathJax && window.MathJax.typesetPromise) {
-        window.MathJax.typesetPromise().then(() => {
-          this.mathReady = true;
-        }).catch(() => {
-          this.mathReady = true; // never leave content hidden if MathJax errors
-        });
+        window.MathJax.typesetPromise().then(reveal).catch(reveal);
       } else if (attempt < 40) {
         // MathJax script is loaded with `async` in base.html, so on the very
         // first question it may not be ready yet — poll briefly instead of
         // giving up and flashing the raw \( \) text.
-        setTimeout(() => this._waitForMathJaxAndTypeset(attempt + 1), 50);
+        setTimeout(() => this._waitForMathJaxAndTypeset(attempt + 1, startedAt, minMs), 50);
       } else {
-        this.mathReady = true; // give up after ~2s and just show the text
+        reveal(); // give up after ~2s and just show the text
       }
     },
 
@@ -263,7 +287,16 @@ function practiceRunner() {
       const q = this.currentQuestion;
       if (!q || this.answers[q.id] != null) return; // lock after first pick
       this.answers[q.id] = opt;
-      this.typesetMath(); // explanation text can contain LaTeX too
+      // Only re-typeset math inside the explanation, without touching
+      // mathReady — that flag fades the *entire* question card, which
+      // looks wrong here (the person just answered; the question and
+      // options shouldn't visually blink). The explanation panel already
+      // eases in on its own via x-transition.
+      this.$nextTick(() => {
+        if (window.MathJax && window.MathJax.typesetPromise) {
+          window.MathJax.typesetPromise();
+        }
+      });
     },
 
     jumpTo(idx) { this.currentIndex = idx; this.startQuestionTimer(); this.typesetMath(); },
