@@ -626,7 +626,7 @@ def change_username():
     return jsonify({"ok": True, "username": new_username, "message": "Username updated successfully."})
 
 
-def _verify_current_password(user_id, current_password, username):
+def _verify_current_password(user_id, current_password):
     """
     Returns True if `current_password` is correct for the given user,
     False otherwise. Always verifies via a real sign-in attempt against
@@ -639,12 +639,29 @@ def _verify_current_password(user_id, current_password, username):
     each other and make a correct password look wrong. A fresh,
     throwaway client has its own isolated session and can't be affected
     by, or affect, any other request.
+
+    BUGFIX: this used to take a `username` argument and build the
+    dummy email as f"{username}@sangam.local" from it, where the
+    caller read `username` out of profiles.username. For any account
+    created BEFORE the username-column migration was applied,
+    profiles.username can be NULL/empty (the migration adds the
+    column but doesn't backfill old rows), which silently produced
+    the dummy email "@sangam.local" — always wrong, so the real
+    password always looked "incorrect" even when typed correctly.
+    Fixed by reading the actual login email straight from
+    auth.users via the admin API instead of reconstructing it from a
+    column that can be stale or empty — auth.users.email is the true
+    source of truth for what sign_in_with_password needs.
     """
-    dummy_email = f"{username}@sangam.local"
     try:
+        user_res = supabase_admin.auth.admin.get_user_by_id(user_id)
+        real_email = user_res.user.email if user_res and user_res.user else None
+        if not real_email:
+            return False
+
         verify_client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
         verify_result = verify_client.auth.sign_in_with_password(
-            {"email": dummy_email, "password": current_password}
+            {"email": real_email, "password": current_password}
         )
         return bool(verify_result and verify_result.session)
     except Exception:
@@ -669,10 +686,7 @@ def verify_password():
     if not current_password:
         return jsonify({"ok": False, "error": "Please enter your current password."}), 400
 
-    profile_res = supabase_admin.table("profiles").select("username").eq("id", user_id).execute()
-    username = (profile_res.data[0].get("username") if profile_res.data else None) or ""
-
-    if not _verify_current_password(user_id, current_password, username):
+    if not _verify_current_password(user_id, current_password):
         return jsonify({"ok": False, "error": "Incorrect password. Please try again."}), 401
 
     return jsonify({"ok": True})
@@ -705,10 +719,7 @@ def change_password():
     if new_password == current_password:
         return jsonify({"ok": False, "error": "New password must be different from your current password."}), 400
 
-    profile_res = supabase_admin.table("profiles").select("username").eq("id", user_id).execute()
-    username = (profile_res.data[0].get("username") if profile_res.data else None) or ""
-
-    if not _verify_current_password(user_id, current_password, username):
+    if not _verify_current_password(user_id, current_password):
         return jsonify({"ok": False, "error": "Your current password is incorrect."}), 401
 
     try:
@@ -755,10 +766,7 @@ def delete_account():
     if not current_password:
         return jsonify({"ok": False, "error": "Please enter your current password to confirm."}), 400
 
-    profile_res = supabase_admin.table("profiles").select("username").eq("id", user_id).execute()
-    username = (profile_res.data[0].get("username") if profile_res.data else None) or ""
-
-    if not _verify_current_password(user_id, current_password, username):
+    if not _verify_current_password(user_id, current_password):
         return jsonify({"ok": False, "error": "Your current password is incorrect."}), 401
 
     try:
