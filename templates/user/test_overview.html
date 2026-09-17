@@ -1,42 +1,51 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ test.title }}{% endblock %}
 {% block content %}
-<section class="max-w-2xl mx-auto px-6 pt-12 pb-24">
-  <h1 class="font-display text-2xl font-semibold text-ink mb-2">{{ test.title }}</h1>
-  {% if test.description %}<p class="text-ink/60 mb-6">{{ test.description }}</p>{% endif %}
+<section class="max-w-2xl mx-auto px-6 pt-12 pb-24 relative z-10">
+  
+  <div class="mb-8">
+    <a href="javascript:history.back()" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-flex items-center gap-2 transition-colors">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+      </svg>
+      Back
+    </a>
+    <h1 class="font-display text-3xl font-bold text-white mb-2">{{ test.title }}</h1>
+    {% if test.description %}<p class="text-gray-400 text-sm font-medium">{{ test.description }}</p>{% endif %}
+  </div>
 
   <div class="grid grid-cols-3 gap-4 mb-8">
-    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
-      <p class="text-2xl font-display text-ink">{{ test.total_marks or '—' }}</p>
-      <p class="text-xs text-ink/50 mt-1">Total Marks</p>
+    <div class="bg-scholar-card border border-scholar-border rounded-xl p-5 text-center backdrop-blur-xl">
+      <p class="text-2xl font-display font-bold text-white">{{ test.total_marks or '—' }}</p>
+      <p class="text-xs text-gray-400 mt-1 font-medium">Total Marks</p>
     </div>
-    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
-      <p class="text-2xl font-display text-ink">{{ test.duration_minutes }}</p>
-      <p class="text-xs text-ink/50 mt-1">Minutes</p>
+    <div class="bg-scholar-card border border-scholar-border rounded-xl p-5 text-center backdrop-blur-xl">
+      <p class="text-2xl font-display font-bold text-white">{{ test.duration_minutes }}</p>
+      <p class="text-xs text-gray-400 mt-1 font-medium">Minutes</p>
     </div>
-    <div class="bg-white border border-ink/10 rounded-lg p-4 text-center">
-      <p class="text-2xl font-display text-ink">-{{ test.negative_marking }}</p>
-      <p class="text-xs text-ink/50 mt-1">Negative Marking</p>
+    <div class="bg-scholar-card border border-scholar-border rounded-xl p-5 text-center backdrop-blur-xl">
+      <p class="text-2xl font-display font-bold text-white">-{{ test.negative_marking }}</p>
+      <p class="text-xs text-gray-400 mt-1 font-medium">Negative Marking</p>
     </div>
   </div>
 
-  <h2 class="font-display text-lg font-semibold text-ink mb-3">Syllabus Covered</h2>
-  <div class="bg-white border border-ink/10 rounded-lg p-5 mb-8">
+  <h2 class="font-display text-lg font-bold text-white mb-3">Syllabus Covered</h2>
+  <div class="bg-scholar-card border border-scholar-border rounded-xl p-6 mb-8 backdrop-blur-xl">
     {% for subject, chapters in syllabus.items() %}
-    <p class="text-sm mb-2"><span class="font-medium text-ink">{{ subject }}:</span> <span class="text-ink/60">{{ chapters|join(', ') }}</span></p>
+    <p class="text-sm mb-2"><span class="font-bold text-white">{{ subject }}:</span> <span class="text-gray-400">{{ chapters|join(', ') }}</span></p>
     {% else %}
-    <p class="text-sm text-ink/50">Syllabus not mapped yet.</p>
+    <p class="text-sm text-gray-500">Syllabus not mapped yet.</p>
     {% endfor %}
   </div>
 
   {% if has_access %}
   <form action="{{ url_for('user.test_start', slug=stream.slug, test_id=test.id) }}" method="POST">
     <button type="submit"
-       class="block w-full text-center bg-ink text-paper font-semibold py-3 rounded-md hover:bg-ink-light">Start Test</button>
+       class="block w-full text-center bg-gold text-ink font-bold py-3.5 rounded-xl hover:bg-gold-light transition-all shadow-[0_4px_14px_0_rgba(212,160,23,0.2)]">Start Test &rarr;</button>
   </form>
   {% elif test.is_premium and not has_access %}
   <a href="{{ url_for('auth.login') if not session.get('user_id') else '#' }}"
-     class="block text-center bg-gold text-ink font-semibold py-3 rounded-md hover:bg-gold-light">Unlock Premium 🔒</a>
+     class="block text-center bg-gold text-ink font-bold py-3.5 rounded-xl hover:bg-gold-light transition-all shadow-[0_4px_14px_0_rgba(212,160,23,0.2)]">Unlock Premium 🔒</a>
   {% endif %}
 </section>
 {% endblock %}
