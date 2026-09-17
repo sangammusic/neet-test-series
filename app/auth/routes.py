@@ -3,7 +3,7 @@ from flask import render_template, request, redirect, url_for, session, flash
 
 from app.auth import auth_bp
 from app.extensions import supabase_public, supabase_admin
-from app.shared.utils import get_or_create_guest_id, set_guest_cookie
+from app.shared.utils import is_logged_in
 
 
 def is_valid_username(username):
@@ -17,6 +17,8 @@ def is_valid_username(username):
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
+        if is_logged_in():
+            return redirect(url_for("user.start_learning"))
         return render_template("login.html")
 
     username = request.form.get("username", "").strip().lower()
@@ -45,16 +47,19 @@ def login():
     session.permanent = True
     session["user_id"] = result.user.id
     session["access_token"] = result.session.access_token
-    return redirect(url_for("user.stream_select"))
+    return redirect(url_for("user.start_learning"))
 
 
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "GET":
+        if is_logged_in():
+            return redirect(url_for("user.start_learning"))
         return render_template("register.html")
 
     username = request.form.get("username", "").strip().lower()
     password = request.form.get("password", "")
+    confirm_password = request.form.get("confirm_password", "")
     full_name = request.form.get("full_name", "").strip()
 
     # 1. Backend Validation (Injection Prevention)
@@ -62,7 +67,23 @@ def register():
         flash("Invalid username. Only letters, numbers, and underscores are allowed (no spaces or @).", "error")
         return render_template("register.html"), 400
 
-    # 2. Convert to Dummy Email
+    # 2. Password must be entered twice and must match.
+    # (This mirrors the two-step confirmation already used on the
+    # settings/change-password flow -- registration was the one place
+    # in the app that only asked once, which is what this fixes.)
+    if not password or len(password) < 6:
+        flash("Password must be at least 6 characters.", "error")
+        return render_template("register.html"), 400
+
+    if not confirm_password:
+        flash("Please confirm your password.", "error")
+        return render_template("register.html"), 400
+
+    if password != confirm_password:
+        flash("Password and confirmation do not match.", "error")
+        return render_template("register.html"), 400
+
+    # 3. Convert to Dummy Email
     dummy_email = f"{username}@sangam.local"
 
     try:
@@ -87,7 +108,7 @@ def register():
             # Save the unique username to the profiles table
             supabase_admin.table("profiles").insert(
                 {
-                    "id": result.user.id, 
+                    "id": result.user.id,
                     "full_name": full_name,
                     "username": username
                 }
@@ -117,27 +138,16 @@ def register():
     session["user_id"] = sign_in_result.user.id
     session["access_token"] = sign_in_result.session.access_token
     flash("Account created — you're all set.", "success")
-    return redirect(url_for("user.stream_select"))
+    return redirect(url_for("user.start_learning"))
 
 
 @auth_bp.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for("user.landing"))
+    return redirect(url_for("auth.login"))
 
 
-@auth_bp.route("/guest/start")
-def guest_start():
-    """
-    Entry point for 'Continue without Login'. Ensures a guest_id
-    cookie + row exist, then sends them to stream selection.
-    """
-    guest_id, is_new = get_or_create_guest_id()
-
-    if is_new:
-        supabase_admin.table("guests").insert({"guest_id": guest_id}).execute()
-
-    response = redirect(url_for("user.stream_select"))
-    if is_new:
-        response = set_guest_cookie(response, guest_id)
-    return response
+# NOTE: guest_start() has been permanently removed. There is no more
+# "Continue without login" path anywhere in this app -- every visitor
+# hits the login page first. See app/user/routes.py: landing() now
+# redirects straight to auth.login for anonymous visitors.
