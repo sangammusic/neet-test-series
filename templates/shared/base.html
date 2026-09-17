@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SANGAM STUDY{% endblock %}</title>
 
-    <!-- Fonts: Lora (display serif, exam-board gravitas) + Inter (body, long-read comfort) -->
+    <!-- Fonts: Lora (headings) + Inter (body) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -16,15 +16,14 @@
             theme: {
                 extend: {
                     colors: {
-                        ink: {
-                            DEFAULT: '#0F1729',
-                            light: '#1B2740',
-                        },
+                        ink: { DEFAULT: '#0F1729', light: '#1B2740' },
                         paper: '#FAF7F0',
-                        gold: {
-                            DEFAULT: '#D4A017',
-                            light: '#E8C158',
-                        },
+                        gold: { DEFAULT: '#D4A017', light: '#E8C158' },
+                        scholar: {
+                            bg: '#0a0a0a',
+                            card: 'rgba(22, 22, 22, 0.65)',
+                            border: 'rgba(255, 255, 255, 0.08)'
+                        }
                     },
                     fontFamily: {
                         display: ['Lora', 'serif'],
@@ -35,7 +34,7 @@
         }
     </script>
 
-    <!-- MathJax for LaTeX (Physics/Chem equations) -->
+    <!-- MathJax for LaTeX -->
     <script>
         window.MathJax = {
             tex: {
@@ -48,26 +47,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-    <!-- GLOBAL DOUBLE-SUBMIT GUARD:
-         Fixes a real bug where clicking "Create Test" / "Delete Test" / any
-         confirm()-guarded destructive form multiple times in quick succession
-         (impatience, slow network, accidental double-tap) fired the same POST
-         2-3 times, creating duplicate empty tests or redundant delete calls.
-         The confirm() dialog does not block a second click after the first is
-         dismissed, and none of these forms had a loading/disabled state — so
-         nothing stopped a second click from submitting again while the first
-         request was still in flight. This listens on every form submission
-         site-wide: once a form successfully submits (confirm() accepted, or
-         no confirm() at all), its submit button is disabled immediately so a
-         second click can't fire a second request. Safe to load on every page
-         since it wires up via event delegation, not per-form setup. -->
+    <!-- GLOBAL DOUBLE-SUBMIT GUARD -->
     <script>
         document.addEventListener('submit', function (e) {
             const form = e.target;
             if (!(form instanceof HTMLFormElement)) return;
-            // If the submission proceeded (browser default not prevented, i.e.
-            // any onsubmit confirm() returned true), disable the submit button(s)
-            // right away so a rapid second click can't fire the same POST again.
             requestAnimationFrame(function () {
                 if (form.defaultPrevented) return;
                 const buttons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
@@ -85,28 +69,37 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
     {% block extra_head %}{% endblock %}
 
-    <!-- SANGAM FIX: GLOBALLY FIX ALPINE.JS FLASHING BUG -->
     <style>[x-cloak] { display: none !important; }</style>
 
-    <!-- SANGAM FIX: Alpine.js loaded globally so components like the
-         "My Account" dropdown in _nav.html work on every page, not just
-         the admin/test pages that were loading it individually. defer is
-         required so Alpine initializes only after the DOM (including
-         _nav.html) has parsed. -->
+    <!-- Alpine.js globally loaded for dropdowns & modals -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="bg-paper text-ink font-body antialiased">
+
+<!-- DYNAMIC BODY: Light theme for Admin, Dark Minimalist Theme for Students -->
+<body class="{% if request.path.startswith('/admin') %}bg-gray-50 text-slate-900{% else %}text-gray-200 antialiased relative min-h-screen flex flex-col{% endif %} font-body">
+
+    {% if not request.path.startswith('/admin') %}
+    <!-- THE SCHOLAR MASTER BACKGROUND -->
+    <div class="fixed inset-0 z-[-1]">
+        <!-- 1. Deep dark background color as fallback -->
+        <div class="absolute inset-0 bg-[#050505]"></div>
+        <!-- 2. High-quality desk/study image (Blend mode makes it subtle) -->
+        <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1456324504439-367cee3b3c32?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-30 mix-blend-luminosity"></div>
+        <!-- 3. Dark Vignette / Overlay to ensure 100% text readability everywhere -->
+        <div class="absolute inset-0 bg-gradient-to-b from-[#050505]/80 via-[#0a0a0a]/90 to-[#0a0a0a]"></div>
+    </div>
+    {% endif %}
 
     {% block nav %}{% include "shared/_nav.html" %}{% endblock %}
 
-    <main>
+    <main class="flex-grow">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="max-w-2xl mx-auto mt-6 px-4">
+                <div class="max-w-2xl mx-auto mt-6 px-4 relative z-10">
                     {% for category, message in messages %}
-                        <div class="rounded-md px-4 py-3 mb-2 text-sm font-medium
-                            {{ 'bg-red-50 text-red-800 border border-red-200' if category == 'error'
-                               else 'bg-green-50 text-green-800 border border-green-200' }}">
+                        <div class="rounded-md px-4 py-3 mb-2 text-sm font-medium shadow-sm backdrop-blur-md
+                            {{ 'bg-red-500/10 text-red-400 border border-red-500/20' if category == 'error'
+                               else 'bg-green-500/10 text-green-400 border border-green-500/20' }}">
                             {{ message }}
                         </div>
                     {% endfor %}
@@ -117,7 +110,9 @@
         {% block content %}{% endblock %}
     </main>
 
-    {% include "shared/_footer.html" %}
+    {% if not request.path.startswith('/admin') %}
+        {% include "shared/_footer.html" %}
+    {% endif %}
 
     {% block extra_scripts %}{% endblock %}
 </body>
