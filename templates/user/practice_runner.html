@@ -117,6 +117,20 @@
                 <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="currentQuestion.explanation"></span>
               </p>
             </div>
+
+            <!-- Review mode, question was left unanswered: say so plainly
+                 and still show the correct answer, but never offer a way
+                 to attempt it now — the attempt is already scored. -->
+            <div x-show="isFinished && !isChecked(currentQuestion.id)"
+                 x-cloak class="mt-5 pt-5 border-t border-white/10">
+              <p class="text-sm font-semibold text-gray-400">
+                <span>— Not Attempted&nbsp;&nbsp;·&nbsp;&nbsp;</span>
+                <span>Correct answer: <span x-text="currentQuestion.correct_option"></span></span>
+              </p>
+              <p x-show="currentQuestion.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
+                <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="currentQuestion.explanation"></span>
+              </p>
+            </div>
           </div>
         </div>
 
@@ -126,11 +140,27 @@
             ← Previous
           </button>
 
-          <!-- Before checking: Submit (needs a pick) + Mark for Review -->
-          <template x-if="!isChecked(currentQuestion.id)">
+          <!-- Before checking, still attempting: Submit (needs a pick) + Mark for Review -->
+          <template x-if="!isChecked(currentQuestion.id) && !isFinished">
             <button @click="submitAnswer()" :disabled="selected[currentQuestion.id] == null"
               class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-md">
               Submit Answer
+            </button>
+          </template>
+
+          <!-- Review mode, question was left unanswered: no Submit is ever
+               offered here — once Finish is clicked, nothing can change
+               what got scored. This just moves on. -->
+          <template x-if="!isChecked(currentQuestion.id) && isFinished && currentIndex < questions.length - 1">
+            <button @click="goNext()"
+              class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
+              Next →
+            </button>
+          </template>
+          <template x-if="!isChecked(currentQuestion.id) && isFinished && currentIndex === questions.length - 1">
+            <button @click="showSummary = true"
+              class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
+              Back to Summary
             </button>
           </template>
 
@@ -141,10 +171,16 @@
               Next →
             </button>
           </template>
-          <template x-if="isChecked(currentQuestion.id) && currentIndex === questions.length - 1">
+          <template x-if="isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && !isFinished">
             <button @click="showFinishConfirm = true"
               class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
               Finish
+            </button>
+          </template>
+          <template x-if="isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && isFinished">
+            <button @click="showSummary = true"
+              class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
+              Back to Summary
             </button>
           </template>
         </div>
@@ -189,14 +225,40 @@
          x-transition:enter="transition ease-out duration-200 delay-75"
          x-transition:enter-start="opacity-0 scale-95"
          x-transition:enter-end="opacity-100 scale-100"
-         class="bg-[#161616] border border-white/10 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
-      <h3 class="font-display text-2xl font-bold text-white mb-2">Practice Complete</h3>
-      <p class="text-4xl font-display font-bold text-gold my-4" x-text="score + ' / ' + questions.length"></p>
-      <p class="text-sm text-gray-400 mb-4">questions answered correctly</p>
+         class="bg-[#161616] border border-white/10 rounded-2xl p-8 w-full max-w-md text-center shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
+      <h3 class="font-display text-2xl font-bold text-white mb-1">Practice Complete</h3>
+      <p class="text-xs text-gray-500 mb-5 uppercase tracking-wide" x-text="chapterLabel"></p>
+
+      <!-- Score -->
+      <div class="relative overflow-hidden bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 mb-5">
+        <div class="absolute top-0 right-0 w-24 h-24 bg-gold opacity-5 rounded-bl-full"></div>
+        <p class="text-xs font-semibold text-gold-light mb-1 uppercase tracking-wider relative z-10">Score</p>
+        <p class="font-display text-4xl font-bold text-white relative z-10" x-text="score + ' / ' + questions.length"></p>
+        <p class="text-sm text-gray-400 mt-1 relative z-10" x-text="accuracyLabel"></p>
+      </div>
+
+      <!-- Correct / Wrong / Skipped breakdown -->
+      <div class="grid grid-cols-3 gap-3 mb-5">
+        <div class="bg-white/5 border border-white/10 rounded-xl p-3">
+          <p class="text-2xl font-display font-bold text-green-400" x-text="score"></p>
+          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Correct</p>
+        </div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-3">
+          <p class="text-2xl font-display font-bold text-red-400" x-text="wrongCount"></p>
+          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Wrong</p>
+        </div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-3">
+          <p class="text-2xl font-display font-bold text-gray-400" x-text="skippedCount"></p>
+          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Skipped</p>
+        </div>
+      </div>
+
+      <!-- Time -->
       <div class="bg-white/5 border border-white/10 rounded-xl px-4 py-3 mb-6 flex items-center justify-between text-sm">
         <span class="text-gray-400">Total time taken</span>
-        <span class="font-semibold text-white tabular-nums" x-text="formattedTotalTime"></span>
+        <span class="font-semibold text-white tabular-nums" x-text="formattedTotalTime + ' · avg ' + formattedAvgTime + '/question'"></span>
       </div>
+
       <div class="grid grid-cols-1 gap-3">
         <button @click="showSummary = false"
           class="py-3 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
@@ -366,6 +428,11 @@ function practiceRunner() {
       this.isFinished = true;
       if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
       if (this.totalTimerHandle) clearInterval(this.totalTimerHandle);
+      this.questionTimerHandle = null;
+      this.totalTimerHandle = null;
+      this.activeQuestionId = null; // belt-and-suspenders: even if some
+      // future code path calls the tick callback directly, there's no
+      // active question left to add seconds to once the attempt is over.
     },
 
     // "Back to Attempt" from the summary modal: closes the summary and
@@ -403,13 +470,52 @@ function practiceRunner() {
       return s;
     },
 
+    get wrongCount() {
+      let w = 0;
+      for (const q of this.questions) {
+        const a = this.answers[q.id];
+        if (a != null && a !== q.correct_option) w++;
+      }
+      return w;
+    },
+
+    get skippedCount() {
+      let s = 0;
+      for (const q of this.questions) {
+        if (this.answers[q.id] == null) s++;
+      }
+      return s;
+    },
+
+    get attemptedCount() {
+      return this.questions.length - this.skippedCount;
+    },
+
+    get accuracyLabel() {
+      if (this.attemptedCount === 0) return 'No questions attempted';
+      const pct = Math.round((this.score / this.attemptedCount) * 100);
+      return pct + '% accuracy on ' + this.attemptedCount + ' attempted';
+    },
+
+    get chapterLabel() {
+      return {{ chapter.name | tojson }} + ' · ' + {{ set_name | tojson }};
+    },
+
+    get formattedAvgTime() {
+      const n = this.questions.length || 1;
+      return this.formatSeconds(Math.round(this.totalSeconds / n));
+    },
+
     // Picking an option only records the choice — it does NOT reveal
     // right/wrong. That reveal only happens once the person hits
     // "Submit Answer" (see submitAnswer below). Picking again before
     // submitting just changes the pick, same as the mock test runner.
     pickOption(opt) {
       const q = this.currentQuestion;
-      if (!q || this.isChecked(q.id)) return; // locked once checked
+      // Locked once checked, and locked for good once the attempt is
+      // finished — a skipped question must stay skipped in Review, it
+      // can't quietly turn into an attempted one after scoring happened.
+      if (!q || this.isChecked(q.id) || this.isFinished) return;
       this.selected[q.id] = opt;
     },
 
@@ -419,7 +525,7 @@ function practiceRunner() {
 
     submitAnswer() {
       const q = this.currentQuestion;
-      if (!q || this.selected[q.id] == null || this.isChecked(q.id)) return;
+      if (!q || this.selected[q.id] == null || this.isChecked(q.id) || this.isFinished) return;
       this.answers[q.id] = this.selected[q.id];
       // Re-typeset math inside the explanation, without touching
       // mathReady — that flag fades the *entire* question card, which
@@ -458,6 +564,7 @@ function practiceRunner() {
         return checked === q.correct_option ? 'bg-green-600 text-white' : 'bg-red-600 text-white';
       }
       if (this.marked[q.id]) return 'bg-[#8A6A1F] text-[#F3E3B8]';
+      if (this.isFinished) return 'bg-transparent border border-dashed border-white/20 text-gray-500'; // skipped, attempt over
       if (this.selected[q.id] != null) return 'bg-white/20 text-white';
       return 'bg-[#2A2A2A] text-gray-400';
     },
@@ -466,7 +573,13 @@ function practiceRunner() {
       const q = this.currentQuestion;
       const checked = this.answers[q.id];
       if (checked == null) {
-        // Not checked yet — just show which one is picked (no right/wrong).
+        if (this.isFinished) {
+          // Review mode, question was skipped — nothing is pickable
+          // anymore. Flat, non-interactive look; no gold hover affordance
+          // since clicking does nothing now.
+          return 'border-white/5 bg-[#1a1a1a] text-gray-500 cursor-default opacity-60';
+        }
+        // Still attempting — just show which one is picked (no right/wrong).
         return this.selected[q.id] === opt
           ? 'border-gold bg-gold/10 text-white cursor-pointer ring-1 ring-gold'
           : 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 hover:bg-[#222] cursor-pointer';
@@ -480,6 +593,7 @@ function practiceRunner() {
       const q = this.currentQuestion;
       const checked = this.answers[q.id];
       if (checked == null) {
+        if (this.isFinished) return 'border-white/10 text-gray-600';
         return this.selected[q.id] === opt
           ? 'border-gold bg-gold text-ink'
           : 'border-white/30 text-gray-400';
