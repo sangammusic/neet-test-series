@@ -15,7 +15,7 @@ Flow:
 """
 import json
 import logging
-import re  # Added for auto-generating slugs
+import re
 
 from flask import render_template, request, redirect, url_for, flash, jsonify
 
@@ -32,16 +32,21 @@ BUCKET_NAME = "question-images"
 def _delete_image_from_storage(image_url):
     """
     Fallback Helper function for single image deletions.
-    SANGAM STUDY HUB FIX: Strips any trailing '?' from the URL to prevent silent Storage API failures.
+    SANGAM STUDY HUB FIX: Safely strips trailing query params ('?') and 
+    strictly matches the bucket path to prevent silent Storage API failures.
     """
     if not image_url:
         return
     try:
-        if "question-images/" in image_url:
+        bucket_prefix = f"/{BUCKET_NAME}/"
+        if bucket_prefix in image_url:
+            path = image_url.split(bucket_prefix)[1].split("?")[0]
+            supabase_admin.storage.from_(BUCKET_NAME).remove([path])
+        elif "question-images/" in image_url:
             path = image_url.split("question-images/")[1].split("?")[0]
             supabase_admin.storage.from_(BUCKET_NAME).remove([path])
     except Exception as e:
-        print(f"Failed to delete image from storage {image_url}: {e}")
+        logger.error(f"Failed to delete image from storage {image_url}: {e}")
 
 
 # ==========================================
@@ -59,7 +64,8 @@ def test_series_list():
                 supabase_admin.table("mock_test_series").insert({"name": name}).execute()
                 flash(f"Folder '{name}' created successfully.", "success")
             except Exception as exc:
-                flash(f"Could not create folder: {exc}", "error")
+                logger.error(f"Test series creation failed: {exc}")
+                flash("Could not create folder. Please try again.", "error")
         return redirect(url_for("admin.test_series_list"))
 
     series = (
@@ -83,7 +89,8 @@ def test_series_edit(series_id):
             supabase_admin.table("mock_test_series").update({"name": new_name}).eq("id", series_id).execute()
             flash("Folder renamed successfully.", "success")
         except Exception as exc:
-            flash(f"Could not rename folder: {exc}", "error")
+            logger.error(f"Folder rename failed: {exc}")
+            flash("Could not rename folder.", "error")
             
     return redirect(url_for("admin.test_series_list"))
 
@@ -91,6 +98,10 @@ def test_series_edit(series_id):
 @admin_bp.route("/test-series/<series_id>/delete", methods=["POST"])
 @admin_required
 def test_series_delete(series_id):
+    """
+    Nuclear Deletion: Cascades through all Tests, Questions, and Bucket Images.
+    Strict chunking employed to prevent payload limits on massive folder wipes.
+    """
     try:
         tests_in_series = supabase_admin.table("tests").select("id").eq("series_id", series_id).execute().data
         test_ids = [t["id"] for t in tests_in_series]
@@ -124,7 +135,10 @@ def test_series_delete(series_id):
                         .data
                     )
                     for q in rows:
-                        if q.get("image_url") and "question-images/" in q["image_url"]:
+                        if q.get("image_url") and f"/{BUCKET_NAME}/" in q["image_url"]:
+                            clean_path = q["image_url"].split(f"/{BUCKET_NAME}/")[1].split("?")[0]
+                            image_paths.append(clean_path)
+                        elif q.get("image_url") and "question-images/" in q["image_url"]:
                             clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
                             image_paths.append(clean_path)
 
@@ -136,14 +150,14 @@ def test_series_delete(series_id):
                     except Exception as e:
                         logger.error(f"Bucket batch delete raised an exception: {e}")
 
-            for tid in test_ids:
-                supabase_admin.table("mock_test_questions").delete().eq("test_id", tid).execute()
+            # Wipe mapping and tests efficiently
+            if test_ids:
+                for i in range(0, len(test_ids), 40):
+                    chunk = test_ids[i:i+40]
+                    supabase_admin.table("mock_test_questions").delete().in_("test_id", chunk).execute()
+                    supabase_admin.table("tests").delete().in_("id", chunk).execute()
             
-            for tid in test_ids:
-                supabase_admin.table("tests").delete().eq("id", tid).execute()
-            
-            if question_ids:
-                unique_question_ids = list(set(question_ids))
+            if unique_question_ids:
                 for i in range(0, len(unique_question_ids), 40):
                     chunk = unique_question_ids[i:i+40]
                     supabase_admin.table("mock_questions").delete().in_("id", chunk).execute()
@@ -151,7 +165,8 @@ def test_series_delete(series_id):
         supabase_admin.table("mock_test_series").delete().eq("id", series_id).execute()
         flash("Folder and ALL its tests, questions, and images were permanently wiped.", "success")
     except Exception as exc:
-        flash(f"Could not completely delete folder: {exc}", "error")
+        logger.error(f"Folder deletion failed: {exc}")
+        flash("Could not completely delete folder.", "error")
 
     return redirect(url_for("admin.test_series_list"))
 
@@ -178,26 +193,19 @@ def series_tests(series_id):
             flash("Please fill all the details, including Category and Marks per Question.", "error")
             return redirect(url_for("admin.series_tests", series_id=series_id))
 
-        # ==========================================
-        # SANGAM STUDY HUB: AUTO-RESOLVE CATEGORY WITH SLUG
-        # ==========================================
         category_id = None
         try:
-            # 1. Look for an existing category
             existing_cats = supabase_admin.table("test_categories").select("id, name").eq("stream_id", stream_id).execute().data
             for cat in existing_cats:
                 if cat["name"].strip().lower() == category_name.lower():
                     category_id = cat["id"]
                     break
             
-            # 2. If it doesn't exist, generate a slug and create it
             if not category_id:
-                # Generate a clean URL-friendly slug (e.g. "Minor Test" -> "minor-test")
                 generated_slug = re.sub(r'[^a-z0-9]+', '-', category_name.lower()).strip('-')
-                
                 new_cat = supabase_admin.table("test_categories").insert({
                     "name": category_name,
-                    "slug": generated_slug, # SANGAM FIX: Added required slug field
+                    "slug": generated_slug,
                     "stream_id": stream_id
                 }).execute().data
                 if new_cat:
@@ -227,10 +235,10 @@ def series_tests(series_id):
             result = supabase_admin.table("tests").insert(payload).execute()
             test_id = result.data[0]["id"]
             flash("Test created — you can now set targets and start uploading questions.", "success")
-            
             return redirect(url_for("admin.tests_upload", test_id=test_id, mpq=marks_per_question_raw))
         except Exception as exc:
-            flash(f"Could not create test: {exc}", "error")
+            logger.error(f"Could not create test: {exc}")
+            flash("Could not create test.", "error")
             return redirect(url_for("admin.series_tests", series_id=series_id))
 
     streams = supabase_admin.table("streams").select("id, name").order("display_order").execute().data
@@ -284,7 +292,8 @@ def tests_lock_targets(test_id):
         supabase_admin.table("tests").update({"total_marks": int(total_marks)}).eq("id", test_id).execute()
         return jsonify({"ok": True, "total_marks": total_marks})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Target lock failed: {exc}")
+        return jsonify({"ok": False, "error": "Database error locking targets."}), 500
 
 
 @admin_bp.route("/tests/<test_id>/manage")
@@ -295,9 +304,10 @@ def tests_manage(test_id):
         flash("Test not found.", "error")
         return redirect(url_for("admin.test_series_list"))
 
+    # SANGAM FIX: Added 'correct_option' to select payload so frontend dropdown pre-fills correctly
     mapped = (
         supabase_admin.table("mock_test_questions")
-        .select("mock_question_id, question_order, mock_questions(question_text, topic_name, is_pyq, pyq_year, has_image, image_url, subjects(name))")
+        .select("mock_question_id, question_order, mock_questions(question_text, topic_name, is_pyq, pyq_year, has_image, image_url, correct_option, subjects(name))")
         .eq("test_id", test_id)
         .order("question_order")
         .execute()
@@ -331,7 +341,7 @@ def tests_bulk_map_questions(test_id):
 
     try:
         parsed = json.loads(raw_json)
-    except json.JSONDecodeError as exc:
+    except json.JSONDecodeError:
         if is_ajax: return jsonify({"ok": False, "error": "Invalid JSON format. Check commas and quotes."}), 400
         return jsonify({"ok": False, "error": "Invalid JSON"}), 400
 
@@ -386,13 +396,11 @@ def tests_bulk_map_questions(test_id):
             
             incoming_texts.add(clean_text)
 
-    if test.get("total_marks") == 720 and not errors:
+    total_marks_val = int(test.get("total_marks") or 0)
+    if total_marks_val == 720 and not errors:
         existing = supabase_admin.table("mock_test_questions").select("mock_questions(subjects(name))").eq("test_id", test_id).execute().data
         
-        phys_count = 0
-        chem_count = 0
-        bio_count = 0
-        
+        phys_count = chem_count = bio_count = 0
         for row in existing:
             q = row.get("mock_questions")
             if q and q.get("subjects") and q["subjects"].get("name"):
@@ -420,7 +428,8 @@ def tests_bulk_map_questions(test_id):
             result = supabase_admin.table("mock_questions").insert(valid_payloads).execute()
             inserted_ids = [row["id"] for row in result.data]
         except Exception as exc:
-            if is_ajax: return jsonify({"ok": False, "error": f"DB Upload failed: {exc}"}), 500
+            logger.error(f"Bulk Insert Error: {exc}")
+            if is_ajax: return jsonify({"ok": False, "error": "Database insert failed. Please try again."}), 500
             return jsonify({"ok": False, "error": "DB Upload failed"}), 500
 
     if inserted_ids:
@@ -434,7 +443,8 @@ def tests_bulk_map_questions(test_id):
             ]
             supabase_admin.table("mock_test_questions").upsert(mapping_rows, on_conflict="test_id,mock_question_id").execute()
         except Exception as exc:
-            if is_ajax: return jsonify({"ok": False, "error": f"Mapping failed: {exc}"}), 500
+            logger.error(f"Test Mapping Error: {exc}")
+            if is_ajax: return jsonify({"ok": False, "error": "Mapping to test failed. Please try again."}), 500
 
     return jsonify({"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "inserted_ids": inserted_ids, "errors": errors})
 
@@ -452,7 +462,10 @@ def tests_undo_chunk(test_id):
         questions = supabase_admin.table("mock_questions").select("image_url").in_("id", question_ids).execute().data
         image_paths = []
         for q in questions:
-            if q.get("image_url") and "question-images/" in q["image_url"]:
+            if q.get("image_url") and f"/{BUCKET_NAME}/" in q["image_url"]:
+                clean_path = q["image_url"].split(f"/{BUCKET_NAME}/")[1].split("?")[0]
+                image_paths.append(clean_path)
+            elif q.get("image_url") and "question-images/" in q["image_url"]:
                 clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
                 image_paths.append(clean_path)
         
@@ -460,15 +473,16 @@ def tests_undo_chunk(test_id):
             for i in range(0, len(image_paths), 50):
                 try:
                     supabase_admin.storage.from_(BUCKET_NAME).remove(image_paths[i:i+50])
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Undo chunk image wipe failed: {e}")
         
         supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).in_("mock_question_id", question_ids).execute()
         supabase_admin.table("mock_questions").delete().in_("id", question_ids).execute()
         
         return jsonify({"ok": True, "message": "Chunk successfully undone and wiped."})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Undo error: {exc}")
+        return jsonify({"ok": False, "error": "Database error during undo."}), 500
 
 
 @admin_bp.route("/tests/<test_id>/questions/<question_id>/remove", methods=["POST"])
@@ -488,10 +502,11 @@ def tests_remove_question(test_id, question_id):
         flash("Question removed from test.", "success")
         return redirect(url_for("admin.tests_manage", test_id=test_id))
     except Exception as exc:
+        logger.error(f"Remove question error: {exc}")
         is_ajax = request.args.get("ajax") == "1" or request.is_json
         if is_ajax:
-            return jsonify({"ok": False, "error": str(exc)}), 500
-        flash(f"Failed to remove question: {exc}", "error")
+            return jsonify({"ok": False, "error": "Failed to remove question"}), 500
+        flash("Failed to remove question.", "error")
         return redirect(url_for("admin.tests_manage", test_id=test_id))
 
 
@@ -515,16 +530,17 @@ def tests_edit_question(test_id, question_id):
     if error:
         return jsonify({"ok": False, "error": error}), 400
 
-    old_q = supabase_admin.table("mock_questions").select("image_url, has_image").eq("id", question_id).maybe_single().execute().data
-    if old_q and old_q.get("image_url") and not payload.get("has_image"):
-        _delete_image_from_storage(old_q["image_url"])
-        payload["image_url"] = None
-
     try:
+        old_q = supabase_admin.table("mock_questions").select("image_url, has_image").eq("id", question_id).maybe_single().execute().data
+        if old_q and old_q.get("image_url") and not payload.get("has_image"):
+            _delete_image_from_storage(old_q["image_url"])
+            payload["image_url"] = None
+
         supabase_admin.table("mock_questions").update(payload).eq("id", question_id).execute()
         return jsonify({"ok": True, "has_image": payload.get("has_image")})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"JSON Edit error: {exc}")
+        return jsonify({"ok": False, "error": "Failed to update JSON in database."}), 500
 
 
 @admin_bp.route("/questions/mock_questions/<question_id>/toggle-image", methods=["POST"])
@@ -547,7 +563,8 @@ def toggle_question_image(question_id):
 
         return jsonify({"ok": True})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Toggle image error: {exc}")
+        return jsonify({"ok": False, "error": "Database error saving image state."}), 500
 
 
 @admin_bp.route("/questions/mock_questions/<question_id>/change-answer", methods=["POST"])
@@ -566,7 +583,8 @@ def change_question_answer(question_id):
         supabase_admin.table("mock_questions").update({"correct_option": correct_option}).eq("id", question_id).execute()
         return jsonify({"ok": True})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Change answer error: {exc}")
+        return jsonify({"ok": False, "error": "Database error updating answer."}), 500
 
 
 @admin_bp.route("/tests/<test_id>/delete", methods=["POST"])
@@ -597,7 +615,10 @@ def tests_delete(test_id):
                     .data
                 )
                 for q in rows:
-                    if q.get("image_url") and "question-images/" in q["image_url"]:
+                    if q.get("image_url") and f"/{BUCKET_NAME}/" in q["image_url"]:
+                        clean_path = q["image_url"].split(f"/{BUCKET_NAME}/")[1].split("?")[0]
+                        image_paths.append(clean_path)
+                    elif q.get("image_url") and "question-images/" in q["image_url"]:
                         clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
                         image_paths.append(clean_path)
 
@@ -621,6 +642,7 @@ def tests_delete(test_id):
         if series_id:
             return redirect(url_for("admin.series_tests", series_id=series_id))
     except Exception as exc:
-        flash(f"Could not completely delete test: {exc}", "error")
+        logger.error(f"Test delete error: {exc}")
+        flash("Could not completely delete test.", "error")
 
     return redirect(url_for("admin.test_series_list"))
