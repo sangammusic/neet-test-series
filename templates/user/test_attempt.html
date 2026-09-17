@@ -4,6 +4,8 @@
 {% block nav %}{% endblock %}
 
 {% block extra_head %}
+<!-- SANGAM CORE: x-ray + zombie-proof clock + offscreen prerender cache -->
+<script src="{{ url_for('static', filename='js/sangam-quiz-core.js') }}"></script>
 <style>
   /* Palette status colors — matches NTA's exam-interface convention,
      with the Marked/Answered-Marked pair reworked to a premium bronze/amber
@@ -22,11 +24,35 @@
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-  /* SANGAM STUDY HUB FIX: Anti-flicker wrapper styling.
-     Changed from a harsh `opacity: 0` (which caused the black screen flash) 
-     to a smooth, premium blur fade. The delay has also been removed in JS. */
-  .math-cloak { opacity: 0.3; filter: blur(2px); transition: all 0.05s ease-out; pointer-events: none; }
-  .math-ready { opacity: 1; filter: blur(0); transition: all 0.15s ease-in; }
+  /* ---------------------------------------------------------------
+     BLACK-FLASH FIX
+     Pehle `.math-cloak { opacity:.3; filter:blur(2px) }` + fadeIn
+     animation lagti thi — dark theme par yahi black flash banti thi.
+     Ab content kabhi fade nahi hota; question already typeset hokar
+     inject hota hai, isliye swap instant hai.
+     --------------------------------------------------------------- */
+  #nta-runner .q-card { position: relative; contain: layout paint; }
+  #nta-runner .q-swapbar {
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    overflow: hidden; border-radius: 2px; pointer-events: none;
+    opacity: 0; transition: opacity .12s ease-out;
+  }
+  #nta-runner .q-swapbar.on { opacity: 1; }
+  #nta-runner .q-swapbar::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, #D4A017, transparent);
+    transform: translateX(-100%);
+    animation: qsweep 0.8s linear infinite;
+  }
+  @keyframes qsweep { to { transform: translateX(100%); } }
+
+  #nta-runner mjx-container { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+  #nta-runner mjx-container[display="true"] { margin: 0.6em 0; }
+
+  #nta-runner .question-text img, #nta-runner .option-text img,
+  #nta-runner .question-text svg, #nta-runner .option-text svg {
+    max-width: 100%; height: auto; display: block; margin: 1rem auto;
+  }
 
   /* This page is a distraction-free full-screen runner — the global
      footer is still included by base.html, so hide it here with a scoped rule. */
@@ -38,17 +64,22 @@
 {% endblock %}
 
 {% block content %}
-<div id="nta-runner" x-data="testAttempt()" x-init="init()" class="min-h-screen bg-[#0a0a0a] text-gray-100 flex flex-col font-body">
+<!-- SANGAM FIX #1: x-init="init()" HATA DIYA.
+     Alpine 3 init() ko khud auto-call karta hai; x-init ke saath yeh DO
+     BAAR chal raha tha -> do countdown interval -> ek zombie bach jata
+     tha jo submit ke baad bhi chalta rehta tha. -->
+<div id="nta-runner" x-data="testAttempt()" class="min-h-screen bg-[#0a0a0a] text-gray-100 flex flex-col font-body">
 
   <!-- Top bar: timer (left) / subject tabs (center) / submit (right) -->
   <div class="bg-[#111111] border-b border-white/10 px-3 md:px-6 py-2.5 flex items-center gap-3 sticky top-0 z-20 shadow-sm">
     <template x-if="!isReviewMode">
-      <div class="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-md shrink-0">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-md shrink-0"
+           :class="finished ? 'bg-white/5 opacity-60' : 'bg-white/5'">
         <span class="text-[11px] text-gray-400 hidden sm:inline uppercase tracking-wider">Time Left</span>
         <span class="font-display text-base md:text-lg font-semibold tabular-nums text-gold-light" x-text="formattedTime"></span>
       </div>
     </template>
-    
+
     <template x-if="isReviewMode">
       <div class="flex items-center gap-2 bg-gold/10 border border-gold/20 px-3 py-1.5 rounded-md shrink-0">
         <span class="text-xs font-semibold text-gold-light uppercase tracking-wider">Review Mode</span>
@@ -71,7 +102,7 @@
         Submit Test
       </button>
     </template>
-    
+
     <template x-if="isReviewMode">
       <a :href="resultUrl"
         class="shrink-0 py-1.5 px-4 md:px-6 rounded-md text-xs md:text-sm font-semibold bg-white/10 text-white hover:bg-white/20 transition-colors">
@@ -105,8 +136,7 @@
 
   <!-- Main question area -->
   <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
-    <!-- SANGAM FIX: Changed x-if to x-show to preserve DOM and pre-load SVGs safely. Used optional chaining inside. -->
-    <div x-show="currentQuestion" x-cloak class="animate-fade-in w-full" :class="needsTypeset ? (mathLoaded ? 'math-ready' : 'math-cloak') : ''" x-ref="questionCard">
+    <div x-show="currentQuestion" x-cloak class="w-full">
       <div class="flex items-center justify-between mb-5">
         <div class="flex items-center gap-3">
           <p class="text-sm font-semibold text-gray-300">
@@ -129,11 +159,11 @@
 
         <template x-if="!isReviewMode">
           <p class="flex items-center gap-2 text-xs font-semibold text-gray-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-gold" :class="finished ? '' : 'animate-pulse'"></span>
             <span class="tabular-nums" x-text="formattedQuestionTime"></span>
           </p>
         </template>
-        
+
         <template x-if="isReviewMode">
           <p class="text-xs font-semibold text-gray-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
             Time Spent: <span class="tabular-nums text-white ml-1" x-text="formatSeconds(currentQuestion?.time_taken_sec)"></span>
@@ -141,12 +171,17 @@
         </template>
       </div>
 
-      <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg">
-        <div class="text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion?.question_text || ''"></div>
+      <div class="q-card bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg"
+           x-ref="questionCard" :style="cardStyle">
+        <div class="q-swapbar" :class="swapping ? 'on' : ''"></div>
+
+        <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium"
+             x-html="rendered.question_text"></div>
 
         <!-- Question Image rendering if exists -->
         <img :src="currentQuestion?.image_url || ''"
              x-show="currentQuestion?.image_url"
+             decoding="async"
              class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-6 shadow-sm" alt="Diagram">
 
         <div class="space-y-3.5">
@@ -160,7 +195,8 @@
               <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
                 :class="optionBadgeClass(opt)"
                 x-text="opt"></span>
-              <span class="text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion ? currentQuestion['option_' + opt.toLowerCase()] : ''"></span>
+              <span class="option-text text-sm md:text-base leading-relaxed mt-0.5"
+                    x-html="rendered['option_' + opt.toLowerCase()]"></span>
             </button>
           </template>
         </div>
@@ -172,14 +208,14 @@
           class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
           ← Previous
         </button>
-        
+
         <template x-if="!isReviewMode">
           <button @click="saveAndNext(currentQuestion?.id)" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
             class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-md focus:outline-none focus:ring-2 focus:ring-gold/50">
             Save &amp; Next →
           </button>
         </template>
-        
+
         <template x-if="isReviewMode">
           <button @click="goNext()" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
             class="py-3.5 rounded-xl text-sm font-semibold bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
@@ -231,7 +267,7 @@
   <div x-show="showSubmitConfirm" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
     <div class="bg-[#161616] border border-white/10 rounded-xl p-6 md:p-8 max-w-sm w-full shadow-2xl">
       <h3 class="font-display text-xl font-semibold mb-4 text-white text-center">Ready to Submit?</h3>
-      
+
       <div class="bg-white/5 rounded-lg p-4 text-sm text-gray-300 space-y-2.5 mb-6 border border-white/5">
         <div class="flex justify-between items-center">
           <span>Answered:</span>
@@ -252,9 +288,9 @@
       </div>
 
       <p x-show="submitError" x-cloak class="text-xs text-red-400 mb-4 text-center bg-red-400/10 py-2 rounded-md" x-text="submitError"></p>
-      
+
       <div class="flex gap-3">
-        <button @click="showSubmitConfirm = false" :disabled="submitting"
+        <button @click="cancelSubmitConfirm()" :disabled="submitting"
           class="flex-1 py-3 rounded-lg text-sm font-semibold border border-white/20 text-gray-200 hover:bg-white/5 disabled:opacity-50 transition-colors">
           Cancel
         </button>
@@ -270,16 +306,6 @@
   </div>
 </div>
 
-<style>
-  .animate-fade-in {
-    animation: fadeIn 0.2s ease-in-out;
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(2px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-</style>
-
 <script>
 function testAttempt() {
   return {
@@ -288,30 +314,49 @@ function testAttempt() {
     isReviewMode: {{ 'true' if is_review_mode else 'false' }},
     currentSubject: null,
     currentIndexInSubject: 0,
-    progress: {},  
-    timeSpent: {},  
+    progress: {},
+    timeSpent: {},
     activeQuestionId: null,
-    activeQuestionSeconds: 0,   
-    questionTimerHandle: null,
+    activeQuestionSeconds: 0,
     durationSeconds: {{ (test.duration_minutes or 60) * 60 }},
     secondsLeft: {{ (test.duration_minutes or 60) * 60 }},
-    timerHandle: null,
     showSubmitConfirm: false,
     showGridModal: false,
     submitting: false,
     submitError: null,
-    mathLoaded: false, 
-    needsTypeset: false, 
-    _typesetToken: 0, 
+    finished: false,
+
+    // --- render state ---
+    rendered: { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '' },
+    swapping: false,
+    cardStyle: '',
+    _swapToken: 0,
+    _hasContent: false,
+    _clock: null,
+    _booted: false,
+    _renderer: null,
+    _swapBarTimer: null,
+
     saveUrl: "{{ url_for('user.test_attempt_save_answer', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     submitUrl: "{{ url_for('user.test_attempt_submit', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     resultUrl: "{{ url_for('user.test_result', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
 
+    /* =============================================================
+       BOOT
+       ============================================================= */
     init() {
+      if (this._booted) { SangamQuiz.xray.warn('double init blocked'); return; }
+      this._booted = true;
+
+      this._renderer = SangamQuiz.createRenderer();
       this.currentSubject = this.subjects[0] || null;
 
+      SangamQuiz.armClockSentinel(() => this.finished || this.isReviewMode);
+
       if (this.isReviewMode) {
-        this.typesetMath();
+        this.finished = true;
+        this.showQuestion();
+        SangamQuiz.xray.set('mode', 'review');
         return;
       }
 
@@ -325,72 +370,172 @@ function testAttempt() {
         this.timeSpent[qid] = entry.time_taken_sec || 0;
       }
 
-      this.startTimer();
+      this._startClock();
       this.markVisited();
-      this.startQuestionTimer();
-      this.typesetMath();
+      this._resetQuestionTimer();
+      this.showQuestion();
+
+      SangamQuiz.xray.set('mode', 'attempt');
     },
 
-    // SANGAM FIX: Stop all timers on submission to prevent background ticking
-    stopTimers() {
-      if (this.timerHandle) clearInterval(this.timerHandle);
-      if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
+    destroy() { this.stopTimers(); },
+
+    /* =============================================================
+       CLOCK  —  ek hi interval countdown + per-question dono chalata hai
+       ============================================================= */
+    _startClock() {
+      if (this.finished || this.isReviewMode) return;
+      if (this._clock) this._clock.kill();
+      this._clock = SangamQuiz.createClock(() => this._tick(), 1000).start();
     },
 
-    questionHasMath(q) {
-      if (!q) return false;
-      const parts = [q.question_text, q.option_a, q.option_b, q.option_c, q.option_d];
-      return parts.some(p => typeof p === 'string' && (
-        p.includes('\\(') || p.includes('\\[') || p.includes('$$') ||
-        /\$[^$]+\$/.test(p)
-      ));
-    },
+    _tick() {
+      if (this.finished || this.isReviewMode) { this.stopTimers(); return; }
 
-    typesetMath() {
-      const q = this.currentQuestion;
-      this.needsTypeset = this.questionHasMath(q);
-      const myToken = ++this._typesetToken;
-
-      if (!this.needsTypeset) {
-        this.mathLoaded = true;
+      if (this.secondsLeft <= 0) {
+        this.stopTimers();
+        this.autoSubmit();
         return;
       }
+      this.secondsLeft--;
 
-      this.mathLoaded = false;
-      const startedAt = Date.now();
-      
-      // SANGAM FIX: Removed artificial 120ms FOUC delay to make rendering smooth
-      const MIN_TRANSITION_MS = 10; 
-      
-      this.$nextTick(() => {
-        const target = this.$refs.questionCard;
-        if (target && window.MathJax && window.MathJax.typesetClear) {
-          try { window.MathJax.typesetClear([target]); } catch (e) { /* silent catch */ }
-        }
-        this._waitForMathJaxAndTypeset(0, startedAt, MIN_TRANSITION_MS, myToken);
+      if (this.activeQuestionId != null) {
+        this.activeQuestionSeconds++;
+        this.timeSpent[this.activeQuestionId] = this.activeQuestionSeconds;
+      }
+
+      if (SangamQuiz.debug) {
+        SangamQuiz.xray.set('left', this.secondsLeft + 's');
+        SangamQuiz.xray.set('live clocks', SangamQuiz.liveClockCount());
+      }
+    },
+
+    /* SANGAM FIX #1: sab kuch nuke — zombie interval bacha hi nahi sakta */
+    stopTimers() {
+      this.finished = true;
+      this.activeQuestionId = null;
+      if (this._clock) { this._clock.kill(); this._clock = null; }
+      SangamQuiz.stopAllClocks();
+      SangamQuiz.xray.set('clocks after stop', SangamQuiz.liveClockCount());
+    },
+
+    _resumeTimers() {
+      this.finished = false;
+      this._startClock();
+      this._resetQuestionTimer();
+    },
+
+    _resetQuestionTimer() {
+      const q = this.currentQuestion;
+      if (this.isReviewMode || this.finished) {
+        this.activeQuestionId = null;
+        this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
+        return;
+      }
+      this.activeQuestionId = q ? q.id : null;
+      this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
+    },
+
+    /* =============================================================
+       RENDER  —  black flash killer
+       ============================================================= */
+    _rawFor(q) {
+      if (!q) return { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '' };
+      return {
+        question_text: q.question_text || '',
+        option_a: q.option_a || '',
+        option_b: q.option_b || '',
+        option_c: q.option_c || '',
+        option_d: q.option_d || ''
+      };
+    },
+
+    _keyFor(q) { return q ? ('t' + q.id) : null; },
+
+    showQuestion() {
+      const q = this.currentQuestion;
+      if (!q) return;
+
+      const token = ++this._swapToken;
+      const key = this._keyFor(q);
+      const t0 = performance.now();
+
+      const apply = (map, hit) => {
+        if (token !== this._swapToken) return;
+        this.rendered = map;
+        this._hasContent = true;
+        this._clearSwapBar();
+        this._unlockHeight();
+        if (hit) SangamQuiz.xray.stats.cacheHits++; else SangamQuiz.xray.stats.cacheMisses++;
+        SangamQuiz.xray.afterPaint(() => {
+          if (token !== this._swapToken) return;
+          const ms = Math.round(performance.now() - t0);
+          SangamQuiz.xray.set('swap', ms + 'ms ' + (hit ? 'HIT' : 'MISS'));
+          SangamQuiz.xray.set('cache', SangamQuiz.xray.stats.cacheHits + ' hit / ' + SangamQuiz.xray.stats.cacheMisses + ' miss');
+        });
+        this._warmNeighbours();
+      };
+
+      const cached = this._renderer.get(key);
+      if (cached) { apply(cached, true); return; }
+
+      // Pehli render: card khaali mat rakho, raw turant dikha do
+      if (!this._hasContent) this.rendered = this._rawFor(q);
+
+      this._lockHeight();
+      this._armSwapBar();
+
+      let settled = false;
+      const safety = setTimeout(() => {
+        if (settled || token !== this._swapToken) return;
+        settled = true;
+        apply(this._rawFor(q), false);
+      }, 1200);
+
+      this._renderer.prepare(key, this._rawFor(q)).then((map) => {
+        if (settled) return;
+        settled = true; clearTimeout(safety); apply(map, false);
+      }).catch(() => {
+        if (settled) return;
+        settled = true; clearTimeout(safety); apply(this._rawFor(q), false);
       });
     },
 
-    _waitForMathJaxAndTypeset(attempt, startedAt, minMs, myToken) {
-      const reveal = () => {
-        if (myToken !== this._typesetToken) return;
-        const elapsed = Date.now() - startedAt;
-        const remaining = Math.max(0, minMs - elapsed);
-        setTimeout(() => {
-          if (myToken !== this._typesetToken) return;
-          this.mathLoaded = true;
-        }, remaining);
-      };
-      if (window.MathJax && window.MathJax.typesetPromise) {
-        const target = this.$refs.questionCard;
-        window.MathJax.typesetPromise(target ? [target] : undefined).then(reveal).catch(reveal);
-      } else if (attempt < 40) {
-        setTimeout(() => this._waitForMathJaxAndTypeset(attempt + 1, startedAt, minMs, myToken), 50);
-      } else {
-        reveal();
-      }
+    _warmNeighbours() {
+      const list = this.currentSubjectQuestions;
+      const i = this.currentIndexInSubject;
+      const items = [];
+      [i + 1, i + 2, i + 3, i - 1].forEach((n) => {
+        const q = list[n];
+        if (!q) return;
+        items.push({ key: this._keyFor(q), raw: this._rawFor(q), image: q.image_url || null });
+      });
+      this._renderer.warm(items);
     },
 
+    _lockHeight() {
+      const el = this.$refs.questionCard;
+      if (!el) return;
+      this.cardStyle = 'min-height:' + Math.ceil(el.offsetHeight) + 'px';
+    },
+
+    _unlockHeight() {
+      requestAnimationFrame(() => { this.cardStyle = ''; });
+    },
+
+    _armSwapBar() {
+      this._clearSwapBar();
+      this._swapBarTimer = setTimeout(() => { this.swapping = true; }, 90);
+    },
+
+    _clearSwapBar() {
+      if (this._swapBarTimer) { clearTimeout(this._swapBarTimer); this._swapBarTimer = null; }
+      this.swapping = false;
+    },
+
+    /* =============================================================
+       GETTERS
+       ============================================================= */
     get currentSubjectQuestions() {
       return this.questionsBySubject[this.currentSubject] || [];
     },
@@ -400,16 +545,13 @@ function testAttempt() {
     },
 
     get formattedTime() {
-      const m = Math.floor(this.secondsLeft / 60).toString().padStart(2, '0');
-      const s = (this.secondsLeft % 60).toString().padStart(2, '0');
+      const left = Math.max(0, this.secondsLeft);
+      const m = Math.floor(left / 60).toString().padStart(2, '0');
+      const s = (left % 60).toString().padStart(2, '0');
       return m + ':' + s;
     },
 
-    get formattedQuestionTime() {
-      const m = Math.floor(this.activeQuestionSeconds / 60).toString().padStart(2, '0');
-      const s = (this.activeQuestionSeconds % 60).toString().padStart(2, '0');
-      return m + ':' + s;
-    },
+    get formattedQuestionTime() { return this.formatSeconds(this.activeQuestionSeconds); },
 
     formatSeconds(total) {
       total = total || 0;
@@ -432,30 +574,9 @@ function testAttempt() {
       return { answered, notAnswered, marked, notVisited };
     },
 
-    startTimer() {
-      this.timerHandle = setInterval(() => {
-        if (this.secondsLeft <= 0) {
-          this.stopTimers(); // SANGAM FIX: Stop the timers instantly
-          this.autoSubmit();
-          return;
-        }
-        this.secondsLeft--;
-      }, 1000);
-    },
-
-    startQuestionTimer() {
-      if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
-      const q = this.currentQuestion;
-      this.activeQuestionId = q ? q.id : null;
-      this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
-
-      this.questionTimerHandle = setInterval(() => {
-        if (!this.activeQuestionId) return;
-        this.activeQuestionSeconds++;
-        this.timeSpent[this.activeQuestionId] = this.activeQuestionSeconds;
-      }, 1000);
-    },
-
+    /* =============================================================
+       NAVIGATION
+       ============================================================= */
     autoSubmit() {
       const q = this.currentQuestion;
       if (q) this.persist(q.id);
@@ -463,19 +584,39 @@ function testAttempt() {
     },
 
     switchSubject(subject) {
+      if (subject === this.currentSubject) return;
       this.currentSubject = subject;
       this.currentIndexInSubject = 0;
       this.markVisited();
-      this.startQuestionTimer();
-      this.typesetMath();
+      this._resetQuestionTimer();
+      this.showQuestion();
     },
 
     jumpTo(subject, idx) {
+      if (subject === this.currentSubject && idx === this.currentIndexInSubject) return;
       this.currentSubject = subject;
       this.currentIndexInSubject = idx;
       this.markVisited();
-      this.startQuestionTimer();
-      this.typesetMath();
+      this._resetQuestionTimer();
+      this.showQuestion();
+    },
+
+    goNext() {
+      if (this.currentIndexInSubject < this.currentSubjectQuestions.length - 1) {
+        this.currentIndexInSubject++;
+        this.markVisited();
+        this._resetQuestionTimer();
+        this.showQuestion();
+      }
+    },
+
+    goPrev() {
+      if (this.currentIndexInSubject > 0) {
+        this.currentIndexInSubject--;
+        this.markVisited();
+        this._resetQuestionTimer();
+        this.showQuestion();
+      }
     },
 
     markVisited() {
@@ -487,6 +628,9 @@ function testAttempt() {
       }
     },
 
+    /* =============================================================
+       ANSWERS
+       ============================================================= */
     selectedOption(questionId) {
       return this.progress[questionId]?.selected_option || null;
     },
@@ -568,24 +712,9 @@ function testAttempt() {
       }, 3, 500).catch(() => {});
     },
 
-    goNext() {
-      if (this.currentIndexInSubject < this.currentSubjectQuestions.length - 1) {
-        this.currentIndexInSubject++;
-        this.markVisited();
-        this.startQuestionTimer();
-        this.typesetMath();
-      }
-    },
-
-    goPrev() {
-      if (this.currentIndexInSubject > 0) {
-        this.currentIndexInSubject--;
-        this.markVisited();
-        this.startQuestionTimer();
-        this.typesetMath();
-      }
-    },
-
+    /* =============================================================
+       PALETTE / OPTION STYLING
+       ============================================================= */
     paletteClass(question) {
       if (this.isReviewMode) {
         if (question.selected_option == null) return 'status-not-visited';
@@ -627,6 +756,9 @@ function testAttempt() {
         : 'border-white/30 text-gray-400 group-hover:border-white/50 group-hover:text-gray-200';
     },
 
+    /* =============================================================
+       SUBMIT
+       ============================================================= */
     openSubmitConfirm() {
       const q = this.currentQuestion;
       if (q) this.persist(q.id);
@@ -634,13 +766,18 @@ function testAttempt() {
       this.showSubmitConfirm = true;
     },
 
+    cancelSubmitConfirm() {
+      this.showSubmitConfirm = false;
+      this.submitError = null;
+    },
+
     submitTest() {
       if (this.submitting) return;
       this.submitting = true;
       this.submitError = null;
-      
-      // SANGAM FIX: Timer ruk jayega immediately on submit button click
-      this.stopTimers(); 
+
+      // Timer turant band — submit ke baad background me kuch nahi chalega
+      this.stopTimers();
 
       const answers = {};
       for (const subject of this.subjects) {
@@ -665,9 +802,9 @@ function testAttempt() {
         })
         .catch(() => {
           this.submitting = false;
-          // Restart timers if submission completely fails so student doesn't lose track
-          this.startTimer();
-          this.startQuestionTimer();
+          // Submission fail hui to hi timer wapas chalega — ek hi clock,
+          // duplicate banne ka koi chance nahi.
+          this._resumeTimers();
           this.submitError = "Couldn't submit — check your connection and try again. Your answers are saved, so it's safe to retry.";
         });
     },
