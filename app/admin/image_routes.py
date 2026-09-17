@@ -24,6 +24,7 @@ this logic per question type.
 """
 import io
 import uuid
+import logging
 
 from flask import request, jsonify
 from PIL import Image, ImageOps
@@ -31,6 +32,8 @@ from PIL import Image, ImageOps
 from app.admin import admin_bp
 from app.admin.decorators import admin_required
 from app.extensions import supabase_admin
+
+logger = logging.getLogger(__name__)
 
 BUCKET_NAME = "question-images"
 ALLOWED_TABLES = {"questions", "mock_questions"}
@@ -53,14 +56,16 @@ def _delete_image_from_storage(image_url):
     if not image_url:
         return
     try:
-        # URL format: https://[project_ref].supabase.co/storage/v1/object/public/question-images/[table]/[id]/[uuid].jpg
+        # Safe parsing: strip bucket prefix AND trailing query parameters
         bucket_prefix = f"/{BUCKET_NAME}/"
         if bucket_prefix in image_url:
-            # Safe parsing: strip bucket prefix AND trailing query parameters
             path = image_url.split(bucket_prefix)[1].split("?")[0]
             supabase_admin.storage.from_(BUCKET_NAME).remove([path])
+        elif f"{BUCKET_NAME}/" in image_url:
+            path = image_url.split(f"{BUCKET_NAME}/")[1].split("?")[0]
+            supabase_admin.storage.from_(BUCKET_NAME).remove([path])
     except Exception as e:
-        print(f"Failed to delete image from storage {image_url}: {e}")
+        logger.error(f"Failed to delete image from storage {image_url}: {e}")
 
 
 def compress_image(file_bytes: bytes) -> bytes:
@@ -123,6 +128,7 @@ def question_upload_image(table_name, question_id):
     try:
         compressed = compress_image(raw_bytes)
     except Exception as exc:
+        logger.error(f"Image compression failed for {question_id}: {exc}")
         return jsonify({"ok": False, "error": f"Could not process image — is it a valid photo? ({exc})"}), 400
 
     # ZERO-KACHRA: Check if an old image exists and safely delete it from storage before replacing.
@@ -131,7 +137,8 @@ def question_upload_image(table_name, question_id):
         old_data = supabase_admin.table(table_name).select("image_url").eq("id", question_id).maybe_single().execute().data
         if old_data and old_data.get("image_url"):
             _delete_image_from_storage(old_data["image_url"])
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to fetch or delete old image before replacement for {question_id}: {e}")
         pass  # If it fails to fetch, ignore safely and proceed with the new upload
 
     storage_path = f"{table_name}/{question_id}/{uuid.uuid4().hex}.jpg"
@@ -143,10 +150,10 @@ def question_upload_image(table_name, question_id):
             {"content-type": "image/jpeg"},
         )
     except Exception as exc:
+        logger.error(f"Supabase Storage upload failed for {question_id}: {exc}")
         return jsonify({
             "ok": False,
-            "error": f"Upload to storage failed: {exc}. "
-                     f"Make sure a public bucket named '{BUCKET_NAME}' exists.",
+            "error": f"Upload to storage failed. Make sure a public bucket named '{BUCKET_NAME}' exists.",
         }), 500
 
     # Fetch public URL from Supabase
@@ -162,7 +169,8 @@ def question_upload_image(table_name, question_id):
             "has_image": True,
         }).eq("id", question_id).execute()
     except Exception as exc:
-        return jsonify({"ok": False, "error": f"Image uploaded but saving the link failed: {exc}"}), 500
+        logger.error(f"Database URL update failed for {question_id}: {exc}")
+        return jsonify({"ok": False, "error": "Image uploaded but saving the link failed."}), 500
 
     return jsonify({
         "ok": True,
@@ -192,6 +200,7 @@ def question_remove_image(table_name, question_id):
         # Update database to clear the URL
         supabase_admin.table(table_name).update({"image_url": None}).eq("id", question_id).execute()
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Failed to remove image for question {question_id}: {exc}")
+        return jsonify({"ok": False, "error": "Database error removing image."}), 500
 
     return jsonify({"ok": True})
