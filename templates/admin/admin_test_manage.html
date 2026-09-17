@@ -27,7 +27,6 @@
             this.isToggling = true;
             showSangamToast('Saving image state to database...');
             try {
-                // Call the dedicated endpoint (We will build this in test_routes.py next)
                 const res = await fetch(`/admin/questions/mock_questions/${qid}/toggle-image`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -38,9 +37,8 @@
                 if (data.ok) {
                     showSangamToast('✅ Image requirement permanently saved!');
                 } else {
-                    // Revert the UI switch if the backend fails or route is missing
                     this.imgRequired = !this.imgRequired;
-                    showSangamToast('❌ Failed to save: ' + (data.error || 'Backend endpoint pending (Next Step).'));
+                    showSangamToast('❌ Failed to save: ' + (data.error || 'Server error.'));
                 }
             } catch(e) {
                 this.imgRequired = !this.imgRequired;
@@ -65,11 +63,12 @@
                 if (data.ok) {
                     showSangamToast(`✅ Answer permanently changed to ${newAnswer}!`);
                 } else {
-                    event.target.value = '';
-                    showSangamToast('❌ Failed: ' + (data.error || 'Backend endpoint pending (Next Step).'));
+                    // Revert visual selection if failed
+                    event.target.value = '{{ m.mock_questions.correct_option if m.mock_questions else "" }}';
+                    showSangamToast('❌ Failed: ' + (data.error || 'Server error.'));
                 }
             } catch(e) {
-                event.target.value = '';
+                event.target.value = '{{ m.mock_questions.correct_option if m.mock_questions else "" }}';
                 showSangamToast('❌ Network error. Could not save.');
             }
         }
@@ -144,19 +143,19 @@
             </div>
             
             <div class="p-5 space-y-5">
-                <!-- Dropdown Answer (Now fully connected to DB via AJAX) -->
+                <!-- Dropdown Answer (Now fully connected & pre-filling from DB) -->
                 <div>
                     <label class="block text-sm font-bold text-ink mb-2">Change Correct Option</label>
                     <select @change="changeAnswerInDB('{{ m.mock_question_id }}', $event)" class="w-full text-sm rounded-lg border-2 border-gray-200 focus:ring-0 focus:border-indigo-600 bg-gray-50 cursor-pointer p-2.5 font-bold text-gray-700 outline-none">
                         <option value="">-- Change Answer --</option>
-                        <option value="A">Option A</option>
-                        <option value="B">Option B</option>
-                        <option value="C">Option C</option>
-                        <option value="D">Option D</option>
+                        <option value="A" {% if m.mock_questions and m.mock_questions.correct_option == 'A' %}selected{% endif %}>Option A</option>
+                        <option value="B" {% if m.mock_questions and m.mock_questions.correct_option == 'B' %}selected{% endif %}>Option B</option>
+                        <option value="C" {% if m.mock_questions and m.mock_questions.correct_option == 'C' %}selected{% endif %}>Option C</option>
+                        <option value="D" {% if m.mock_questions and m.mock_questions.correct_option == 'D' %}selected{% endif %}>Option D</option>
                     </select>
                 </div>
 
-                <!-- Image Switch (Now fully connected to DB via AJAX) -->
+                <!-- Image Switch -->
                 <div class="flex items-center justify-between bg-blue-50/50 p-3 rounded-lg border border-blue-100">
                     <label class="text-sm font-bold text-indigo-900 cursor-pointer">Image Required?</label>
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -334,7 +333,15 @@
             <span>Paste complete JSON object</span>
             <span class="text-yellow-500">Ensure 'subject_name' & 'topic_name' are correct!</span>
         </label>
-        <textarea x-model="editJsonText" rows="18" placeholder='{\n  "subject_name": "Physics",\n  "topic_name": "Kinematics",\n  "question_text": "Enter new text...",\n  "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",\n  "correct_option": "A",\n  "difficulty_id": 1,\n  "has_image": true\n}'
+        <textarea x-model="editJsonText" rows="18" placeholder='{
+  "subject_name": "Physics",
+  "topic_name": "Kinematics",
+  "question_text": "Enter new text...",
+  "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",
+  "correct_option": "A",
+  "difficulty_id": 1,
+  "has_image": true
+}'
                   class="w-full bg-gray-900 text-green-400 font-mono text-sm border-2 border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-0 resize-none outline-none p-5 flex-1 shadow-inner"></textarea>
     </div>
     
@@ -537,6 +544,16 @@
     } catch (err) {
       showSangamToast('❌ Network Error: Could not remove image.');
     }
+  });
+
+  // ========================================================
+  // SANGAM FIX: BFCACHE KILLER (Prevents old forms from reopening on Back button)
+  // ========================================================
+  window.addEventListener('pageshow', function(event) {
+      if (event.persisted) {
+          // If browser loads page from cache (Back button), force fresh reload
+          window.location.reload(); 
+      }
   });
 </script>
 {% endblock %}
