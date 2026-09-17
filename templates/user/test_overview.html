@@ -1,51 +1,82 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ test.title }}{% endblock %}
 {% block content %}
-<section class="max-w-2xl mx-auto px-6 pt-12 pb-24 relative z-10">
+<section class="max-w-3xl mx-auto px-6 pt-16 pb-24 relative z-10">
   
-  <div class="mb-8">
-    <a href="javascript:history.back()" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-flex items-center gap-2 transition-colors">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-      </svg>
-      Back
+  <div class="mb-10 text-center">
+    <!-- Close / Back Button -->
+    <a href="javascript:history.back()" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-all mb-8 shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
     </a>
-    <h1 class="font-display text-3xl font-bold text-white mb-2">{{ test.title }}</h1>
-    {% if test.description %}<p class="text-gray-400 text-sm font-medium">{{ test.description }}</p>{% endif %}
+    
+    <h1 class="font-display text-4xl font-bold text-white mb-4">{{ test.title }}</h1>
+    {% if test.description %}
+        <p class="text-gray-400 text-lg font-medium max-w-2xl mx-auto leading-relaxed">{{ test.description }}</p>
+    {% endif %}
   </div>
 
-  <div class="grid grid-cols-3 gap-4 mb-8">
-    <div class="bg-scholar-card border border-scholar-border rounded-xl p-5 text-center backdrop-blur-xl">
-      <p class="text-2xl font-display font-bold text-white">{{ test.total_marks or '—' }}</p>
-      <p class="text-xs text-gray-400 mt-1 font-medium">Total Marks</p>
+  <!-- Test Stats Grid -->
+  <div class="grid grid-cols-3 gap-4 sm:gap-6 mb-10">
+    <div class="bg-[#161616]/90 backdrop-blur-md border border-white/10 rounded-2xl p-6 text-center hover:border-white/20 transition-colors">
+      <p class="text-3xl font-display font-bold text-white mb-1">{{ test.total_marks or '—' }}</p>
+      <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Total Marks</p>
     </div>
-    <div class="bg-scholar-card border border-scholar-border rounded-xl p-5 text-center backdrop-blur-xl">
-      <p class="text-2xl font-display font-bold text-white">{{ test.duration_minutes }}</p>
-      <p class="text-xs text-gray-400 mt-1 font-medium">Minutes</p>
+    <div class="bg-[#161616]/90 backdrop-blur-md border border-white/10 rounded-2xl p-6 text-center hover:border-white/20 transition-colors">
+      <p class="text-3xl font-display font-bold text-white mb-1">{{ test.duration_minutes }}</p>
+      <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Minutes</p>
     </div>
-    <div class="bg-scholar-card border border-scholar-border rounded-xl p-5 text-center backdrop-blur-xl">
-      <p class="text-2xl font-display font-bold text-white">-{{ test.negative_marking }}</p>
-      <p class="text-xs text-gray-400 mt-1 font-medium">Negative Marking</p>
+    <div class="bg-[#161616]/90 backdrop-blur-md border border-white/10 rounded-2xl p-6 text-center hover:border-white/20 transition-colors">
+      <p class="text-3xl font-display font-bold text-white mb-1">-{{ test.negative_marking }}</p>
+      <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Negative</p>
     </div>
   </div>
 
-  <h2 class="font-display text-lg font-bold text-white mb-3">Syllabus Covered</h2>
-  <div class="bg-scholar-card border border-scholar-border rounded-xl p-6 mb-8 backdrop-blur-xl">
-    {% for subject, chapters in syllabus.items() %}
-    <p class="text-sm mb-2"><span class="font-bold text-white">{{ subject }}:</span> <span class="text-gray-400">{{ chapters|join(', ') }}</span></p>
-    {% else %}
-    <p class="text-sm text-gray-500">Syllabus not mapped yet.</p>
-    {% endfor %}
+  <!-- Syllabus Block -->
+  <div class="mb-12">
+    <h2 class="font-display text-xl font-bold text-white mb-4 flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+      Syllabus Covered
+    </h2>
+    <div class="bg-[#161616]/90 backdrop-blur-md border border-white/10 rounded-2xl p-6 lg:p-8">
+      {% for subject, chapters in syllabus.items() %}
+      <div class="{% if not loop.last %}mb-4 pb-4 border-b border-white/5{% endif %}">
+        <p class="text-sm">
+            <span class="font-bold text-gold uppercase tracking-wider text-xs block mb-1">{{ subject }}</span> 
+            <span class="text-gray-300 font-medium leading-relaxed">{{ chapters|join(' • ') }}</span>
+        </p>
+      </div>
+      {% else %}
+      <p class="text-sm font-medium text-gray-500 italic text-center py-4">Syllabus details have not been mapped yet.</p>
+      {% endfor %}
+    </div>
   </div>
 
-  {% if has_access %}
-  <form action="{{ url_for('user.test_start', slug=stream.slug, test_id=test.id) }}" method="POST">
-    <button type="submit"
-       class="block w-full text-center bg-gold text-ink font-bold py-3.5 rounded-xl hover:bg-gold-light transition-all shadow-[0_4px_14px_0_rgba(212,160,23,0.2)]">Start Test &rarr;</button>
-  </form>
-  {% elif test.is_premium and not has_access %}
-  <a href="{{ url_for('auth.login') if not session.get('user_id') else '#' }}"
-     class="block text-center bg-gold text-ink font-bold py-3.5 rounded-xl hover:bg-gold-light transition-all shadow-[0_4px_14px_0_rgba(212,160,23,0.2)]">Unlock Premium 🔒</a>
-  {% endif %}
+  <!-- Call to Action -->
+  <div class="text-center">
+      {% if has_access %}
+      <form action="{{ url_for('user.test_start', slug=stream.slug, test_id=test.id) }}" method="POST">
+        <button type="submit"
+           class="inline-flex justify-center items-center gap-2 w-full sm:w-auto min-w-[240px] bg-gold text-ink font-bold text-lg py-4 px-8 rounded-xl hover:bg-gold-light shadow-[0_4px_14px_0_rgba(212,160,23,0.2)] hover:shadow-[0_6px_20px_rgba(212,160,23,0.3)] transition-all">
+           Initialize Attempt
+           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </button>
+      </form>
+      {% elif test.is_premium and not has_access %}
+      <a href="{{ url_for('auth.login') if not session.get('user_id') else '#' }}"
+         class="inline-flex justify-center items-center gap-2 w-full sm:w-auto min-w-[240px] bg-white/10 text-white font-bold text-lg py-4 px-8 rounded-xl hover:bg-white/20 border border-white/20 transition-all">
+         Unlock Premium 
+         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+         </svg>
+      </a>
+      {% endif %}
+  </div>
+  
 </section>
 {% endblock %}
