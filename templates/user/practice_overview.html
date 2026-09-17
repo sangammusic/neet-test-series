@@ -1,34 +1,69 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ set_name }} — {{ chapter.name }}{% endblock %}
 {% block content %}
-<section class="max-w-xl mx-auto px-6 pt-16 pb-24">
-  <div class="bg-white border border-ink/10 rounded-2xl shadow-sm p-8 text-center">
-    <p class="text-gold font-semibold text-sm mb-2">
-      {{ chapter.name }} · {{ 'PYQ' if mode == 'pyq' else 'MCQ' }} · {{ 'Topic-wise' if category == 'topic' else 'Random' }}
-    </p>
-    <h1 class="font-display text-2xl font-semibold text-ink mb-1">{{ set_name }}</h1>
-    <p class="text-sm text-ink/50 mb-8">📁 {{ folder }}</p>
+<section class="max-w-2xl mx-auto px-6 pt-16 pb-24 relative z-10">
+  
+  <div class="mb-6 text-center">
+    <!-- Close / Back Button -->
+    <a href="javascript:history.back()" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-all shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+    </a>
+  </div>
 
-    <div class="grid grid-cols-2 gap-4 mb-8">
-      <div class="bg-ink/[0.03] rounded-xl p-4">
-        <p class="text-2xl font-display font-semibold text-ink">{{ total_questions }}</p>
-        <p class="text-xs text-ink/50 mt-1 uppercase tracking-wide">Questions</p>
+  <!-- Main Pre-start Card (Replaces the ugly white box) -->
+  <div class="bg-[#161616]/90 border border-white/10 rounded-2xl shadow-2xl p-8 sm:p-10 text-center backdrop-blur-xl relative overflow-hidden">
+    
+    <!-- Subtle Gold Glow inside the card -->
+    <div class="absolute top-0 right-0 w-48 h-48 bg-gold/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+
+    <div class="flex flex-wrap items-center justify-center gap-2 mb-5 relative z-10">
+        <span class="text-[10px] font-black tracking-widest uppercase text-white border border-white/20 bg-white/5 px-2.5 py-1 rounded-full">{{ chapter.name }}</span>
+        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-1 rounded-full">{{ 'PYQ' if mode == 'pyq' else 'MCQ' }}</span>
+        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-1 rounded-full">{{ 'Topic-wise' if category == 'topic' else 'Random' }}</span>
+    </div>
+    
+    <h1 class="font-display text-4xl font-bold text-white mb-2 relative z-10">{{ set_name }}</h1>
+    
+    <p class="text-sm text-gray-400 font-medium mb-10 flex items-center justify-center gap-1.5 relative z-10">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="text-gold" viewBox="0 0 16 16">
+          <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/>
+        </svg>
+        {{ folder }}
+    </p>
+
+    <div class="grid grid-cols-2 gap-4 sm:gap-6 mb-10 relative z-10">
+      <div class="bg-white/5 border border-white/10 rounded-xl p-5 hover:border-white/20 transition-colors">
+        <p class="text-4xl font-display font-bold text-white mb-1">{{ total_questions }}</p>
+        <p class="text-[10px] text-gray-400 uppercase tracking-widest font-black">Questions</p>
       </div>
-      <div class="bg-ink/[0.03] rounded-xl p-4">
-        <p class="text-2xl font-display font-semibold text-ink">{{ total_marks }}</p>
-        <p class="text-xs text-ink/50 mt-1 uppercase tracking-wide">Total Marks</p>
+      <div class="bg-white/5 border border-white/10 rounded-xl p-5 hover:border-white/20 transition-colors">
+        <p class="text-4xl font-display font-bold text-white mb-1">{{ total_marks }}</p>
+        <p class="text-[10px] text-gray-400 uppercase tracking-widest font-black">Total Marks</p>
       </div>
     </div>
 
-    {% if is_premium %}
-    <p class="text-xs bg-gold/15 text-gold font-semibold rounded px-3 py-1.5 inline-block mb-6">Premium 🔒 Content</p>
-    {% endif %}
+    <div class="relative z-10">
+        {% if is_premium %}
+        <div class="mb-6">
+            <span class="text-xs bg-gold/20 border border-gold/40 text-gold font-black uppercase tracking-widest rounded-lg px-4 py-2 inline-block shadow-sm">💎 Premium Content</span>
+        </div>
+        {% endif %}
 
-    <a href="{{ url_for('user.practice_run', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name) }}"
-       class="block w-full py-4 rounded-xl bg-gold text-ink font-display font-semibold text-lg hover:bg-gold-light transition-colors shadow-md">
-      Start Practice →
-    </a>
-    <p class="text-xs text-ink/40 mt-4">This is practice mode — your attempt is not saved.</p>
+        <a href="{{ url_for('user.practice_run', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name) }}"
+           class="inline-flex justify-center items-center gap-2 w-full sm:w-auto min-w-[240px] py-4 px-8 rounded-xl bg-gold text-ink font-bold text-lg hover:bg-gold-light transition-all shadow-[0_4px_14px_0_rgba(212,160,23,0.2)] hover:shadow-[0_6px_20px_rgba(212,160,23,0.3)]">
+          Initialize Practice
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </a>
+        
+        <p class="text-xs font-medium text-gray-500 mt-5 flex items-center justify-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            This is practice mode — your attempt is not saved.
+        </p>
+    </div>
   </div>
 </section>
 {% endblock %}
