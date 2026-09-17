@@ -7,6 +7,11 @@
 {% endblock %}
 
 {% block content %}
+<!-- SANGAM STUDY HUB: Critical CSS to prevent Modal Flashing (FOUC) on page loads -->
+<style>
+    [x-cloak] { display: none !important; }
+</style>
+
 <!-- Alpine.js is now loaded globally in shared/base.html -->
 
 <!-- WRAPPING ENTIRE PAGE IN MASTER ALPINE APP FOR GLOBAL MODALS -->
@@ -376,7 +381,6 @@
               <p class="text-sm font-medium text-gray-500 mb-6">e.g., "Basic Math - 1"</p>
               
               <label class="block text-sm font-bold text-indigo-900 mb-2">{{ 'PYQ Name' if selected_type == 'pyq' else 'MCQ Name' }} <span class="text-red-500">*</span></label>
-              <!-- SANGAM FIX: Changed x-model from newName to form.name -->
               <input type="text" x-model="form.name" placeholder="Enter quiz name..." class="w-full rounded-xl border-2 border-gray-200 px-4 py-3.5 focus:border-indigo-600 focus:ring-0 outline-none font-bold bg-gray-50 mb-4">
               
               <div class="grid grid-cols-2 gap-4 mb-6">
@@ -536,8 +540,14 @@
               try {
                   const res = await fetch(endpoint, { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                   const data = await res.json();
-                  if(data.ok) window.location.reload(); else alert(data.error);
-              } catch(e) { alert('Network Error.'); }
+                  if(data.ok) {
+                      window.location.reload(); 
+                  } else {
+                      showSangamToast("❌ " + (data.error || "Server error."));
+                  }
+              } catch(e) { 
+                  showSangamToast("❌ Network Error. Please check your connection."); 
+              }
               this.quickAdd.isSaving = false;
           },
 
@@ -551,8 +561,14 @@
               try {
                   const res = await fetch(endpoint, { method: 'POST', headers:{'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                   const data = await res.json();
-                  if(data.ok) window.location.reload(); else alert(data.error);
-              } catch(e) { alert('Network Error.'); }
+                  if(data.ok) {
+                      window.location.reload(); 
+                  } else {
+                      showSangamToast("❌ " + (data.error || "Server error."));
+                  }
+              } catch(e) { 
+                  showSangamToast("❌ Network Error. Please check your connection."); 
+              }
               this.itemManage.isSaving = false;
           }
       };
@@ -584,10 +600,13 @@
                   if(data.ok) {
                       const url = new URL(window.location.href);
                       url.searchParams.set('folder', data.folder_name);
-                      // SANGAM FIX: Use window.location.replace() to prevent history stacking
                       window.location.replace(url.toString());
-                  } else alert(data.error);
-              } catch(e) { alert('Network Error'); }
+                  } else {
+                      showSangamToast("❌ " + (data.error || "Failed to create folder."));
+                  }
+              } catch(e) { 
+                  showSangamToast("❌ Network Error. Could not create folder."); 
+              }
               this.isSaving = false;
           },
           async submitRename() {
@@ -603,8 +622,14 @@
                       })
                   });
                   const data = await res.json();
-                  if(data.ok) window.location.reload(); else alert(data.error);
-              } catch(e) { alert('Network Error'); }
+                  if(data.ok) {
+                      window.location.reload(); 
+                  } else {
+                      showSangamToast("❌ " + (data.error || "Failed to rename folder."));
+                  }
+              } catch(e) { 
+                  showSangamToast("❌ Network Error. Could not rename folder."); 
+              }
               this.isSaving = false;
           },
           async submitDelete() {
@@ -620,8 +645,14 @@
                       })
                   });
                   const data = await res.json();
-                  if(data.ok) window.location.reload(); else alert(data.error);
-              } catch(e) { alert('Network Error'); }
+                  if(data.ok) {
+                      window.location.reload(); 
+                  } else {
+                      showSangamToast("❌ " + (data.error || "Failed to delete folder."));
+                  }
+              } catch(e) { 
+                  showSangamToast("❌ Network Error. Could not delete folder."); 
+              }
               this.isSaving = false;
           }
       };
@@ -651,7 +682,6 @@
                   });
                   const data = await res.json();
                   if(data.ok) {
-                      // Redirect to the Deep Manage view
                       const url = new URL(window.location.origin + '/admin/questions/set-manage');
                       url.searchParams.set('stream_id', '{{ selected_stream_id }}');
                       url.searchParams.set('subject_id', '{{ selected_subject_id }}');
@@ -660,10 +690,13 @@
                       url.searchParams.set('category', '{{ selected_category }}');
                       url.searchParams.set('folder', '{{ selected_folder }}');
                       url.searchParams.set('set', data.set_name);
-                      // SANGAM FIX: Use window.location.replace() to prevent history stacking
                       window.location.replace(url.toString());
-                  } else alert(data.error);
-              } catch(e) { alert('Network Error'); }
+                  } else {
+                      showSangamToast("❌ " + (data.error || "Failed to create quiz."));
+                  }
+              } catch(e) { 
+                  showSangamToast("❌ Network Error. Could not create quiz."); 
+              }
               this.isSaving = false;
           },
           async submitRename() {
@@ -678,8 +711,14 @@
                       })
                   });
                   const data = await res.json();
-                  if(data.ok) window.location.reload(); else alert(data.error);
-              } catch(e) { alert('Network Error'); }
+                  if(data.ok) {
+                      window.location.reload(); 
+                  } else {
+                      showSangamToast("❌ " + (data.error || "Failed to rename quiz."));
+                  }
+              } catch(e) { 
+                  showSangamToast("❌ Network Error. Could not rename quiz."); 
+              }
               this.isSaving = false;
           },
           async submitDelete() {
@@ -694,11 +733,27 @@
                       })
                   });
                   const data = await res.json();
-                  if(data.ok) window.location.reload(); else alert(data.error);
-              } catch(e) { alert('Network Error'); }
+                  if(data.ok) {
+                      window.location.reload(); 
+                  } else {
+                      showSangamToast("❌ " + (data.error || "Failed to delete quiz."));
+                  }
+              } catch(e) { 
+                  showSangamToast("❌ Network Error. Could not delete quiz."); 
+              }
               this.isSaving = false;
           }
       };
   }
+
+  // ========================================================
+  // SANGAM FIX: BFCACHE KILLER (Prevents old forms from reopening on Back button)
+  // ========================================================
+  window.addEventListener('pageshow', function(event) {
+      if (event.persisted) {
+          // If browser loads page from cache (Back button), force fresh reload
+          window.location.reload(); 
+      }
+  });
 </script>
 {% endblock %}
