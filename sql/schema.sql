@@ -7,10 +7,14 @@
 --    without touching code.
 -- 2. Users can belong to MULTIPLE streams (many-to-many), so a
 --    student prepping for Class 12 + JEE isn't forced to pick one.
--- 3. Guests (no login) still need a stable identity across a
---    session so we can remember their stream choice + free-test
---    attempts. We use a `guest_id` (UUID stored in a cookie) for
---    this instead of forcing login.
+-- 3. Guest (no-login) mode has been PERMANENTLY REMOVED from the
+--    app. Every visitor must register/login before doing anything.
+--    The `guests` / `guest_streams` tables and the `guest_id` column
+--    on `test_attempts` that used to support that mode are dropped
+--    below (see the DROP statements right after this notice) --
+--    this schema file is the source of truth for the new, no-guest
+--    shape of the database. If you're re-reading old code/docs that
+--    still mention guest_id, that's expected leftover history.
 -- 4. Difficulty is a lookup table, not a hardcoded enum, so Admin
 --    can rename/add levels later without a migration.
 -- 5. UPDATED: Schema now acts as the absolute Single Source of Truth,
@@ -20,6 +24,21 @@
 -- ---------- EXTENSIONS ----------
 create extension if not exists "uuid-ossp";
 create extension if not exists pgcrypto;
+
+-- ---------- GUEST MODE REMOVAL ----------
+-- Guest mode is gone for good. Drop its tables outright (cascades
+-- to guest_streams and clears any guest_id FK on test_attempts).
+-- Safe to run repeatedly -- a fresh install has nothing to drop here.
+drop table if exists guest_streams cascade;
+drop table if exists guests cascade;
+
+-- If test_attempts already exists from before this fix, drop its old
+-- guest index, guest_id column, and the two-way owner-check
+-- constraint that referenced it -- the table definition further
+-- below recreates user_id as NOT NULL, which is the real fix.
+drop index if exists idx_attempts_guest;
+alter table if exists test_attempts drop column if exists guest_id;
+alter table if exists test_attempts drop constraint if exists attempt_owner_check;
 
 -- ---------- ENUM-LIKE LOOKUP: roles ----------
 create table if not exists roles (
@@ -33,8 +52,20 @@ on conflict (id) do nothing;
 -- ---------- USERS ----------
 -- Extends Supabase auth.users (auth handled by Supabase Auth).
 -- This table is 1:1 with auth.users via the same UUID primary key.
+--
+-- `username` is the app's real-world login handle (see
+-- app/auth/routes.py -- it's turned into a dummy "<username>@sangam.local"
+-- email under the hood for Supabase Auth). The UNIQUE constraint here
+-- is the actual, DB-level guarantee that two people can never hold
+-- the same username at the same time -- the app also does a
+-- friendly pre-check before hitting this, but this constraint is
+-- what makes that check trustworthy instead of just a race-prone
+-- courtesy check. If a user changes their username or deletes their
+-- account, the old value becomes free again immediately (there is no
+-- separate "reserved/retired usernames" list by design).
 create table if not exists profiles (
     id              uuid primary key references auth.users(id) on delete cascade,
+    username        text,
     full_name       text,
     phone           text,
     role_id         smallint not null default 1 references roles(id),
@@ -42,15 +73,10 @@ create table if not exists profiles (
     updated_at      timestamptz not null default now()
 );
 
--- ---------- GUESTS ----------
--- Anonymous/no-login users. guest_id is generated client-side (or on
--- first hit) and stored in a long-lived cookie. Lets us persist
--- stream choice + free attempts without forcing registration.
-create table if not exists guests (
-    guest_id        uuid primary key default uuid_generate_v4(),
-    created_at      timestamptz not null default now(),
-    last_seen_at    timestamptz not null default now()
-);
+-- Idempotent add + unique index, for databases where `profiles`
+-- already existed before `username` was added to this schema file.
+alter table profiles add column if not exists username text;
+create unique index if not exists profiles_username_unique_idx on profiles (username);
 
 -- ---------- STREAMS (dynamic, admin-managed) ----------
 create table if not exists streams (
@@ -71,14 +97,6 @@ create table if not exists user_streams (
     stream_id       uuid not null references streams(id) on delete cascade,
     joined_at       timestamptz not null default now(),
     primary key (user_id, stream_id)
-);
-
--- Same, for guests
-create table if not exists guest_streams (
-    guest_id        uuid not null references guests(guest_id) on delete cascade,
-    stream_id       uuid not null references streams(id) on delete cascade,
-    joined_at       timestamptz not null default now(),
-    primary key (guest_id, stream_id)
 );
 
 -- ---------- SUBJECTS (per stream, admin-managed) ----------
@@ -200,25 +218,33 @@ create table if not exists mock_test_questions (
     primary key (test_id, mock_question_id)
 );
 
--- ---------- ATTEMPTS (both users and guests can attempt free tests) ----------
+-- ---------- ATTEMPTS (registered users only -- guest mode removed) ----------
 create table if not exists test_attempts (
     id              uuid primary key default uuid_generate_v4(),
     test_id         uuid not null references tests(id) on delete cascade,
-    user_id         uuid references profiles(id) on delete cascade,
-    guest_id        uuid references guests(guest_id) on delete cascade,
+    user_id         uuid not null references profiles(id) on delete cascade,
     started_at      timestamptz not null default now(),
     submitted_at    timestamptz,
     score           numeric(6,2),
     total_questions int,
     correct_count   int,
     wrong_count     int,
-    skipped_count   int,
-    -- Exactly one of user_id / guest_id must be set
-    constraint attempt_owner_check check (
-        (user_id is not null and guest_id is null) or
-        (user_id is null and guest_id is not null)
-    )
+    skipped_count   int
 );
+
+-- For a live DB where test_attempts already existed with a nullable
+-- user_id (from the old guest-mode days): after running the
+-- "Wipe Legacy Guests" admin cleanup (or otherwise deleting/backfilling
+-- any user_id IS NULL rows), enforce NOT NULL for real. This is safe
+-- to run repeatedly and a no-op once already set.
+do $$
+begin
+    if not exists (
+        select 1 from test_attempts where user_id is null
+    ) then
+        alter table test_attempts alter column user_id set not null;
+    end if;
+end $$;
 
 -- Unified answers table for both Chapter Questions and Mock Questions.
 -- Contains durable state (`status`, `time_taken_sec`) to eliminate cookie session size crashes.
@@ -282,7 +308,6 @@ create index if not exists idx_tests_category on tests(category_id);
 create index if not exists idx_tests_stream on tests(stream_id);
 create index if not exists idx_attempts_test on test_attempts(test_id);
 create index if not exists idx_attempts_user on test_attempts(user_id);
-create index if not exists idx_attempts_guest on test_attempts(guest_id);
 create index if not exists idx_transactions_status on transactions(status);
 create index if not exists idx_transactions_user on transactions(user_id);
 create index if not exists idx_mock_questions_stream on mock_questions(stream_id);
