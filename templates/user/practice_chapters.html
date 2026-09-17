@@ -1,18 +1,45 @@
 {% extends "shared/base.html" %}
 {% block title %}Chapters — {{ stream.name }}{% endblock %}
 {% block content %}
-<section class="max-w-3xl mx-auto px-6 pt-12 pb-24">
-  <p class="text-gold font-semibold text-sm mb-2">{{ stream.name.upper() }} · CHAPTER-WISE PRACTICE</p>
-  <h1 class="font-display text-2xl font-semibold text-ink mb-8">Choose a Chapter</h1>
-  <div class="grid sm:grid-cols-2 gap-4">
+<section class="max-w-4xl mx-auto px-6 pt-12 pb-24 relative z-10">
+  
+  <div class="mb-10 border-b border-white/10 pb-6">
+    <a href="{{ url_for('user.practice_subjects', slug=stream.slug) }}" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-flex items-center gap-2 transition-colors">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+      </svg>
+      Back to Subjects
+    </a>
+    <div class="flex items-center gap-3 mb-2">
+        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full">{{ stream.name }}</span>
+    </div>
+    <h1 class="font-display text-4xl font-bold text-white mb-2 tracking-tight">Select Chapter</h1>
+    <p class="text-gray-400 text-sm font-medium">Choose a specific chapter to access its MCQs and PYQs.</p>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-5">
     {% for c in chapters %}
-    <!-- SANGAM FIX: Reverted endpoint to practice_chapter_detail to fix 500 BuildError -->
     <a href="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=c.id) }}"
-       class="block p-5 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-sm transition-all bg-white font-medium text-ink">
-      {{ c.name }}
+       class="block p-6 border border-white/10 rounded-xl hover:border-gold/40 hover:shadow-[0_0_20px_rgba(212,160,23,0.1)] transition-all bg-[#161616]/90 backdrop-blur-md group relative overflow-hidden flex items-center justify-between">
+      
+      <!-- Subtle Hover Accent -->
+      <div class="absolute inset-y-0 left-0 w-1 bg-transparent group-hover:bg-gold transition-colors"></div>
+
+      <div class="pl-3">
+        <h2 class="font-bold text-white group-hover:text-gold transition-colors text-lg">{{ c.name }}</h2>
+      </div>
+      
+      <div class="text-gray-600 group-hover:text-gold transition-colors transform group-hover:translate-x-1 duration-200">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
     </a>
     {% else %}
-    <p class="text-ink/50 text-sm col-span-full">No chapters yet — check back soon.</p>
+    <div class="col-span-full text-center p-12 bg-[#161616]/90 rounded-2xl border border-dashed border-white/20 backdrop-blur-md">
+        <p class="text-white font-bold text-lg mb-1">No Chapters Yet</p>
+        <p class="text-gray-500 text-sm font-medium">Content is currently being updated. Check back soon.</p>
+    </div>
     {% endfor %}
   </div>
 </section>
