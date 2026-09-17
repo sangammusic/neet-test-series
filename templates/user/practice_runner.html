@@ -78,7 +78,8 @@
         </p>
 
         <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg overflow-hidden">
-          <div class="transition-all duration-200 ease-out" :class="mathReady ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'">
+          <div class="transition-all duration-200 ease-out" x-ref="questionCard"
+               :class="!needsTypeset ? 'opacity-100 translate-y-0' : (mathReady ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1')">
             <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion.question_text"></div>
 
             <div x-show="currentQuestion.image_url" class="my-6 mx-auto max-w-full flex justify-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
@@ -176,7 +177,7 @@
         <span class="font-semibold text-white tabular-nums" x-text="formattedTotalTime"></span>
       </div>
       <div class="grid grid-cols-2 gap-3">
-        <button @click="showSummary = false; startQuestionTimer(); startTotalTimer()" class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
+        <button @click="showSummary = false" class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
           Review
         </button>
         <a href="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=chapter.id) }}"
@@ -197,6 +198,9 @@ function practiceRunner() {
     answers: {},    // { questionId: 'A' } — locked in only after Submit; drives reveal + scoring
     marked: {},     // { questionId: true } — Mark for Review, independent of answered/checked state
     showSummary: false,
+    isFinished: false, // true once "Finish" is clicked — timers stay stopped for good after this,
+                        // even while browsing questions in Review (closing the summary modal must
+                        // not secretly resume the clock — see startQuestionTimer/startTotalTimer)
 
     // --- timing ---
     timeSpent: {},              // { questionId: secondsSpentOnThatQuestion }
@@ -208,6 +212,7 @@ function practiceRunner() {
 
     // --- render state (avoids flashing raw \( \) LaTeX before MathJax typesets it) ---
     mathReady: false,
+    needsTypeset: false, // true only when the current question actually contains LaTeX
 
     init() {
       this.startTotalTimer();
@@ -215,7 +220,33 @@ function practiceRunner() {
       this.typesetMath();
     },
 
+    // Cheap textual check for LaTeX delimiters across everything this
+    // question renders with x-html (question text + all 4 options).
+    // Explanation text is checked separately in submitAnswer(), since it
+    // doesn't exist until the question is answered.
+    questionHasMath(q) {
+      if (!q) return false;
+      const parts = [q.question_text, q.option_a, q.option_b, q.option_c, q.option_d];
+      return parts.some(p => typeof p === 'string' && (
+        p.includes('\\(') || p.includes('\\[') || p.includes('$$') ||
+        /\$[^$]+\$/.test(p)
+      ));
+    },
+
     typesetMath() {
+      const q = this.currentQuestion;
+      this.needsTypeset = this.questionHasMath(q);
+
+      // No LaTeX on this question — skip the cloak/fade entirely so
+      // "Next"/"Previous" is instant for plain-text questions (the common
+      // case). This is the fix for the blank-screen-on-next issue:
+      // previously every navigation cloaked regardless of whether
+      // MathJax had anything to typeset.
+      if (!this.needsTypeset) {
+        this.mathReady = true;
+        return;
+      }
+
       this.mathReady = false;
       const startedAt = Date.now();
       // A fixed floor on how long the fade-out stays visible before the new
@@ -239,7 +270,11 @@ function practiceRunner() {
         setTimeout(() => { this.mathReady = true; }, remaining);
       };
       if (window.MathJax && window.MathJax.typesetPromise) {
-        window.MathJax.typesetPromise().then(reveal).catch(reveal);
+        // Scoped to just this question's card instead of the whole
+        // document — faster and avoids re-typesetting unrelated content
+        // (palette strip, top bar, etc.) on every click.
+        const target = this.$refs.questionCard;
+        window.MathJax.typesetPromise(target ? [target] : undefined).then(reveal).catch(reveal);
       } else if (attempt < 40) {
         // MathJax script is loaded with `async` in base.html, so on the very
         // first question it may not be ready yet — poll briefly instead of
@@ -251,12 +286,14 @@ function practiceRunner() {
     },
 
     startTotalTimer() {
+      if (this.isFinished) return; // once finished, the clock never restarts
       this.totalTimerHandle = setInterval(() => {
         this.totalSeconds++;
       }, 1000);
     },
 
     startQuestionTimer() {
+      if (this.isFinished) return; // browsing questions in Review shouldn't tick a live timer
       if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
       const q = this.currentQuestion;
       this.activeQuestionId = q ? q.id : null;
@@ -270,6 +307,7 @@ function practiceRunner() {
     },
 
     stopTimers() {
+      this.isFinished = true;
       if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
       if (this.totalTimerHandle) clearInterval(this.totalTimerHandle);
     },
@@ -326,7 +364,8 @@ function practiceRunner() {
       // eases in on its own via x-transition.
       this.$nextTick(() => {
         if (window.MathJax && window.MathJax.typesetPromise) {
-          window.MathJax.typesetPromise();
+          const target = this.$refs.questionCard;
+          window.MathJax.typesetPromise(target ? [target] : undefined);
         }
       });
     },
