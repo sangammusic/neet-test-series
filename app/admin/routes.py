@@ -86,19 +86,16 @@ def dashboard():
         "tests": _count("tests"),
     }
 
-    # FEATURE: Garbage tracking (Guest and Abandoned attempts).
-    try:
-        guest_count = supabase_admin.table("test_attempts").select("id", count="exact").is_("user_id", "null").limit(1).execute().count or 0
-    except Exception:
-        guest_count = 0
-
+    # FEATURE: Garbage tracking (Abandoned attempts).
+    # NOTE: guest-attempt tracking was removed along with guest mode --
+    # every test_attempts row now always has a user_id, so a
+    # "guest_attempts" count would always read zero going forward.
     try:
         incomplete_count = supabase_admin.table("test_attempts").select("id", count="exact").is_("submitted_at", "null").limit(1).execute().count or 0
     except Exception:
         incomplete_count = 0
 
     garbage_info = {
-        "guest_attempts": guest_count,
         "incomplete_attempts": incomplete_count,
     }
 
@@ -134,18 +131,26 @@ def dashboard():
     )
 
 
-@admin_bp.route("/cleanup/guests", methods=["POST"])
+@admin_bp.route("/cleanup/legacy-guest-attempts", methods=["POST"])
 @admin_required
-def cleanup_guest_attempts():
+def cleanup_legacy_guest_attempts():
     """
-    Nuclear option for Admin: Deletes all test attempts made by Guests.
-    Because of the DB's ON DELETE CASCADE, this automatically wipes millions 
-    of linked `attempt_answers` rows instantly, saving massive DB storage.
+    One-time historical cleanup only.
+
+    Guest mode has been permanently removed from the app -- no new
+    test_attempts row will ever be created without a user_id again.
+    This route exists purely so an admin can purge any *old* guest
+    attempt rows (user_id IS NULL) that were created back when guest
+    mode still existed, freeing their storage via the DB's ON DELETE
+    CASCADE (which also removes their attempt_answers rows).
+
+    Safe to run repeatedly -- once there are no more NULL-user_id
+    rows left, this is a no-op.
     """
     try:
         res = supabase_admin.table("test_attempts").delete().is_("user_id", "null").execute()
         deleted_count = len(res.data) if res.data else 0
-        flash(f"Success: {deleted_count} Guest attempts and their temporary data have been permanently wiped.", "success")
+        flash(f"Success: {deleted_count} legacy guest attempts and their data have been permanently wiped.", "success")
     except Exception as exc:
         flash(f"Cleanup failed: {exc}", "error")
     return redirect(url_for("admin.dashboard"))
