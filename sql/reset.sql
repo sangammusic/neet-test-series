@@ -27,12 +27,15 @@ drop table if exists questions cascade;
 drop table if exists difficulty_levels cascade;
 drop table if exists chapters cascade;
 drop table if exists subjects cascade;
-drop table if exists guest_streams cascade;
 drop table if exists user_streams cascade;
-drop table if exists guests cascade;
 drop table if exists streams cascade;
 drop table if exists profiles cascade;
 drop table if exists roles cascade;
+
+-- NOTE: guest_streams / guests used to be dropped here too, back when
+-- guest mode existed. Guest mode is now permanently removed and
+-- schema.sql itself drops those two tables unconditionally at the
+-- top (so they're gone either way, whether you reset first or not).
 
 -- Drop the helper function too — it gets recreated by schema.sql,
 -- but `create or replace` will fail if the return type ever changes,
