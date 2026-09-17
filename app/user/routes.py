@@ -5,7 +5,7 @@ from supabase import create_client
 from app.user import user_bp
 from app.extensions import supabase_admin, supabase_public, SUPABASE_URL, SUPABASE_ANON_KEY
 from app.shared.models import (
-    get_active_streams, get_streams_for_user_or_guest, get_stream_by_slug,
+    get_active_streams, get_streams_for_user, get_stream_by_slug,
     get_subjects_for_stream, get_chapters_for_subject, get_chapter_by_id,
     get_all_tests_for_stream, get_test_by_id, get_test_syllabus,
     user_has_access_to_test, get_mock_questions_for_test,
@@ -14,40 +14,59 @@ from app.shared.models import (
     save_attempt_progress, bulk_save_attempt_progress, get_attempt_answers_map,
     get_mock_questions_for_test_review, delete_all_attempts_for_user
 )
-from app.shared.utils import GUEST_COOKIE_NAME, get_or_create_guest_id, set_guest_cookie, is_logged_in, current_user_id
+from app.shared.utils import is_logged_in, current_user_id
 
+
+# ==========================================
+# ENTRY / AUTH-GATED FLOW
+#
+# Guest mode has been permanently removed. Every route below that
+# used to branch on "logged in vs guest_id cookie" now simply
+# requires login -- an anonymous visitor is redirected straight to
+# auth.login. There is no more "continue without an account" path.
+# ==========================================
 
 @user_bp.route("/")
 def landing():
-    if is_logged_in():
-        existing = get_streams_for_user_or_guest(user_id=current_user_id())
-        if existing:
-            return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
-        return redirect(url_for("user.stream_select"))
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
 
-    guest_id = request.cookies.get(GUEST_COOKIE_NAME)
-    if guest_id:
-        existing = get_streams_for_user_or_guest(guest_id=guest_id)
-        if existing:
-            return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
+    existing = get_streams_for_user(user_id=current_user_id())
+    if existing:
+        return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
+    return redirect(url_for("user.start_learning"))
 
-    return render_template("landing.html")
+
+@user_bp.route("/start")
+def start_learning():
+    """
+    The page a logged-in user lands on right after login/registration:
+    a simple welcome screen with a single 'Start Learning' button that
+    leads into board/stream selection.
+    """
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
+
+    existing = get_streams_for_user(user_id=current_user_id())
+    if existing:
+        return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
+
+    return render_template("start_learning.html")
 
 
 @user_bp.route("/streams", methods=["GET", "POST"])
 def stream_select():
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
+
     streams = get_active_streams()
+    user_id = current_user_id()
 
     if request.method == "GET":
         force = request.args.get("force") == "1"
 
         if not force:
-            if is_logged_in():
-                existing = get_streams_for_user_or_guest(user_id=current_user_id())
-            else:
-                guest_id = request.cookies.get(GUEST_COOKIE_NAME)
-                existing = get_streams_for_user_or_guest(guest_id=guest_id) if guest_id else []
-
+            existing = get_streams_for_user(user_id=user_id)
             if existing:
                 return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
 
@@ -57,27 +76,19 @@ def stream_select():
     if not selected_ids:
         return render_template("stream_select.html", streams=streams, error="Pick at least one stream.")
 
-    if is_logged_in():
-        user_id = current_user_id()
-        rows = [{"user_id": user_id, "stream_id": sid} for sid in selected_ids]
-        supabase_admin.table("user_streams").upsert(rows).execute()
-    else:
-        guest_id, is_new = get_or_create_guest_id()
-        if is_new:
-            supabase_admin.table("guests").insert({"guest_id": guest_id}).execute()
-        rows = [{"guest_id": guest_id, "stream_id": sid} for sid in selected_ids]
-        supabase_admin.table("guest_streams").upsert(rows).execute()
+    rows = [{"user_id": user_id, "stream_id": sid} for sid in selected_ids]
+    supabase_admin.table("user_streams").upsert(rows).execute()
 
     session["active_stream_ids"] = selected_ids
     first_stream = next((s for s in streams if s["id"] == selected_ids[0]), None)
-    response = redirect(url_for("user.stream_dashboard", slug=first_stream["slug"]))
-    if not is_logged_in() and is_new:
-        response = set_guest_cookie(response, guest_id)
-    return response
+    return redirect(url_for("user.stream_dashboard", slug=first_stream["slug"]))
 
 
 @user_bp.route("/streams/<slug>")
 def stream_dashboard(slug):
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
+
     stream = get_stream_by_slug(slug)
     if not stream:
         return render_template("shared/404.html"), 404
@@ -86,17 +97,17 @@ def stream_dashboard(slug):
 
 @user_bp.route("/switch-stream")
 def switch_stream():
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     return redirect(url_for("user.stream_select", force="1"))
 
 
 @user_bp.route("/dashboard")
 def my_dashboard():
-    if is_logged_in():
-        existing = get_streams_for_user_or_guest(user_id=current_user_id())
-    else:
-        guest_id = request.cookies.get(GUEST_COOKIE_NAME)
-        existing = get_streams_for_user_or_guest(guest_id=guest_id) if guest_id else []
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
 
+    existing = get_streams_for_user(user_id=current_user_id())
     if existing:
         return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
     return redirect(url_for("user.stream_select"))
@@ -108,6 +119,8 @@ def my_dashboard():
 
 @user_bp.route("/streams/<slug>/practice")
 def practice_subjects(slug):
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     subjects = get_subjects_for_stream(stream["id"])
     return render_template("practice_subjects.html", stream=stream, subjects=subjects)
@@ -115,6 +128,8 @@ def practice_subjects(slug):
 
 @user_bp.route("/streams/<slug>/practice/subject/<subject_id>")
 def practice_chapters(slug, subject_id):
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapters = get_chapters_for_subject(subject_id)
     return render_template("practice_chapters.html", stream=stream, chapters=chapters)
@@ -123,6 +138,8 @@ def practice_chapters(slug, subject_id):
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>")
 def practice_chapter_detail(slug, chapter_id):
     """Level 4: Select MCQ or PYQ"""
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
     return render_template("practice_chapter_detail.html", stream=stream, chapter=chapter)
@@ -131,6 +148,8 @@ def practice_chapter_detail(slug, chapter_id):
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>")
 def practice_category(slug, chapter_id, mode):
     """Level 5: Select Topic-wise or Random"""
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
     return render_template("practice_category.html", stream=stream, chapter=chapter, mode=mode)
@@ -139,6 +158,8 @@ def practice_category(slug, chapter_id, mode):
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>")
 def practice_folders(slug, chapter_id, mode, category):
     """Level 6: Show Folders for the specific category"""
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
     is_pyq = (mode == "pyq")
@@ -152,6 +173,8 @@ def practice_folders(slug, chapter_id, mode, category):
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>")
 def practice_sets(slug, chapter_id, mode, category, folder):
     """Level 7: Show Quizzes inside the Folder"""
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
     is_pyq = (mode == "pyq")
@@ -175,6 +198,9 @@ def practice_sets(slug, chapter_id, mode, category, folder):
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>")
 def practice_overview(slug, chapter_id, mode, category, folder, set_name):
     """Level 8: Test Overview Page (Prevents answer leak, provides 'Start' button)"""
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
+
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
     is_pyq = (mode == "pyq")
@@ -185,8 +211,6 @@ def practice_overview(slug, chapter_id, mode, category, folder, set_name):
         abort(404)
 
     is_premium = any(q.get("is_premium") for q in questions)
-    if is_premium and not is_logged_in():
-        return render_template("practice_locked.html")
 
     total_questions = len(questions)
     total_marks = sum(q.get("marks", 4) for q in questions)
@@ -197,6 +221,9 @@ def practice_overview(slug, chapter_id, mode, category, folder, set_name):
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>/run")
 def practice_run(slug, chapter_id, mode, category, folder, set_name):
     """Level 9: Actual Test Runner for Practice (No DB Saves)"""
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
+
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
     is_pyq = (mode == "pyq")
@@ -205,9 +232,6 @@ def practice_run(slug, chapter_id, mode, category, folder, set_name):
 
     if not questions:
         abort(404)
-
-    if any(q.get("is_premium") for q in questions) and not is_logged_in():
-        return render_template("practice_locked.html")
 
     return render_template("practice_runner.html", stream=stream, chapter=chapter, mode=mode, category=category, folder=folder, set_name=set_name, questions=questions)
 
@@ -221,6 +245,8 @@ def tests_feed(slug):
     """
     PHASE 4: Shows Folders (Test Series) instead of flat bikhre hue tests.
     """
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     # Fetch all VIP Folders created by admin
     series_list = (
@@ -240,6 +266,8 @@ def series_tests(slug, series_id):
     Only shows tests belonging to this specific Folder AND this Student's Stream.
     Zero Test Leaking.
     """
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     series = supabase_admin.table("mock_test_series").select("*").eq("id", series_id).single().execute().data
     if not series:
@@ -260,6 +288,8 @@ def series_tests(slug, series_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>")
 def test_overview(slug, test_id):
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     test = get_test_by_id(test_id)
     syllabus = get_test_syllabus(test_id)
@@ -269,6 +299,9 @@ def test_overview(slug, test_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/start", methods=["POST"])
 def test_start(slug, test_id):
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
+
     test = get_test_by_id(test_id)
     if not test:
         abort(404)
@@ -276,17 +309,8 @@ def test_start(slug, test_id):
     if not user_has_access_to_test(test, current_user_id()):
         return redirect(url_for("user.test_overview", slug=slug, test_id=test_id))
 
-    if is_logged_in():
-        attempt_id = create_test_attempt(test_id, user_id=current_user_id())
-        response = redirect(url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=attempt_id))
-    else:
-        guest_id, is_new = get_or_create_guest_id()
-        if is_new:
-            supabase_admin.table("guests").insert({"guest_id": guest_id}).execute()
-        attempt_id = create_test_attempt(test_id, guest_id=guest_id)
-        response = redirect(url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=attempt_id))
-        if is_new:
-            response = set_guest_cookie(response, guest_id)
+    attempt_id = create_test_attempt(test_id, user_id=current_user_id())
+    response = redirect(url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=attempt_id))
 
     if not attempt_id:
         return redirect(url_for("user.test_overview", slug=slug, test_id=test_id))
@@ -296,8 +320,10 @@ def test_start(slug, test_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>")
 def test_attempt(slug, test_id, attempt_id):
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     attempt = get_attempt_by_id(attempt_id)
-    if not attempt or attempt["test_id"] != test_id:
+    if not attempt or attempt["test_id"] != test_id or attempt.get("user_id") != current_user_id():
         abort(404)
     if attempt.get("submitted_at"):
         return redirect(url_for("user.test_result", slug=slug, test_id=test_id, attempt_id=attempt_id))
@@ -319,8 +345,15 @@ def test_attempt(slug, test_id, attempt_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>/answer", methods=["POST"])
 def test_attempt_save_answer(slug, test_id, attempt_id):
+    if not is_logged_in():
+        return jsonify({"ok": False, "error": "not logged in"}), 401
     attempt = get_attempt_by_id(attempt_id)
-    if not attempt or attempt["test_id"] != test_id or attempt.get("submitted_at"):
+    if (
+        not attempt
+        or attempt["test_id"] != test_id
+        or attempt.get("user_id") != current_user_id()
+        or attempt.get("submitted_at")
+    ):
         return jsonify({"ok": False, "error": "attempt not active"}), 400
 
     payload = request.get_json(silent=True) or {}
@@ -343,10 +376,12 @@ def test_attempt_save_answer(slug, test_id, attempt_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>/submit", methods=["POST"])
 def test_attempt_submit(slug, test_id, attempt_id):
+    if not is_logged_in():
+        return jsonify({"ok": False, "error": "not logged in"}), 401
     attempt = get_attempt_by_id(attempt_id)
-    if not attempt or attempt["test_id"] != test_id:
+    if not attempt or attempt["test_id"] != test_id or attempt.get("user_id") != current_user_id():
         abort(404)
-        
+
     if attempt.get("submitted_at"):
         return jsonify({
             "ok": True,
@@ -392,8 +427,10 @@ def test_attempt_submit(slug, test_id, attempt_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>/result")
 def test_result(slug, test_id, attempt_id):
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     attempt = get_attempt_by_id(attempt_id)
-    if not attempt or attempt["test_id"] != test_id:
+    if not attempt or attempt["test_id"] != test_id or attempt.get("user_id") != current_user_id():
         abort(404)
     if not attempt.get("submitted_at"):
         return redirect(url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=attempt_id))
@@ -411,8 +448,10 @@ def test_result(slug, test_id, attempt_id):
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>/review")
 def test_attempt_review(slug, test_id, attempt_id):
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
     attempt = get_attempt_by_id(attempt_id)
-    if not attempt or attempt["test_id"] != test_id:
+    if not attempt or attempt["test_id"] != test_id or attempt.get("user_id") != current_user_id():
         abort(404)
     if not attempt.get("submitted_at"):
         return redirect(url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=attempt_id))
