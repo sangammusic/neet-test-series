@@ -1,7 +1,7 @@
 {% extends "shared/base.html" %}
-{% block title %}Authentication — SANGAM STUDY{% endblock %}
+{% block title %}Registration — SANGAM STUDY{% endblock %}
 {% block content %}
-<div class="max-w-md mx-auto mt-20 px-4 relative z-10">
+<div class="max-w-md mx-auto mt-16 mb-16 px-4 relative z-10">
   
   <!-- Glassmorphic Card -->
   <div class="bg-scholar-card border border-scholar-border rounded-2xl p-8 sm:p-10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
@@ -10,35 +10,83 @@
     <div class="absolute top-0 right-0 w-32 h-32 bg-gold/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
 
     <div class="mb-8 relative z-10">
-      <h1 class="font-display text-3xl font-bold text-white mb-2">Student Authentication</h1>
-      <p class="text-gray-400 text-sm font-medium">Enter your credentials to access your workspace.</p>
+      <h1 class="font-display text-3xl font-bold text-white mb-2">Student Registration</h1>
+      <p class="text-gray-400 text-sm font-medium">Establish your preparation workspace.</p>
     </div>
 
     <form method="POST" class="space-y-5 relative z-10">
       
-      <!-- Username Field -->
+      <!-- Full Name Field -->
       <div>
-        <label class="block text-sm font-semibold text-gray-300 mb-1.5">Username</label>
-        <input type="text" name="username" required placeholder="Enter your username"
+        <label class="block text-sm font-semibold text-gray-300 mb-1.5">Full Name</label>
+        <input type="text" name="full_name" required placeholder="Your official name"
                class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/50 transition-all">
+      </div>
+
+      <!-- Username Field (Strict Logic Intact) -->
+      <div>
+        <label class="block text-sm font-semibold text-gray-300 mb-1.5">Choose a Username <span class="text-gold">*</span></label>
+        <input type="text" name="username" required pattern="[a-zA-Z0-9_]+" title="Only letters, numbers, and underscores allowed" placeholder="e.g. rohit_123"
+               class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/50 transition-all">
+        <p class="text-xs text-gray-500 mt-1.5 font-medium">Make it unique. No spaces or special characters.</p>
       </div>
 
       <!-- Password Field -->
       <div>
         <label class="block text-sm font-semibold text-gray-300 mb-1.5">Password</label>
-        <input type="password" name="password" required placeholder="Enter your password"
+        <input type="password" name="password" id="reg_password" required minlength="6" placeholder="Create a strong password"
                class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/50 transition-all">
       </div>
-      
+
+      <!-- Confirm Password Field -->
+      <div>
+        <label class="block text-sm font-semibold text-gray-300 mb-1.5">Confirm Password <span class="text-gold">*</span></label>
+        <input type="password" name="confirm_password" id="reg_confirm_password" required minlength="6" placeholder="Re-enter your password"
+               class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/50 transition-all">
+        <p id="reg_password_mismatch" class="text-xs text-red-400 mt-1.5 font-medium hidden">Passwords do not match.</p>
+      </div>
+
       <button type="submit"
               class="w-full bg-gold text-ink font-bold py-3 mt-4 rounded-lg hover:bg-gold-light transition-all shadow-[0_4px_14px_0_rgba(212,160,23,0.2)] hover:shadow-[0_6px_20px_rgba(212,160,23,0.3)]">
-        Access Portal &rarr;
+        Create Account &rarr;
       </button>
     </form>
 
     <p class="text-sm text-gray-400 mt-8 text-center relative z-10">
-      First time here? <a href="{{ url_for('auth.register') }}" class="text-gold font-bold hover:text-gold-light hover:underline transition-colors">Create an account</a>
+      Already registered? <a href="{{ url_for('auth.login') }}" class="text-gold font-bold hover:text-gold-light hover:underline transition-colors">Access Portal</a>
     </p>
   </div>
 </div>
+
+<script>
+  (function () {
+    var pw = document.getElementById('reg_password');
+    var confirm = document.getElementById('reg_confirm_password');
+    var warning = document.getElementById('reg_password_mismatch');
+    var form = pw.closest('form');
+
+    function checkMatch() {
+      if (confirm.value && pw.value !== confirm.value) {
+        warning.classList.remove('hidden');
+        confirm.classList.add('border-red-500/50', 'focus:border-red-500/50', 'focus:ring-red-500/50');
+        confirm.classList.remove('border-white/10', 'focus:border-gold/50', 'focus:ring-gold/50');
+        confirm.setCustomValidity('Passwords do not match.');
+      } else {
+        warning.classList.add('hidden');
+        confirm.classList.remove('border-red-500/50', 'focus:border-red-500/50', 'focus:ring-red-500/50');
+        confirm.classList.add('border-white/10', 'focus:border-gold/50', 'focus:ring-gold/50');
+        confirm.setCustomValidity('');
+      }
+    }
+
+    pw.addEventListener('input', checkMatch);
+    confirm.addEventListener('input', checkMatch);
+    form.addEventListener('submit', function (e) {
+      checkMatch();
+      if (pw.value !== confirm.value) {
+        e.preventDefault();
+      }
+    });
+  })();
+</script>
 {% endblock %}
