@@ -452,50 +452,187 @@ def clear_history():
     return redirect(url_for("user.profile"))
 
 
-@user_bp.route("/settings", methods=["GET", "POST"])
+USERNAME_MIN_LEN = 3
+USERNAME_MAX_LEN = 20
+USERNAME_TAKEN_MESSAGE = "That username is already taken. Please choose another one."
+
+
+def _validate_username_format(username):
+    """
+    Returns an error message string if the username is invalid, else None.
+    Mirrors app.auth.routes.is_valid_username but with length bounds and
+    user-facing messages, since this is surfaced directly in the settings UI.
+    """
+    if not username:
+        return "Username cannot be empty."
+    if len(username) < USERNAME_MIN_LEN:
+        return f"Username must be at least {USERNAME_MIN_LEN} characters."
+    if len(username) > USERNAME_MAX_LEN:
+        return f"Username must be at most {USERNAME_MAX_LEN} characters."
+    if not re.match(r"^[a-zA-Z0-9_]+$", username):
+        return "Only letters, numbers, and underscores are allowed."
+    return None
+
+
+def _username_taken(username, exclude_user_id=None):
+    """
+    Checks whether `username` is already in use by someone else. This is a
+    pre-check for a fast, friendly UI response — the database UNIQUE
+    constraint (via the dummy-email trick, see app/auth/routes.py) remains
+    the real source of truth and is what actually prevents a race condition
+    where two people grab the same username in the same instant.
+    """
+    query = supabase_admin.table("profiles").select("id").eq("username", username)
+    rows = query.execute().data or []
+    if exclude_user_id:
+        rows = [r for r in rows if r["id"] != exclude_user_id]
+    return len(rows) > 0
+
+
+@user_bp.route("/settings", methods=["GET"])
 def settings():
     if not is_logged_in():
         return redirect(url_for("auth.login"))
-        
+
     user_id = current_user_id()
-    
-    # Render Settings Page
-    if request.method == "GET":
-        profile_res = supabase_admin.table("profiles").select("username, full_name").eq("id", user_id).execute()
-        profile = profile_res.data[0] if profile_res.data else None
-        return render_template("settings.html", profile=profile)
+    profile_res = supabase_admin.table("profiles").select("username, full_name").eq("id", user_id).execute()
+    profile = profile_res.data[0] if profile_res.data else None
+    return render_template("settings.html", profile=profile)
 
-    # Handle Form Submission
-    new_username = request.form.get("username", "").strip().lower()
-    new_password = request.form.get("password", "")
-    
-    # 1. Update Username logic
-    if new_username:
-        if not re.match(r"^[a-zA-Z0-9_]+$", new_username):
-            flash("Invalid username format. No spaces or special characters allowed.", "error")
-            return redirect(url_for("user.settings"))
-        
-        dummy_email = f"{new_username}@sangam.local"
-        try:
-            # Tell Supabase Auth to change the internal mapping
-            supabase_admin.auth.admin.update_user_by_id(user_id, {"email": dummy_email})
-            # Also save it in our visual profiles table
-            supabase_admin.table("profiles").update({"username": new_username}).eq("id", user_id).execute()
-            flash("Username updated successfully!", "success")
-        except Exception as e:
-            error_msg = str(e)
-            if "already" in error_msg.lower() or "unique" in error_msg.lower():
-                flash(f"Username '{new_username}' is already taken! Please choose another.", "error")
-            else:
-                flash(f"Error updating username: {error_msg}", "error")
-            return redirect(url_for("user.settings"))
-            
-    # 2. Update Password logic
-    if new_password:
-        try:
-            supabase_admin.auth.admin.update_user_by_id(user_id, {"password": new_password})
-            flash("Password updated successfully!", "success")
-        except Exception as e:
-            flash(f"Error updating password: {e}", "error")
 
-    return redirect(url_for("user.settings"))
+@user_bp.route("/settings/check-username", methods=["GET"])
+def check_username_availability():
+    """
+    AJAX endpoint backing the live availability check in the settings UI.
+    Always returns JSON, never redirects — this is called from JS, not a form.
+    """
+    if not is_logged_in():
+        return jsonify({"ok": False, "error": "Not logged in."}), 401
+
+    candidate = (request.args.get("username") or "").strip().lower()
+    user_id = current_user_id()
+
+    format_error = _validate_username_format(candidate)
+    if format_error:
+        return jsonify({"ok": True, "available": False, "reason": format_error})
+
+    profile_res = supabase_admin.table("profiles").select("username").eq("id", user_id).execute()
+    current_username = (profile_res.data[0].get("username") if profile_res.data else None) or ""
+
+    if candidate == current_username.lower():
+        return jsonify({"ok": True, "available": False, "reason": "This is already your current username."})
+
+    if _username_taken(candidate, exclude_user_id=user_id):
+        return jsonify({"ok": True, "available": False, "reason": USERNAME_TAKEN_MESSAGE})
+
+    return jsonify({"ok": True, "available": True, "reason": "Username is available."})
+
+
+@user_bp.route("/settings/username", methods=["POST"])
+def change_username():
+    """
+    Changes the logged-in user's username. Returns JSON so the settings
+    page can show an inline success/error state without a full reload.
+    """
+    if not is_logged_in():
+        return jsonify({"ok": False, "error": "Not logged in."}), 401
+
+    user_id = current_user_id()
+    new_username = (request.form.get("username") or "").strip().lower()
+
+    format_error = _validate_username_format(new_username)
+    if format_error:
+        return jsonify({"ok": False, "error": format_error}), 400
+
+    profile_res = supabase_admin.table("profiles").select("username").eq("id", user_id).execute()
+    current_username = (profile_res.data[0].get("username") if profile_res.data else None) or ""
+
+    if new_username == current_username.lower():
+        return jsonify({"ok": False, "error": "That's already your current username."}), 400
+
+    # Fast pre-check for a friendly error message. The final guarantee of
+    # uniqueness is the UNIQUE constraint on profiles.username / the dummy
+    # email's uniqueness in Supabase Auth (see except block below) — this
+    # pre-check just avoids making the user wait for that round trip in the
+    # common case.
+    if _username_taken(new_username, exclude_user_id=user_id):
+        return jsonify({"ok": False, "error": USERNAME_TAKEN_MESSAGE}), 409
+
+    dummy_email = f"{new_username}@sangam.local"
+
+    try:
+        # Change the Auth-side identity first. If this fails (e.g. a
+        # concurrent request just took this username between our
+        # pre-check and now), nothing has been written to profiles yet.
+        supabase_admin.auth.admin.update_user_by_id(user_id, {"email": dummy_email})
+    except Exception as exc:
+        error_msg = str(exc).lower()
+        if "already" in error_msg or "unique" in error_msg or "exists" in error_msg:
+            return jsonify({"ok": False, "error": USERNAME_TAKEN_MESSAGE}), 409
+        return jsonify({"ok": False, "error": "Something went wrong while updating your username. Please try again."}), 500
+
+    try:
+        supabase_admin.table("profiles").update({"username": new_username}).eq("id", user_id).execute()
+    except Exception:
+        # Auth side succeeded but the profiles row failed to update (should
+        # be rare — same UNIQUE constraint applies there). Roll the Auth
+        # email back so the two stores don't drift out of sync.
+        try:
+            supabase_admin.auth.admin.update_user_by_id(user_id, {"email": f"{current_username}@sangam.local"})
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": USERNAME_TAKEN_MESSAGE}), 409
+
+    return jsonify({"ok": True, "username": new_username, "message": "Username updated successfully."})
+
+
+@user_bp.route("/settings/password", methods=["POST"])
+def change_password():
+    """
+    Changes the logged-in user's password. Requires the current password
+    (re-verified server-side via a real sign-in attempt, never trusted from
+    the client) plus a new password entered twice for confirmation.
+    """
+    if not is_logged_in():
+        return jsonify({"ok": False, "error": "Not logged in."}), 401
+
+    user_id = current_user_id()
+    current_password = request.form.get("current_password", "")
+    new_password = request.form.get("new_password", "")
+    confirm_password = request.form.get("confirm_password", "")
+
+    if not current_password:
+        return jsonify({"ok": False, "error": "Please enter your current password."}), 400
+
+    if not new_password or len(new_password) < 6:
+        return jsonify({"ok": False, "error": "New password must be at least 6 characters."}), 400
+
+    if new_password != confirm_password:
+        return jsonify({"ok": False, "error": "New password and confirmation do not match."}), 400
+
+    if new_password == current_password:
+        return jsonify({"ok": False, "error": "New password must be different from your current password."}), 400
+
+    profile_res = supabase_admin.table("profiles").select("username").eq("id", user_id).execute()
+    username = (profile_res.data[0].get("username") if profile_res.data else None) or ""
+    dummy_email = f"{username}@sangam.local"
+
+    # Verify the current password is actually correct by attempting a real
+    # sign-in with it, using the ANON-key client so this never bypasses
+    # Supabase's own password check. We never trust a client-supplied
+    # "yes this is correct" — this is the only way to be sure.
+    try:
+        verify_result = supabase_public.auth.sign_in_with_password(
+            {"email": dummy_email, "password": current_password}
+        )
+        if not verify_result or not verify_result.session:
+            raise ValueError("no session")
+    except Exception:
+        return jsonify({"ok": False, "error": "Your current password is incorrect."}), 401
+
+    try:
+        supabase_admin.auth.admin.update_user_by_id(user_id, {"password": new_password})
+    except Exception:
+        return jsonify({"ok": False, "error": "Something went wrong while updating your password. Please try again."}), 500
+
+    return jsonify({"ok": True, "message": "Password updated successfully."})
