@@ -89,7 +89,7 @@
 
             <div class="space-y-3.5">
               <template x-for="opt in ['A','B','C','D']" :key="opt">
-                <button type="button" @click="selectOption(opt)"
+                <button type="button" @click="pickOption(opt)"
                   class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-300 ease-out"
                   :class="optionClass(opt)">
                   <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ease-out"
@@ -99,9 +99,9 @@
               </template>
             </div>
 
-            <!-- Instant feedback after answering — eases in instead of
-                 snapping into place, so the buttons below don't jump -->
-            <div x-show="answers[currentQuestion.id] != null"
+            <!-- Feedback only appears once the pick has been submitted and
+                 checked — eases in instead of snapping into place. -->
+            <div x-show="isChecked(currentQuestion.id)"
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 -translate-y-1"
                  x-transition:enter-end="opacity-100 translate-y-0"
@@ -124,19 +124,35 @@
             class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
             ← Previous
           </button>
-          <template x-if="currentIndex < questions.length - 1">
+
+          <!-- Before checking: Submit (needs a pick) + Mark for Review -->
+          <template x-if="!isChecked(currentQuestion.id)">
+            <button @click="submitAnswer()" :disabled="selected[currentQuestion.id] == null"
+              class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-md">
+              Submit Answer
+            </button>
+          </template>
+
+          <!-- After checking: move on -->
+          <template x-if="isChecked(currentQuestion.id) && currentIndex < questions.length - 1">
             <button @click="goNext()"
               class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
               Next →
             </button>
           </template>
-          <template x-if="currentIndex === questions.length - 1">
+          <template x-if="isChecked(currentQuestion.id) && currentIndex === questions.length - 1">
             <button @click="stopTimers(); showSummary = true"
               class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
               Finish
             </button>
           </template>
         </div>
+
+        <button @click="toggleMark(currentQuestion.id)"
+          class="w-full mt-3 py-2.5 rounded-xl text-xs md:text-sm font-semibold border transition-colors"
+          :class="isMarked(currentQuestion.id) ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 text-gray-400 hover:bg-white/5'">
+          <span x-text="isMarked(currentQuestion.id) ? '★ Marked for Review' : '☆ Mark for Review'"></span>
+        </button>
       </div>
     </template>
   </div>
@@ -177,7 +193,9 @@ function practiceRunner() {
   return {
     questions: {{ questions | tojson }},
     currentIndex: 0,
-    answers: {},
+    selected: {},   // { questionId: 'A' } — the pick, before it's checked
+    answers: {},    // { questionId: 'A' } — locked in only after Submit; drives reveal + scoring
+    marked: {},     // { questionId: true } — Mark for Review, independent of answered/checked state
     showSummary: false,
 
     // --- timing ---
@@ -283,11 +301,25 @@ function practiceRunner() {
       return s;
     },
 
-    selectOption(opt) {
+    // Picking an option only records the choice — it does NOT reveal
+    // right/wrong. That reveal only happens once the person hits
+    // "Submit Answer" (see submitAnswer below). Picking again before
+    // submitting just changes the pick, same as the mock test runner.
+    pickOption(opt) {
       const q = this.currentQuestion;
-      if (!q || this.answers[q.id] != null) return; // lock after first pick
-      this.answers[q.id] = opt;
-      // Only re-typeset math inside the explanation, without touching
+      if (!q || this.isChecked(q.id)) return; // locked once checked
+      this.selected[q.id] = opt;
+    },
+
+    isChecked(questionId) {
+      return this.answers[questionId] != null;
+    },
+
+    submitAnswer() {
+      const q = this.currentQuestion;
+      if (!q || this.selected[q.id] == null || this.isChecked(q.id)) return;
+      this.answers[q.id] = this.selected[q.id];
+      // Re-typeset math inside the explanation, without touching
       // mathReady — that flag fades the *entire* question card, which
       // looks wrong here (the person just answered; the question and
       // options shouldn't visually blink). The explanation panel already
@@ -299,34 +331,53 @@ function practiceRunner() {
       });
     },
 
+    toggleMark(questionId) {
+      this.marked[questionId] = !this.marked[questionId];
+    },
+
+    isMarked(questionId) {
+      return !!this.marked[questionId];
+    },
+
     jumpTo(idx) { this.currentIndex = idx; this.startQuestionTimer(); this.typesetMath(); },
     goNext() { if (this.currentIndex < this.questions.length - 1) { this.currentIndex++; this.startQuestionTimer(); this.typesetMath(); } },
     goPrev() { if (this.currentIndex > 0) { this.currentIndex--; this.startQuestionTimer(); this.typesetMath(); } },
 
     paletteClass(idx) {
       const q = this.questions[idx];
-      const a = this.answers[q.id];
-      if (a == null) return 'bg-[#2A2A2A] text-gray-400';
-      return a === q.correct_option ? 'bg-green-600 text-white' : 'bg-red-600 text-white';
+      const checked = this.answers[q.id];
+      if (checked != null) {
+        return checked === q.correct_option ? 'bg-green-600 text-white' : 'bg-red-600 text-white';
+      }
+      if (this.marked[q.id]) return 'bg-[#8A6A1F] text-[#F3E3B8]';
+      if (this.selected[q.id] != null) return 'bg-white/20 text-white';
+      return 'bg-[#2A2A2A] text-gray-400';
     },
 
     optionClass(opt) {
       const q = this.currentQuestion;
-      const a = this.answers[q.id];
-      if (a == null) {
-        return 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 hover:bg-[#222] cursor-pointer';
+      const checked = this.answers[q.id];
+      if (checked == null) {
+        // Not checked yet — just show which one is picked (no right/wrong).
+        return this.selected[q.id] === opt
+          ? 'border-gold bg-gold/10 text-white cursor-pointer ring-1 ring-gold'
+          : 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 hover:bg-[#222] cursor-pointer';
       }
       if (opt === q.correct_option) return 'border-green-500/50 bg-green-500/10 text-white cursor-default ring-1 ring-green-500/50';
-      if (opt === a) return 'border-red-500/50 bg-red-500/10 text-white cursor-default ring-1 ring-red-500/50';
+      if (opt === checked) return 'border-red-500/50 bg-red-500/10 text-white cursor-default ring-1 ring-red-500/50';
       return 'border-white/5 bg-[#1a1a1a] text-gray-400 cursor-default opacity-50';
     },
 
     optionBadgeClass(opt) {
       const q = this.currentQuestion;
-      const a = this.answers[q.id];
-      if (a == null) return 'border-white/30 text-gray-400';
+      const checked = this.answers[q.id];
+      if (checked == null) {
+        return this.selected[q.id] === opt
+          ? 'border-gold bg-gold text-ink'
+          : 'border-white/30 text-gray-400';
+      }
       if (opt === q.correct_option) return 'border-green-500 bg-green-500 text-ink';
-      if (opt === a) return 'border-red-500 bg-red-500 text-white';
+      if (opt === checked) return 'border-red-500 bg-red-500 text-white';
       return 'border-white/20 text-gray-500';
     },
   };
