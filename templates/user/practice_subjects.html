@@ -1,5 +1,5 @@
 {% extends "shared/base.html" %}
-{% block title %}Evaluation Modules — {{ stream.name }}{% endblock %}
+{% block title %}Academic Subjects — {{ stream.name }}{% endblock %}
 {% block content %}
 <section class="max-w-5xl mx-auto px-6 pt-12 pb-24 relative z-10">
   
@@ -13,41 +13,34 @@
     <div class="flex items-center gap-3 mb-2">
         <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full">{{ stream.name }}</span>
     </div>
-    <h1 class="font-display text-4xl font-bold text-white mb-2 tracking-tight">Evaluation Modules</h1>
-    <p class="text-gray-400 text-sm font-medium">Select a designated test series folder to access strictly verified examination mock tests.</p>
+    <h1 class="font-display text-4xl font-bold text-white mb-2 tracking-tight">Select Academic Subject</h1>
+    <p class="text-gray-400 text-sm font-medium">Choose a discipline to begin your chapter-wise practice and PYQs.</p>
   </div>
-  
-  <div class="grid md:grid-cols-2 gap-6">
-    {% for s in series_list %}
-    <a href="{{ url_for('user.series_tests', slug=stream.slug, series_id=s.id) }}"
-       class="block p-8 border border-white/10 rounded-2xl hover:border-gold/50 hover:shadow-[0_0_30px_rgba(212,160,23,0.15)] transition-all duration-300 bg-[#161616]/90 backdrop-blur-xl group relative overflow-hidden">
-      
-      <div class="absolute top-0 right-0 w-32 h-32 bg-gold/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-gold/20 transition-colors"></div>
 
-      <div class="flex items-start gap-5 relative z-10">
-        <!-- Premium Folder Icon -->
-        <div class="bg-white/5 border border-white/10 text-gold p-4 rounded-xl group-hover:bg-gold/10 group-hover:scale-110 transition-all duration-300 shadow-sm">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/>
-          </svg>
-        </div>
-        
-        <div>
-          <h2 class="font-display text-2xl font-bold text-white mb-2 group-hover:text-gold transition-colors">{{ s.name }}</h2>
-          <p class="text-sm font-bold text-gray-400 group-hover:text-white transition-colors flex items-center gap-1">
-            Access module contents &rarr;
-          </p>
-        </div>
+  <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
+    {% for s in subjects %}
+    <a href="{{ url_for('user.practice_chapters', slug=stream.slug, subject_id=s.id) }}"
+       class="block p-8 border border-white/10 rounded-2xl hover:border-gold/50 hover:shadow-[0_0_30px_rgba(212,160,23,0.15)] transition-all duration-300 bg-[#161616]/90 backdrop-blur-xl group relative overflow-hidden text-center">
+      
+      <div class="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-gold/10 transition-colors"></div>
+
+      <!-- Book Icon -->
+      <div class="w-14 h-14 mx-auto bg-white/5 border border-white/10 text-gold rounded-xl flex items-center justify-center mb-5 group-hover:bg-gold/10 group-hover:scale-110 transition-all duration-300 shadow-sm relative z-10">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
       </div>
+
+      <h2 class="font-display text-xl font-bold text-white group-hover:text-gold transition-colors relative z-10">{{ s.name }}</h2>
     </a>
     {% else %}
-    <div class="md:col-span-2 text-center p-16 bg-[#161616]/90 rounded-2xl border border-dashed border-white/20 backdrop-blur-md">
+    <div class="col-span-full text-center p-16 bg-[#161616]/90 rounded-2xl border border-dashed border-white/20 backdrop-blur-md">
         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="text-gray-600 mx-auto mb-4" viewBox="0 0 16 16">
-          <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 14A6 6 0 1 1 8 2a6 6 0 0 1 0 12z"/>
-          <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
+          <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+          <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
         </svg>
-        <p class="text-white font-bold text-xl mb-1">No Evaluation Modules Available</p>
-        <p class="text-gray-500 text-sm font-medium">Check back later for new exclusive examination mock tests.</p>
+        <p class="text-white font-bold text-xl mb-1">No Subjects Available</p>
+        <p class="text-gray-500 text-sm font-medium">Subjects will appear here once they are added to this discipline.</p>
     </div>
     {% endfor %}
   </div>
