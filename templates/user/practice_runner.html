@@ -146,8 +146,8 @@
         <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium"
              x-html="rendered.question_text"></div>
 
-        <div x-show="currentQuestion?.image_url" class="my-6 mx-auto max-w-full flex flex-col items-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
-          <img :src="currentQuestion?.image_url || ''"
+        <div x-show="hasValidImage(currentQuestion)" class="my-6 mx-auto max-w-full flex flex-col items-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
+          <img :src="hasValidImage(currentQuestion) ? currentQuestion.image_url : ''"
                class="max-h-[300px] w-auto max-w-full object-contain"
                decoding="async" alt="Diagram" style="background-color: #ffffff !important;"
                @load="onImageLoad($event, currentQuestion)"
@@ -542,7 +542,7 @@ function practiceRunner() {
       [idx + 1, idx + 2, idx + 3, idx - 1].forEach((i) => {
         const q = this.questions[i];
         if (!q) return;
-        items.push({ key: this._keyFor(q), raw: this._rawFor(q), image: q.image_url || null });
+        items.push({ key: this._keyFor(q), raw: this._rawFor(q), image: this.hasValidImage(q) ? q.image_url : null });
       });
       this._renderer.warm(items);
       if (SangamQuiz.debug) SangamQuiz.xray.set('warmed', this._renderer.stats().cached);
@@ -582,6 +582,27 @@ function practiceRunner() {
     get formattedQuestionTime() { return this.formatSeconds(this.activeQuestionSeconds); },
     get formattedTotalTime() { return this.formatSeconds(this.totalSeconds); },
     get currentQuestion() { return this.questions[this.currentIndex] || null; },
+
+    /* SANGAM FIX: "Diagram failed to load" on questions with NO diagram.
+       Purana check tha sirf `image_url` ki truthiness — JS me khaali
+       spaces (" "), ek akela dash ("-"), ya koi bhi junk string bhi
+       truthy hoti hai. DB me kabhi kisi purane data-entry/bulk-paste
+       step se image_url column me aisi junk value bhar gayi thi
+       (khaali nahi, par asli URL bhi nahi) — is wajah se un sawalo
+       par jinme diagram tha hi nahi, image box dikh jata tha, browser
+       us junk string ko URL maan ke load karne ki koshish karta,
+       aur turant "failed to load" error fire ho jata — bina kabhi
+       koi image upload hue hi.
+       Ab: image box tabhi dikhega jab image_url ek asli http(s) URL
+       ho. Khaali, whitespace, ya kisi bhi non-URL junk string par
+       box hi nahi banega — na koi failed request, na koi error. */
+    hasValidImage(q) {
+      const url = q && q.image_url;
+      if (typeof url !== 'string') return false;
+      const trimmed = url.trim();
+      if (!trimmed) return false;
+      return /^https?:\/\//i.test(trimmed);
+    },
 
     get score() {
       let s = 0;
