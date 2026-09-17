@@ -3,6 +3,8 @@
 {% block nav %}{% endblock %}
 
 {% block extra_head %}
+<!-- SANGAM CORE: x-ray + zombie-proof clock + offscreen prerender cache -->
+<script src="{{ url_for('static', filename='js/sangam-quiz-core.js') }}"></script>
 <style>
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -11,16 +13,42 @@
     display: none !important;
   }
 
-  /* SANGAM FIX: Premium MathJax Anti-Flicker Transitions
-     Changed from `opacity-0` to a premium blur/opacity combo so 
-     users never see a harsh black screen when clicking Next. */
-  .math-cloak { opacity: 0.3; filter: blur(2px); transition: all 0.05s ease-out; pointer-events: none; }
-  .math-ready { opacity: 1; filter: blur(0); transition: all 0.15s ease-in; }
+  /* ---------------------------------------------------------------
+     BLACK-FLASH FIX
+     Purana code content ko opacity:0.3 + blur kar deta tha — dark
+     theme par yahi "black screen flash" dikhta tha. Ab content kabhi
+     fade nahi hota. Naya question already-typeset inject hota hai,
+     isliye swap instant hai. Slow case me sirf ek patli gold line
+     upar chalti hai, content jagah par hi rehta hai.
+     --------------------------------------------------------------- */
+  #practice-runner .q-card {
+    position: relative;
+    contain: layout paint;
+  }
+  #practice-runner .q-swapbar {
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    overflow: hidden; border-radius: 2px; pointer-events: none;
+    opacity: 0; transition: opacity .12s ease-out;
+  }
+  #practice-runner .q-swapbar.on { opacity: 1; }
+  #practice-runner .q-swapbar::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, #D4A017, transparent);
+    transform: translateX(-100%);
+    animation: qsweep 0.8s linear infinite;
+  }
+  @keyframes qsweep { to { transform: translateX(100%); } }
+
+  /* Math ko wrap hone do taki lambi equation layout na tode */
+  #practice-runner mjx-container { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+  #practice-runner mjx-container[display="true"] { margin: 0.6em 0; }
 
   /* Diagram visibility overrides */
   #practice-runner .question-text img,
   #practice-runner .option-text img,
-  #practice-runner .explanation-text img {
+  #practice-runner .explanation-text img,
+  #practice-runner .question-text svg,
+  #practice-runner .explanation-text svg {
     background-color: #ffffff !important;
     border: 2px solid #9ca3af;
     border-radius: 0.5rem;
@@ -35,7 +63,12 @@
 {% endblock %}
 
 {% block content %}
-<div id="practice-runner" x-data="practiceRunner()" x-init="init()" class="min-h-screen w-full max-w-full overflow-x-hidden bg-[#0a0a0a] text-gray-100 flex flex-col font-body">
+<!-- SANGAM FIX #1: x-init="init()" HATA DIYA.
+     Alpine 3 khud init() method ko auto-call karta hai. x-init lagane se
+     init() DO BAAR chalta tha -> DO setInterval -> ek zombie timer bach
+     jata tha jise stopTimers() kabhi maar hi nahi pata tha. Yahi wajah
+     thi ki Finish ke baad bhi timer chalta rehta tha. -->
+<div id="practice-runner" x-data="practiceRunner()" class="min-h-screen w-full max-w-full overflow-x-hidden bg-[#0a0a0a] text-gray-100 flex flex-col font-body">
 
   <!-- Top bar -->
   <div class="bg-[#111111] border-b border-white/10 px-3 md:px-6 py-2.5 flex items-center justify-between gap-3 sticky top-0 z-20 shadow-sm">
@@ -45,10 +78,17 @@
     </div>
     <div class="shrink-0 flex items-center gap-3">
       <div class="text-right">
-        <p class="text-[10px] uppercase tracking-wide text-gray-500 leading-none mb-0.5">Total time</p>
-        <p class="font-display text-sm md:text-base font-semibold tabular-nums text-gold-light leading-none" x-text="formattedTotalTime"></p>
+        <p class="text-[10px] uppercase tracking-wide text-gray-500 leading-none mb-0.5">
+          <span x-show="!isFinished">Total time</span>
+          <span x-show="isFinished" x-cloak>Final time</span>
+        </p>
+        <p class="font-display text-sm md:text-base font-semibold tabular-nums leading-none"
+           :class="isFinished ? 'text-gray-400' : 'text-gold-light'"
+           x-text="formattedTotalTime"></p>
       </div>
-      <a href="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=chapter.id) }}"
+      <!-- SANGAM FIX #4: Exit ab seedha isi folder ke quiz-list par le jayega,
+           na ki chapter ke top par. -->
+      <a href="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
          class="py-1.5 px-4 rounded-md text-xs md:text-sm font-semibold bg-white/10 text-white hover:bg-white/20 transition-colors">
         Exit
       </a>
@@ -67,69 +107,69 @@
 
   <!-- Main question area -->
   <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
-    <!-- SANGAM FIX: x-show prevents SVG unmounting & DOM destruction -->
     <div x-show="currentQuestion" x-cloak class="w-full">
       <p class="text-sm font-semibold text-gray-300 mb-5 flex items-center justify-between">
         <span>Question <span x-text="currentIndex + 1"></span> of <span x-text="questions.length"></span></span>
         <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-white/5 border border-white/10 rounded-full px-3 py-1">
-          <span>⏱</span>
+          <span x-text="isFinished ? '⏹' : '⏱'"></span>
           <span class="tabular-nums" x-text="formattedQuestionTime"></span>
         </span>
       </p>
 
-      <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg overflow-hidden">
-        <!-- Anti-flicker wrapper via MathJax state -->
-        <div class="transition-all duration-200 ease-out" x-ref="questionCard"
-             :class="!needsTypeset ? 'opacity-100 translate-y-0' : (mathReady ? 'math-ready translate-y-0' : 'math-cloak translate-y-1')">
-          
-          <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion?.question_text || ''"></div>
+      <div class="q-card bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg overflow-hidden"
+           x-ref="questionCard" :style="cardStyle">
+        <!-- Slow-render indicator: content dim nahi hota, sirf yeh line chalti hai -->
+        <div class="q-swapbar" :class="swapping ? 'on' : ''"></div>
 
-          <div x-show="currentQuestion?.image_url" class="my-6 mx-auto max-w-full flex justify-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
-            <img :src="currentQuestion?.image_url || ''"
-                 class="max-h-[300px] w-auto max-w-full object-contain"
-                 alt="Diagram" style="background-color: #ffffff !important;">
-          </div>
+        <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium"
+             x-html="rendered.question_text"></div>
 
-          <div class="space-y-3.5">
-            <template x-for="opt in ['A','B','C','D']" :key="opt">
-              <button type="button" @click="pickOption(opt)"
-                class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-300 ease-out"
-                :class="optionClass(opt)">
-                <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ease-out"
-                  :class="optionBadgeClass(opt)" x-text="opt"></span>
-                <span class="option-text text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion ? currentQuestion['option_' + opt.toLowerCase()] : ''"></span>
-              </button>
-            </template>
-          </div>
+        <div x-show="currentQuestion?.image_url" class="my-6 mx-auto max-w-full flex justify-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
+          <img :src="currentQuestion?.image_url || ''"
+               class="max-h-[300px] w-auto max-w-full object-contain"
+               decoding="async" alt="Diagram" style="background-color: #ffffff !important;">
+        </div>
 
-          <!-- Feedback only appears once the pick has been submitted -->
-          <div x-show="currentQuestion && isChecked(currentQuestion.id)"
-               x-transition:enter="transition ease-out duration-300"
-               x-transition:enter-start="opacity-0 -translate-y-1"
-               x-transition:enter-end="opacity-100 translate-y-0"
-               x-cloak class="mt-5 pt-5 border-t border-white/10">
-            <p class="text-sm font-semibold transition-colors duration-300" :class="answers[currentQuestion?.id] === currentQuestion?.correct_option ? 'text-green-400' : 'text-red-400'">
-              <span x-text="answers[currentQuestion?.id] === currentQuestion?.correct_option ? '✓ Correct!' : '✗ Incorrect.'"></span>
-              <span x-show="answers[currentQuestion?.id] !== currentQuestion?.correct_option">
-                Correct answer: <span x-text="currentQuestion?.correct_option"></span>
-              </span>
-            </p>
-            <p x-show="currentQuestion?.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
-              <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="currentQuestion?.explanation || ''"></span>
-            </p>
-          </div>
+        <div class="space-y-3.5">
+          <template x-for="opt in ['A','B','C','D']" :key="opt">
+            <button type="button" @click="pickOption(opt)"
+              class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-300 ease-out"
+              :class="optionClass(opt)">
+              <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ease-out"
+                :class="optionBadgeClass(opt)" x-text="opt"></span>
+              <span class="option-text text-sm md:text-base leading-relaxed mt-0.5"
+                    x-html="rendered['option_' + opt.toLowerCase()]"></span>
+            </button>
+          </template>
+        </div>
 
-          <!-- Review mode, question was left unanswered -->
-          <div x-show="currentQuestion && isFinished && !isChecked(currentQuestion.id)"
-               x-cloak class="mt-5 pt-5 border-t border-white/10">
-            <p class="text-sm font-semibold text-gray-400">
-              <span>— Not Attempted&nbsp;&nbsp;·&nbsp;&nbsp;</span>
-              <span>Correct answer: <span x-text="currentQuestion?.correct_option"></span></span>
-            </p>
-            <p x-show="currentQuestion?.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
-              <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="currentQuestion?.explanation || ''"></span>
-            </p>
-          </div>
+        <!-- Feedback only appears once the pick has been submitted -->
+        <div x-show="currentQuestion && isChecked(currentQuestion.id)"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 -translate-y-1"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-cloak class="mt-5 pt-5 border-t border-white/10">
+          <p class="text-sm font-semibold transition-colors duration-300" :class="answers[currentQuestion?.id] === currentQuestion?.correct_option ? 'text-green-400' : 'text-red-400'">
+            <span x-text="answers[currentQuestion?.id] === currentQuestion?.correct_option ? '✓ Correct!' : '✗ Incorrect.'"></span>
+            <span x-show="answers[currentQuestion?.id] !== currentQuestion?.correct_option">
+              Correct answer: <span x-text="currentQuestion?.correct_option"></span>
+            </span>
+          </p>
+          <p x-show="currentQuestion?.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
+            <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="rendered.explanation"></span>
+          </p>
+        </div>
+
+        <!-- Review mode, question was left unanswered -->
+        <div x-show="currentQuestion && isFinished && !isChecked(currentQuestion.id)"
+             x-cloak class="mt-5 pt-5 border-t border-white/10">
+          <p class="text-sm font-semibold text-gray-400">
+            <span>— Not Attempted&nbsp;&nbsp;·&nbsp;&nbsp;</span>
+            <span>Correct answer: <span x-text="currentQuestion?.correct_option"></span></span>
+          </p>
+          <p x-show="currentQuestion?.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
+            <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="rendered.explanation"></span>
+          </p>
         </div>
       </div>
 
@@ -152,7 +192,7 @@
             Next →
           </button>
         </template>
-        
+
         <template x-if="currentQuestion && !isChecked(currentQuestion.id) && isFinished && currentIndex === questions.length - 1">
           <button @click="showSummary = true"
             class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
@@ -166,14 +206,14 @@
             Next →
           </button>
         </template>
-        
+
         <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && !isFinished">
           <button @click="showFinishConfirm = true"
             class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
             Finish
           </button>
         </template>
-        
+
         <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && isFinished">
           <button @click="showSummary = true"
             class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
@@ -203,8 +243,7 @@
         <button @click="showFinishConfirm = false" class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
           Cancel
         </button>
-        <!-- SANGAM FIX: Ensure stopTimers() fires immediately on finish -->
-        <button @click="showFinishConfirm = false; stopTimers(); showSummary = true"
+        <button @click="finishNow()"
           class="py-3 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
           Yes, Finish
         </button>
@@ -256,20 +295,17 @@
         <span class="font-semibold text-white tabular-nums" x-text="formattedTotalTime + ' · avg ' + formattedAvgTime + '/question'"></span>
       </div>
 
+      <!-- SANGAM FIX #3: "Back to Attempt" button hata diya gaya hai.
+           "Review Answers" wahi kaam karta tha, duplicate tha. -->
       <div class="grid grid-cols-1 gap-3">
         <button @click="showSummary = false"
           class="py-3 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
           Review Answers
         </button>
-        <div class="grid grid-cols-2 gap-3">
-          <button @click="backToAttempt()" class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
-            Back to Attempt
-          </button>
-          <a href="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=chapter.id) }}"
-             class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
-            Exit
-          </a>
-        </div>
+        <a href="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
+           class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
+          Exit
+        </a>
       </div>
     </div>
   </div>
@@ -280,125 +316,230 @@ function practiceRunner() {
   return {
     questions: {{ questions | tojson }},
     currentIndex: 0,
-    selected: {},   
-    answers: {},    
-    marked: {},     
-    showFinishConfirm: false, 
+    selected: {},
+    answers: {},
+    marked: {},
+    showFinishConfirm: false,
     showSummary: false,
-    isFinished: false, 
+    isFinished: false,
 
     // --- timing ---
-    timeSpent: {},              
+    timeSpent: {},
     activeQuestionId: null,
     activeQuestionSeconds: 0,
-    questionTimerHandle: null,
     totalSeconds: 0,
-    totalTimerHandle: null,
+    _clock: null,
 
     // --- render state ---
-    mathReady: false,
-    needsTypeset: false,
-    _typesetToken: 0,
+    rendered: { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', explanation: '' },
+    swapping: false,
+    cardStyle: '',
+    _swapToken: 0,
+    _hasContent: false,
+    _booted: false,
+    _renderer: null,
+    _swapBarTimer: null,
 
+    /* =============================================================
+       BOOT
+       ============================================================= */
     init() {
-      this.startTotalTimer();
-      this.startQuestionTimer();
-      this.typesetMath();
-    },
-
-    questionHasMath(q) {
-      if (!q) return false;
-      const parts = [q.question_text, q.option_a, q.option_b, q.option_c, q.option_d];
-      return parts.some(p => typeof p === 'string' && (
-        p.includes('\\(') || p.includes('\\[') || p.includes('$$') ||
-        /\$[^$]+\$/.test(p)
-      ));
-    },
-
-    typesetMath() {
-      const q = this.currentQuestion;
-      this.needsTypeset = this.questionHasMath(q);
-      const myToken = ++this._typesetToken;
-
-      if (!this.needsTypeset) {
-        this.mathReady = true;
+      // Double-init guard. x-init hata diya hai, par yeh belt-and-braces
+      // hai — agar kabhi galti se dobara laga to bhi ek hi clock banega.
+      if (this._booted) {
+        SangamQuiz.xray.warn('double init blocked');
         return;
       }
+      this._booted = true;
 
-      this.mathReady = false;
-      const startedAt = Date.now();
-      
-      // SANGAM FIX: Transition speed bump.
-      const MIN_TRANSITION_MS = 10; 
-      
-      this.$nextTick(() => {
-        const target = this.$refs.questionCard;
-        if (target && window.MathJax && window.MathJax.typesetClear) {
-          try { window.MathJax.typesetClear([target]); } catch (e) { }
-        }
-        this._waitForMathJaxAndTypeset(0, startedAt, MIN_TRANSITION_MS, myToken);
+      this._renderer = SangamQuiz.createRenderer();
+
+      // Zombie ko har haal me pakdo
+      SangamQuiz.armClockSentinel(() => this.isFinished);
+
+      this._startClock();
+      this._resetQuestionTimer();
+      this.showQuestion(0);
+
+      SangamQuiz.xray.set('mode', 'practice');
+      SangamQuiz.xray.set('questions', this.questions.length);
+    },
+
+    destroy() { this._killClock(); },
+
+    /* =============================================================
+       CLOCK  —  ek hi interval, dono timers isi se chalte hain
+       ============================================================= */
+    _startClock() {
+      if (this.isFinished) return;
+      this._killClock();
+      this._clock = SangamQuiz.createClock(() => this._tick(), 1000).start();
+    },
+
+    _tick() {
+      // Sabse zaroori guard: agar finish ho gaya to interval khud maro.
+      if (this.isFinished) { this._killClock(); return; }
+      this.totalSeconds++;
+      if (this.activeQuestionId != null) {
+        this.activeQuestionSeconds++;
+        this.timeSpent[this.activeQuestionId] = this.activeQuestionSeconds;
+      }
+      if (SangamQuiz.debug) {
+        SangamQuiz.xray.set('total', this.totalSeconds + 's');
+        SangamQuiz.xray.set('live clocks', SangamQuiz.liveClockCount());
+      }
+    },
+
+    _killClock() {
+      if (this._clock) { this._clock.kill(); this._clock = null; }
+    },
+
+    _resetQuestionTimer() {
+      const q = this.currentQuestion;
+      if (this.isFinished) {
+        // Review mode: live ticking band, sirf record kiya hua time dikhao
+        this.activeQuestionId = null;
+        this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
+        return;
+      }
+      this.activeQuestionId = q ? q.id : null;
+      this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
+    },
+
+    /* SANGAM FIX #1: Finish dabate hi sab kuch band — page ke har
+       clock ko nuke kar diya jata hai, zombie bacha hi nahi sakta. */
+    finishNow() {
+      this.showFinishConfirm = false;
+      this.stopTimers();
+      this.showSummary = true;
+    },
+
+    stopTimers() {
+      this.isFinished = true;
+      this.activeQuestionId = null;
+      this._killClock();
+      SangamQuiz.stopAllClocks();   // <- purane double-init zombies bhi
+      SangamQuiz.xray.set('finished', 'yes / clocks=' + SangamQuiz.liveClockCount());
+    },
+
+    /* =============================================================
+       RENDER  —  black flash killer
+       ============================================================= */
+    _rawFor(q) {
+      if (!q) return { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', explanation: '' };
+      return {
+        question_text: q.question_text || '',
+        option_a: q.option_a || '',
+        option_b: q.option_b || '',
+        option_c: q.option_c || '',
+        option_d: q.option_d || '',
+        explanation: q.explanation || ''
+      };
+    },
+
+    _keyFor(q) { return q ? ('p' + q.id) : null; },
+
+    /* Naya question dikhao. Agar cache warm hai to swap INSTANT hai —
+       koi typeset, koi fade, koi blank frame nahi. Agar cache miss ho
+       (rare), purana content screen par tika rehta hai aur upar patli
+       gold line chalti hai — black screen kabhi nahi aata. */
+    showQuestion(idx) {
+      const q = this.questions[idx];
+      if (!q) return;
+
+      const token = ++this._swapToken;
+      const key = this._keyFor(q);
+      const t0 = performance.now();
+
+      const apply = (map, hit) => {
+        if (token !== this._swapToken) return;      // user aage badh gaya
+        this.rendered = map;
+        this.swapping = false;
+        this._clearSwapBar();
+        this._unlockHeight();
+        this._hasContent = true;
+        if (hit) SangamQuiz.xray.stats.cacheHits++;
+        else SangamQuiz.xray.stats.cacheMisses++;
+        SangamQuiz.xray.afterPaint(() => {
+          if (token !== this._swapToken) return;
+          const ms = Math.round(performance.now() - t0);
+          SangamQuiz.xray.stats.transitions++;
+          SangamQuiz.xray.stats.lastSwapMs = ms;
+          SangamQuiz.xray.set('swap', 'Q' + (idx + 1) + ' ' + ms + 'ms ' + (hit ? 'HIT' : 'MISS'));
+          SangamQuiz.xray.set('cache', SangamQuiz.xray.stats.cacheHits + ' hit / ' + SangamQuiz.xray.stats.cacheMisses + ' miss');
+        });
+        this._warmNeighbours(idx);
+      };
+
+      const cached = this._renderer.get(key);
+      if (cached) { apply(cached, true); return; }
+
+      // Pehli baar page khul raha hai aur abhi kuch dikha hi nahi hai —
+      // card ko khaali mat chhodo, raw text turant dikha do. MathJax
+      // ready hote hi yeh apne aap typeset version se replace ho jayega.
+      if (!this._hasContent) this.rendered = this._rawFor(q);
+
+      // Cache miss — height lock karo taki card collapse na ho (yahi
+      // collapse pehle black gap jaisa dikhta tha)
+      this._lockHeight();
+      this._armSwapBar();
+
+      let settled = false;
+      const safety = setTimeout(() => {
+        if (settled || token !== this._swapToken) return;
+        settled = true;
+        apply(this._rawFor(q), false);       // 1.2s se zyada? raw hi dikha do
+      }, 1200);
+
+      this._renderer.prepare(key, this._rawFor(q)).then((map) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(safety);
+        apply(map, false);
+      }).catch(() => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(safety);
+        apply(this._rawFor(q), false);
       });
     },
 
-    _waitForMathJaxAndTypeset(attempt, startedAt, minMs, myToken) {
-      const reveal = () => {
-        if (myToken !== this._typesetToken) return;
-        const elapsed = Date.now() - startedAt;
-        const remaining = Math.max(0, minMs - elapsed);
-        setTimeout(() => {
-          if (myToken !== this._typesetToken) return;
-          this.mathReady = true;
-        }, remaining);
-      };
-      if (window.MathJax && window.MathJax.typesetPromise) {
-        const target = this.$refs.questionCard;
-        window.MathJax.typesetPromise(target ? [target] : undefined).then(reveal).catch(reveal);
-      } else if (attempt < 40) {
-        setTimeout(() => this._waitForMathJaxAndTypeset(attempt + 1, startedAt, minMs, myToken), 50);
-      } else {
-        reveal();
-      }
+    /* Aage/peeche ke questions idle time me pehle se typeset kar lo */
+    _warmNeighbours(idx) {
+      const items = [];
+      [idx + 1, idx + 2, idx + 3, idx - 1].forEach((i) => {
+        const q = this.questions[i];
+        if (!q) return;
+        items.push({ key: this._keyFor(q), raw: this._rawFor(q), image: q.image_url || null });
+      });
+      this._renderer.warm(items);
+      if (SangamQuiz.debug) SangamQuiz.xray.set('warmed', this._renderer.stats().cached);
     },
 
-    startTotalTimer() {
-      if (this.isFinished) return;
-      this.totalTimerHandle = setInterval(() => {
-        this.totalSeconds++;
-      }, 1000);
+    _lockHeight() {
+      const el = this.$refs.questionCard;
+      if (!el) return;
+      this.cardStyle = 'min-height:' + Math.ceil(el.offsetHeight) + 'px';
     },
 
-    startQuestionTimer() {
-      if (this.isFinished) return;
-      if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
-      const q = this.currentQuestion;
-      this.activeQuestionId = q ? q.id : null;
-      this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
-
-      this.questionTimerHandle = setInterval(() => {
-        if (!this.activeQuestionId) return;
-        this.activeQuestionSeconds++;
-        this.timeSpent[this.activeQuestionId] = this.activeQuestionSeconds;
-      }, 1000);
+    _unlockHeight() {
+      requestAnimationFrame(() => { this.cardStyle = ''; });
     },
 
-    // SANGAM FIX: Kills timers immediately 
-    stopTimers() {
-      this.isFinished = true;
-      if (this.questionTimerHandle) {
-        clearInterval(this.questionTimerHandle);
-        this.questionTimerHandle = null;
-      }
-      if (this.totalTimerHandle) {
-        clearInterval(this.totalTimerHandle);
-        this.totalTimerHandle = null;
-      }
-      this.activeQuestionId = null;
+    _armSwapBar() {
+      // 90ms se kam lage to bar dikhao hi mat — warna blink lagega
+      this._clearSwapBar();
+      this._swapBarTimer = setTimeout(() => { this.swapping = true; }, 90);
     },
 
-    backToAttempt() {
-      this.showSummary = false;
+    _clearSwapBar() {
+      if (this._swapBarTimer) { clearTimeout(this._swapBarTimer); this._swapBarTimer = null; }
+      this.swapping = false;
     },
 
+    /* =============================================================
+       FORMATTING / GETTERS
+       ============================================================= */
     formatSeconds(total) {
       total = total || 0;
       const m = Math.floor(total / 60).toString().padStart(2, '0');
@@ -429,17 +570,23 @@ function practiceRunner() {
     },
 
     get attemptedCount() { return this.questions.length - this.skippedCount; },
+
     get accuracyLabel() {
       if (this.attemptedCount === 0) return 'No questions attempted';
       const pct = Math.round((this.score / this.attemptedCount) * 100);
       return pct + '% accuracy on ' + this.attemptedCount + ' attempted';
     },
+
     get chapterLabel() { return {{ chapter.name | tojson }} + ' · ' + {{ set_name | tojson }}; },
+
     get formattedAvgTime() {
       const n = this.questions.length || 1;
       return this.formatSeconds(Math.round(this.totalSeconds / n));
     },
 
+    /* =============================================================
+       INTERACTIONS
+       ============================================================= */
     pickOption(opt) {
       const q = this.currentQuestion;
       if (!q || this.isChecked(q.id) || this.isFinished) return;
@@ -452,23 +599,27 @@ function practiceRunner() {
       const q = this.currentQuestion;
       if (!q || this.selected[q.id] == null || this.isChecked(q.id) || this.isFinished) return;
       this.answers[q.id] = this.selected[q.id];
-      const myToken = this._typesetToken;
-      this.$nextTick(() => {
-        if (myToken !== this._typesetToken) return;
-        if (window.MathJax && window.MathJax.typesetPromise) {
-          const target = this.$refs.questionCard;
-          window.MathJax.typesetPromise(target ? [target] : undefined);
-        }
-      });
+      // Explanation already prerendered hai cache me — kuch typeset karne
+      // ki zaroorat nahi, isliye yahan koi MathJax call nahi.
     },
 
-    toggleMark(questionId) { if(questionId) this.marked[questionId] = !this.marked[questionId]; },
+    toggleMark(questionId) { if (questionId) this.marked[questionId] = !this.marked[questionId]; },
     isMarked(questionId) { return questionId ? !!this.marked[questionId] : false; },
 
-    jumpTo(idx) { this.currentIndex = idx; this.startQuestionTimer(); this.typesetMath(); },
-    goNext() { if (this.currentIndex < this.questions.length - 1) { this.currentIndex++; this.startQuestionTimer(); this.typesetMath(); } },
-    goPrev() { if (this.currentIndex > 0) { this.currentIndex--; this.startQuestionTimer(); this.typesetMath(); } },
+    _goto(idx) {
+      if (idx < 0 || idx >= this.questions.length || idx === this.currentIndex) return;
+      this.currentIndex = idx;
+      this._resetQuestionTimer();
+      this.showQuestion(idx);
+    },
 
+    jumpTo(idx) { this._goto(idx); },
+    goNext() { this._goto(this.currentIndex + 1); },
+    goPrev() { this._goto(this.currentIndex - 1); },
+
+    /* =============================================================
+       STYLING HELPERS
+       ============================================================= */
     paletteClass(idx) {
       const q = this.questions[idx];
       const checked = this.answers[q.id];
@@ -514,5 +665,5 @@ function practiceRunner() {
 {% endblock %}
 
 {% block extra_scripts %}
-<!-- Alpine.js is now loaded globally in shared/base.html -->
+<!-- Alpine.js is loaded globally in shared/base.html -->
 {% endblock %}
