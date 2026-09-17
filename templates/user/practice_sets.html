@@ -1,25 +1,66 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ folder }} — {{ chapter.name }}{% endblock %}
 {% block content %}
-<section class="max-w-3xl mx-auto px-6 pt-12 pb-24">
-  <p class="text-gold font-semibold text-sm mb-2">
-    {{ chapter.name }} · {{ 'PYQ' if mode == 'pyq' else 'MCQ' }} · {{ 'Topic-wise' if category == 'topic' else 'Random' }}
-  </p>
-  <h1 class="font-display text-2xl font-semibold text-ink mb-8">📁 {{ folder }}</h1>
+<section class="max-w-4xl mx-auto px-6 pt-12 pb-24 relative z-10">
 
-  <div class="grid sm:grid-cols-2 gap-4">
+  <!-- Header & Breadcrumbs -->
+  <div class="mb-10 border-b border-white/10 pb-6">
+    <a href="javascript:history.back()" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-flex items-center gap-2 transition-colors">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+      </svg>
+      Back to Folders
+    </a>
+    
+    <div class="flex flex-wrap items-center gap-3 mb-3">
+        <span class="text-[10px] font-black tracking-widest uppercase text-white border border-white/20 bg-white/5 px-3 py-1.5 rounded-full">{{ chapter.name }}</span>
+        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full">{{ 'PYQ' if mode == 'pyq' else 'MCQ' }}</span>
+        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full">{{ 'Topic-wise' if category == 'topic' else 'Random' }}</span>
+    </div>
+    
+    <h1 class="font-display text-4xl font-bold text-white mb-2 tracking-tight flex items-center gap-4">
+        <div class="bg-white/5 border border-white/10 text-gold p-3 rounded-xl shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/>
+            </svg>
+        </div>
+        {{ folder }}
+    </h1>
+  </div>
+
+  <!-- Quizzes Grid -->
+  <div class="grid sm:grid-cols-2 gap-5">
     {% for s in sets %}
     <a href="{{ url_for('user.practice_overview', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=s.name) }}"
-       class="block p-5 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-sm transition-all bg-white">
-      <div class="flex items-center justify-between mb-1">
-        <span class="font-medium text-ink">{{ s.name }}</span>
-        {% if s.is_premium %}<span class="text-xs bg-gold/15 text-gold font-semibold rounded px-2 py-0.5">Premium 🔒</span>
-        {% else %}<span class="text-xs bg-green-50 text-green-700 rounded px-2 py-0.5">Free</span>{% endif %}
+       class="block p-6 border border-white/10 rounded-xl hover:border-gold/40 hover:shadow-[0_0_20px_rgba(212,160,23,0.15)] transition-all bg-[#161616]/90 backdrop-blur-md group relative overflow-hidden">
+      
+      <!-- Subtle Hover Accent -->
+      <div class="absolute inset-y-0 left-0 w-1 bg-transparent group-hover:bg-gold transition-colors"></div>
+
+      <div class="flex items-start justify-between gap-4 relative z-10 pl-2">
+        <div>
+          <p class="font-display text-xl font-bold text-white group-hover:text-gold transition-colors leading-tight">{{ s.name }}</p>
+          <p class="text-sm font-medium text-gray-400 mt-2 flex items-center gap-1.5 group-hover:text-gray-300 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              {{ s.count }} question{{ 's' if s.count != 1 else '' }}
+          </p>
+        </div>
+        
+        <!-- Badges -->
+        <div class="shrink-0">
+            {% if s.is_premium %}
+                <span class="text-[10px] bg-gold/20 text-gold border border-gold/40 font-black tracking-widest uppercase rounded px-2.5 py-1 shadow-sm block text-center">Premium</span>
+            {% else %}
+                <span class="text-[10px] bg-green-500/10 text-green-400 border border-green-500/30 font-black tracking-widest uppercase rounded px-2.5 py-1 shadow-sm block text-center">Free</span>
+            {% endif %}
+        </div>
       </div>
-      <p class="text-sm text-ink/50">{{ s.count }} question{{ 's' if s.count != 1 else '' }}</p>
     </a>
     {% else %}
-    <p class="text-ink/50 text-sm col-span-full">No quizzes in this folder yet — check back soon.</p>
+    <div class="col-span-full text-center p-12 bg-[#161616]/90 rounded-2xl border border-dashed border-white/20 backdrop-blur-md">
+        <p class="text-white font-bold text-lg mb-1">No Practice Sets Here</p>
+        <p class="text-gray-500 text-sm font-medium">Content is currently being updated. Check back soon.</p>
+    </div>
     {% endfor %}
   </div>
 </section>
