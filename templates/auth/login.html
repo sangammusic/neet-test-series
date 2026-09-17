@@ -1,32 +1,44 @@
 {% extends "shared/base.html" %}
-{% block title %}Login — SANGAM STUDY{% endblock %}
+{% block title %}Authentication — SANGAM STUDY{% endblock %}
 {% block content %}
-<div class="max-w-md mx-auto mt-16 px-4">
-  <h1 class="font-display text-3xl text-ink mb-2">Welcome back</h1>
-  <p class="text-ink/60 mb-8">Log in to continue your prep.</p>
-
-  <form method="POST" class="space-y-5">
+<div class="max-w-md mx-auto mt-20 px-4 relative z-10">
+  
+  <!-- Glassmorphic Card -->
+  <div class="bg-scholar-card border border-scholar-border rounded-2xl p-8 sm:p-10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
     
-    <!-- SANGAM FIX: Changed to Username -->
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Username</label>
-      <input type="text" name="username" required placeholder="Enter your username"
-             class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
+    <!-- Subtle Premium Glow -->
+    <div class="absolute top-0 right-0 w-32 h-32 bg-gold/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+
+    <div class="mb-8 relative z-10">
+      <h1 class="font-display text-3xl font-bold text-white mb-2">Student Authentication</h1>
+      <p class="text-gray-400 text-sm font-medium">Enter your credentials to access your workspace.</p>
     </div>
 
-    <div>
-      <label class="block text-sm font-medium text-ink mb-1">Password</label>
-      <input type="password" name="password" required placeholder="Enter your password"
-             class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
-    </div>
-    <button type="submit"
-            class="w-full bg-ink text-paper font-medium py-2.5 rounded-md hover:bg-ink-light transition-colors">
-      Log In
-    </button>
-  </form>
+    <form method="POST" class="space-y-5 relative z-10">
+      
+      <!-- Username Field -->
+      <div>
+        <label class="block text-sm font-semibold text-gray-300 mb-1.5">Username</label>
+        <input type="text" name="username" required placeholder="Enter your username"
+               class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/50 transition-all">
+      </div>
 
-  <p class="text-sm text-ink/60 mt-6 text-center">
-    New here? <a href="{{ url_for('auth.register') }}" class="text-gold font-medium hover:underline">Create an account</a>
-  </p>
+      <!-- Password Field -->
+      <div>
+        <label class="block text-sm font-semibold text-gray-300 mb-1.5">Password</label>
+        <input type="password" name="password" required placeholder="Enter your password"
+               class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/50 transition-all">
+      </div>
+      
+      <button type="submit"
+              class="w-full bg-gold text-ink font-bold py-3 mt-4 rounded-lg hover:bg-gold-light transition-all shadow-[0_4px_14px_0_rgba(212,160,23,0.2)] hover:shadow-[0_6px_20px_rgba(212,160,23,0.3)]">
+        Access Portal &rarr;
+      </button>
+    </form>
+
+    <p class="text-sm text-gray-400 mt-8 text-center relative z-10">
+      First time here? <a href="{{ url_for('auth.register') }}" class="text-gold font-bold hover:text-gold-light hover:underline transition-colors">Create an account</a>
+    </p>
+  </div>
 </div>
 {% endblock %}
