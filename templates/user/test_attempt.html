@@ -179,8 +179,8 @@
              x-html="rendered.question_text"></div>
 
         <!-- Question Image rendering if exists -->
-        <img :src="currentQuestion?.image_url || ''"
-             x-show="currentQuestion?.image_url"
+        <img :src="hasValidImage(currentQuestion) ? currentQuestion.image_url : ''"
+             x-show="hasValidImage(currentQuestion)"
              decoding="async"
              class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-6 shadow-sm" alt="Diagram"
              @load="onImageLoad($event, currentQuestion)"
@@ -515,7 +515,7 @@ function testAttempt() {
       [i + 1, i + 2, i + 3, i - 1].forEach((n) => {
         const q = list[n];
         if (!q) return;
-        items.push({ key: this._keyFor(q), raw: this._rawFor(q), image: q.image_url || null });
+        items.push({ key: this._keyFor(q), raw: this._rawFor(q), image: this.hasValidImage(q) ? q.image_url : null });
       });
       this._renderer.warm(items);
     },
@@ -549,6 +549,21 @@ function testAttempt() {
 
     get currentQuestion() {
       return this.currentSubjectQuestions[this.currentIndexInSubject] || null;
+    },
+
+    /* SANGAM FIX: same root cause as practice_runner.html — a raw
+       truthiness check on image_url treats whitespace/junk DB values
+       as "has an image", so a pure-text question with a stray
+       non-empty image_url shows a diagram box, the browser tries to
+       load the junk string as a URL, and "failed to load" fires even
+       though no image was ever uploaded for that question. Only a
+       real http(s) URL counts as having an image now. */
+    hasValidImage(q) {
+      const url = q && q.image_url;
+      if (typeof url !== 'string') return false;
+      const trimmed = url.trim();
+      if (!trimmed) return false;
+      return /^https?:\/\//i.test(trimmed);
     },
 
     get formattedTime() {
