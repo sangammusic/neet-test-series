@@ -11,7 +11,7 @@
       <input type="text" name="full_name" required
              class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
     </div>
-    
+
     <!-- SANGAM FIX: Changed from Email to Strict Username -->
     <div>
       <label class="block text-sm font-medium text-ink mb-1">Choose a Username <span class="text-red-500">*</span></label>
@@ -22,9 +22,21 @@
 
     <div>
       <label class="block text-sm font-medium text-ink mb-1">Password</label>
-      <input type="password" name="password" required minlength="6"
+      <input type="password" name="password" id="reg_password" required minlength="6"
              class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
     </div>
+
+    <!-- SANGAM FIX: Password must be entered twice on registration, same as
+         the change-password flow on the settings page already does. This
+         is the fix for point #1 -- previously registration only asked once,
+         so a typo in the password went unnoticed until the next login. -->
+    <div>
+      <label class="block text-sm font-medium text-ink mb-1">Confirm Password <span class="text-red-500">*</span></label>
+      <input type="password" name="confirm_password" id="reg_confirm_password" required minlength="6"
+             class="w-full rounded-md border border-ink/15 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold">
+      <p id="reg_password_mismatch" class="text-xs text-red-600 mt-1 hidden">Passwords do not match.</p>
+    </div>
+
     <button type="submit"
             class="w-full bg-gold text-ink font-semibold py-2.5 rounded-md hover:bg-gold-light transition-colors">
       Create Account
@@ -35,4 +47,35 @@
     Already have an account? <a href="{{ url_for('auth.login') }}" class="text-gold font-medium hover:underline">Log in</a>
   </p>
 </div>
+
+<script>
+  // Client-side check purely for instant feedback -- the server
+  // (app/auth/routes.py) always re-checks password == confirm_password
+  // itself and never trusts this, since this can be bypassed.
+  (function () {
+    var pw = document.getElementById('reg_password');
+    var confirm = document.getElementById('reg_confirm_password');
+    var warning = document.getElementById('reg_password_mismatch');
+    var form = pw.closest('form');
+
+    function checkMatch() {
+      if (confirm.value && pw.value !== confirm.value) {
+        warning.classList.remove('hidden');
+        confirm.setCustomValidity('Passwords do not match.');
+      } else {
+        warning.classList.add('hidden');
+        confirm.setCustomValidity('');
+      }
+    }
+
+    pw.addEventListener('input', checkMatch);
+    confirm.addEventListener('input', checkMatch);
+    form.addEventListener('submit', function (e) {
+      checkMatch();
+      if (pw.value !== confirm.value) {
+        e.preventDefault();
+      }
+    });
+  })();
+</script>
 {% endblock %}
