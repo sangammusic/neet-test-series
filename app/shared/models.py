@@ -22,37 +22,33 @@ def get_active_streams():
     return res.data
 
 
-def get_streams_for_user_or_guest(user_id: str = None, guest_id: str = None):
+def get_streams_for_user(user_id: str = None):
     """
-    Returns the list of streams (id, name, slug) a logged-in user or
-    a guest has already selected, by reading user_streams /
-    guest_streams. Returns [] if neither id is given, or if the
-    person hasn't picked any stream yet.
-
-    Pass exactly one of user_id / guest_id — this mirrors how
-    stream_select()'s POST handler already branches on is_logged_in()
-    in app/user/routes.py, just for reading instead of writing.
+    Returns the list of streams (id, name, slug) a logged-in user has
+    already selected, by reading user_streams. Returns [] if no
+    user_id is given, or if the user hasn't picked any stream yet.
 
     Used to decide whether to show the stream-selection page again
     or skip straight to the dashboard — see landing() and
     stream_select() in app/user/routes.py.
+
+    NOTE: this used to also handle guest_id / guest_streams for
+    anonymous "guest mode" visitors. Guest mode has been permanently
+    removed from the app (every route now requires a real logged-in
+    account), so that branch was deleted along with the guests /
+    guest_streams tables. If you're reading old code or an old DB
+    dump that still references guest_id here, that's expected — this
+    function no longer accepts it.
     """
-    if user_id:
-        res = (
-            supabase_public.table("user_streams")
-            .select("streams(id, name, slug)")
-            .eq("user_id", user_id)
-            .execute()
-        )
-    elif guest_id:
-        res = (
-            supabase_public.table("guest_streams")
-            .select("streams(id, name, slug)")
-            .eq("guest_id", guest_id)
-            .execute()
-        )
-    else:
+    if not user_id:
         return []
+
+    res = (
+        supabase_public.table("user_streams")
+        .select("streams(id, name, slug)")
+        .eq("user_id", user_id)
+        .execute()
+    )
 
     # Each row looks like {"streams": {"id": ..., "name": ..., "slug": ...}}
     # because of the FK-join select syntax above — unwrap it into a
@@ -249,11 +245,13 @@ def get_mock_question_ids_for_test(test_id):
     return [row["mock_question_id"] for row in res.data]
 
 
-def create_test_attempt(test_id, user_id=None, guest_id=None):
+def create_test_attempt(test_id, user_id=None):
     """
     Starts a new attempt row (started_at defaults to now() in the DB).
-    Exactly one of user_id/guest_id must be given.
-    
+    user_id is required — guest attempts (guest_id) are no longer
+    supported anywhere in the app, since guest mode was permanently
+    removed.
+
     FEATURE: Auto-Overwrite (Storage Saver).
     Before creating a new attempt, this completely wipes out any existing 
     attempts (and via DB cascade, their answers) for THIS test by THIS user.
@@ -261,23 +259,20 @@ def create_test_attempt(test_id, user_id=None, guest_id=None):
     """
     from app.extensions import supabase_admin
 
-    # 1. DELETE existing attempts for this test + user to save storage
-    del_query = supabase_admin.table("test_attempts").delete().eq("test_id", test_id)
-    if user_id:
-        del_query = del_query.eq("user_id", user_id)
-    elif guest_id:
-        del_query = del_query.eq("guest_id", guest_id)
-    else:
+    if not user_id:
         return None
-        
-    del_query.execute() # Executes the wipe
+
+    # 1. DELETE existing attempts for this test + user to save storage
+    (
+        supabase_admin.table("test_attempts")
+        .delete()
+        .eq("test_id", test_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
 
     # 2. INSERT the fresh new attempt
-    payload = {"test_id": test_id}
-    if user_id:
-        payload["user_id"] = user_id
-    elif guest_id:
-        payload["guest_id"] = guest_id
+    payload = {"test_id": test_id, "user_id": user_id}
 
     res = supabase_admin.table("test_attempts").insert(payload).execute()
     if not res.data:
@@ -292,7 +287,7 @@ def get_attempt_by_id(attempt_id):
     the RLS section was left incomplete), so the public/anon client
     can insert nothing and read nothing on this table by default.
     Ownership is already enforced at the route level (test_id match +
-    session user_id/guest_id), so reading here via the admin client is
+    session user_id), so reading here via the admin client is
     safe and is what makes the freshly-created attempt visible at all.
     """
     from app.extensions import supabase_admin
