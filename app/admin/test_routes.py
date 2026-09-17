@@ -9,13 +9,13 @@ Flow:
    - SANGAM FIX: Dynamic Auto-Creation of Categories via Text Input instead of Dropdown.
 3. Level 3: Admin manages questions for a test via:
     A. 25-Chunk Upload (3-Tabs) with STRICT SANGAM STUDY HUB RULES (45-45-90 for 720 marks).
-    B. Live JSON Edit: Seamless replacement of JSON + Image toggle (No Duplicates).
+    B. Live JSON Edit: Seamless replacement of JSON + Image toggle.
     C. Undo Chunk: Temporary history destruction with Deep Storage Cleanup.
     D. Deep Storage Permanent Cleanup (Fixed Chunking Bug for 100% Wipe).
 """
 import json
 import logging
-import re  # Added for auto-generating slugs
+import re
 
 from flask import render_template, request, redirect, url_for, flash, jsonify
 
@@ -178,26 +178,20 @@ def series_tests(series_id):
             flash("Please fill all the details, including Category and Marks per Question.", "error")
             return redirect(url_for("admin.series_tests", series_id=series_id))
 
-        # ==========================================
-        # SANGAM STUDY HUB: AUTO-RESOLVE CATEGORY WITH SLUG
-        # ==========================================
         category_id = None
         try:
-            # 1. Look for an existing category
             existing_cats = supabase_admin.table("test_categories").select("id, name").eq("stream_id", stream_id).execute().data
             for cat in existing_cats:
                 if cat["name"].strip().lower() == category_name.lower():
                     category_id = cat["id"]
                     break
             
-            # 2. If it doesn't exist, generate a slug and create it
             if not category_id:
-                # Generate a clean URL-friendly slug (e.g. "Minor Test" -> "minor-test")
                 generated_slug = re.sub(r'[^a-z0-9]+', '-', category_name.lower()).strip('-')
                 
                 new_cat = supabase_admin.table("test_categories").insert({
                     "name": category_name,
-                    "slug": generated_slug, # SANGAM FIX: Added required slug field
+                    "slug": generated_slug, 
                     "stream_id": stream_id
                 }).execute().data
                 if new_cat:
@@ -353,38 +347,10 @@ def tests_bulk_map_questions(test_id):
         else:
             valid_payloads.append(payload)
 
-    if valid_payloads:
-        existing_mapped = (
-            supabase_admin.table("mock_test_questions")
-            .select("mock_questions(question_text)")
-            .eq("test_id", test_id)
-            .execute()
-            .data
-        )
-        
-        existing_texts = set()
-        for row in existing_mapped:
-            q = row.get("mock_questions")
-            if q and q.get("question_text"):
-                existing_texts.add(q["question_text"].strip().lower())
-
-        incoming_texts = set()
-        for p in valid_payloads:
-            clean_text = p["question_text"].strip().lower()
-            
-            if clean_text in existing_texts:
-                error_msg = f"Duplicate Detected: The question starting with '{clean_text[:40]}...' already exists in this test!"
-                if is_ajax: return jsonify({"ok": False, "error": error_msg}), 400
-                flash(error_msg, "error")
-                return redirect(url_for("admin.test_series_list"))
-            
-            if clean_text in incoming_texts:
-                error_msg = f"Duplicate Detected: The question starting with '{clean_text[:40]}...' appears multiple times in your pasted JSON chunk!"
-                if is_ajax: return jsonify({"ok": False, "error": error_msg}), 400
-                flash(error_msg, "error")
-                return redirect(url_for("admin.test_series_list"))
-            
-            incoming_texts.add(clean_text)
+    # ==========================================
+    # DUPLICATE DETECTION LOGIC COMPLETELY REMOVED 
+    # YOU CAN NOW UPLOAD ANYTHING FREELY.
+    # ==========================================
 
     if test.get("total_marks") == 720 and not errors:
         existing = supabase_admin.table("mock_test_questions").select("mock_questions(subjects(name))").eq("test_id", test_id).execute().data
