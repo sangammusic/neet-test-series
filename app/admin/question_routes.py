@@ -13,6 +13,7 @@ the old topic_name system, just one level deeper.
 """
 import json
 import logging
+import re
 
 from flask import render_template, request, redirect, url_for, flash, jsonify
 
@@ -34,7 +35,6 @@ DEFAULT_FOLDER = "General / Uncategorized"
 
 def _slugify(text: str) -> str:
     """Helper to safely generate URLs from names"""
-    import re
     text = str(text).lower().strip()
     return re.sub(r'[^\w\s-]', '', text).replace(' ', '-')
 
@@ -42,13 +42,17 @@ def _slugify(text: str) -> str:
 def _delete_image_from_storage(image_url):
     """
     Helper function for Pillar 4: Deep Storage Cleanup.
-    Extracts the file path and strips trailing '?' to permanently
-    delete it from the Supabase Storage bucket (Zero-Kachra Policy).
+    SANGAM STUDY HUB FIX: Safely strips trailing query params ('?') and 
+    strictly matches the bucket path to prevent silent Storage API failures.
     """
     if not image_url:
         return
     try:
-        if "question-images/" in image_url:
+        bucket_prefix = f"/{BUCKET_NAME}/"
+        if bucket_prefix in image_url:
+            path = image_url.split(bucket_prefix)[1].split("?")[0]
+            supabase_admin.storage.from_(BUCKET_NAME).remove([path])
+        elif "question-images/" in image_url:
             path = image_url.split("question-images/")[1].split("?")[0]
             supabase_admin.storage.from_(BUCKET_NAME).remove([path])
     except Exception as e:
@@ -66,7 +70,10 @@ def _bulk_delete_questions_and_images(question_rows):
 
     image_paths = []
     for q in question_rows:
-        if q.get("image_url") and "question-images/" in q["image_url"]:
+        if q.get("image_url") and f"/{BUCKET_NAME}/" in q["image_url"]:
+            clean_path = q["image_url"].split(f"/{BUCKET_NAME}/")[1].split("?")[0]
+            image_paths.append(clean_path)
+        elif q.get("image_url") and "question-images/" in q["image_url"]:
             clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
             image_paths.append(clean_path)
 
@@ -135,10 +142,10 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_na
     payload = {
         "chapter_id": chapter_id,
         "difficulty_id": difficulty_id,
-        "category": category, # Strictly mapped from route
+        "category": category, 
         "folder_name": folder_name,
         "set_name": set_name,
-        "topic_name": set_name,  # kept in sync for backward-compat
+        "topic_name": set_name, 
         "question_text": str(raw["question_text"]).strip(),
         "option_a": str(raw["option_a"]).strip(),
         "option_b": str(raw["option_b"]).strip(),
@@ -352,9 +359,11 @@ def questions_bulk_upload():
                     inserted_ids = [row["id"] for row in result.data]
                     warning_msg = "Questions saved! BUT 'marks' were ignored. Run SQL Migration."
                 except Exception as fallback_exc:
-                    return jsonify({"ok": False, "error": f"Upload failed: {fallback_exc}"}), 500
+                    logger.error(f"Fallback DB Upload failed: {fallback_exc}")
+                    return jsonify({"ok": False, "error": "Upload failed. Please try again."}), 500
             else:
-                return jsonify({"ok": False, "error": f"DB Upload failed: {exc}"}), 500
+                logger.error(f"DB Upload failed: {exc}")
+                return jsonify({"ok": False, "error": "DB Upload failed."}), 500
 
     resp = {"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "inserted_ids": inserted_ids, "errors": errors}
     if warning_msg:
@@ -376,7 +385,8 @@ def questions_undo_chunk():
         _bulk_delete_questions_and_images(rows)
         return jsonify({"ok": True, "message": "Chunk successfully undone and wiped."})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Undo chunk error: {exc}")
+        return jsonify({"ok": False, "error": "Failed to undo chunk."}), 500
 
 
 # ==========================================
@@ -389,8 +399,6 @@ def questions_folder_create():
     name = str(data.get("name", "")).strip()
     if not name:
         return jsonify({"ok": False, "error": "Folder name is required."}), 400
-    # SANGAM NOTE: Folder is ONLY verified here, NOT saved to DB. 
-    # Frontend JS redirects to upload to make the folder "real".
     return jsonify({"ok": True, "folder_name": name})
 
 
@@ -412,7 +420,8 @@ def questions_folder_rename():
         supabase_admin.table("questions").update({"folder_name": new_name}).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", old_name).execute()
         return jsonify({"ok": True})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Folder rename error: {exc}")
+        return jsonify({"ok": False, "error": "Failed to rename folder."}), 500
 
 
 @admin_bp.route("/questions/folder/delete", methods=["POST"])
@@ -433,7 +442,8 @@ def questions_folder_delete():
         _bulk_delete_questions_and_images(rows)
         return jsonify({"ok": True})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Folder delete error: {exc}")
+        return jsonify({"ok": False, "error": "Failed to delete folder."}), 500
 
 
 # ==========================================
@@ -459,7 +469,8 @@ def questions_set_create():
             return jsonify({"ok": False, "error": f"A quiz named '{set_name}' already exists in this folder."}), 400
         return jsonify({"ok": True, "set_name": set_name})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Quiz create error: {exc}")
+        return jsonify({"ok": False, "error": "Failed to create quiz."}), 500
 
 
 @admin_bp.route("/questions/set/rename", methods=["POST"])
@@ -484,7 +495,8 @@ def questions_set_rename():
         supabase_admin.table("questions").update({"set_name": new_name, "topic_name": new_name}).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", old_name).execute()
         return jsonify({"ok": True})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Quiz rename error: {exc}")
+        return jsonify({"ok": False, "error": "Failed to rename quiz."}), 500
 
 
 @admin_bp.route("/questions/set/delete", methods=["POST"])
@@ -506,7 +518,8 @@ def questions_set_delete():
         _bulk_delete_questions_and_images(rows)
         return jsonify({"ok": True})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        logger.error(f"Quiz delete error: {exc}")
+        return jsonify({"ok": False, "error": "Failed to delete quiz."}), 500
 
 
 # ==========================================
@@ -522,7 +535,8 @@ def api_create_stream():
         supabase_admin.table("streams").insert({"name": name, "slug": _slugify(name)}).execute()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        logger.error(f"Stream create error: {e}")
+        return jsonify({"ok": False, "error": "Failed to create stream."}), 500
 
 @admin_bp.route("/api/subjects/create", methods=["POST"])
 @admin_required
@@ -534,7 +548,8 @@ def api_create_subject():
         supabase_admin.table("subjects").insert({"name": name, "slug": _slugify(name), "stream_id": stream_id}).execute()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        logger.error(f"Subject create error: {e}")
+        return jsonify({"ok": False, "error": "Failed to create subject."}), 500
 
 @admin_bp.route("/api/chapters/create", methods=["POST"])
 @admin_required
@@ -546,7 +561,8 @@ def api_create_chapter():
         supabase_admin.table("chapters").insert({"name": name, "slug": _slugify(name), "subject_id": subject_id}).execute()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        logger.error(f"Chapter create error: {e}")
+        return jsonify({"ok": False, "error": "Failed to create chapter."}), 500
 
 
 @admin_bp.route("/api/streams/edit", methods=["POST"])
@@ -559,7 +575,8 @@ def api_edit_stream():
         supabase_admin.table("streams").update({"name": name, "slug": _slugify(name)}).eq("id", id).execute()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        logger.error(f"Stream edit error: {e}")
+        return jsonify({"ok": False, "error": "Failed to edit stream."}), 500
 
 @admin_bp.route("/api/subjects/edit", methods=["POST"])
 @admin_required
@@ -571,7 +588,8 @@ def api_edit_subject():
         supabase_admin.table("subjects").update({"name": name, "slug": _slugify(name)}).eq("id", id).execute()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        logger.error(f"Subject edit error: {e}")
+        return jsonify({"ok": False, "error": "Failed to edit subject."}), 500
 
 @admin_bp.route("/api/chapters/edit", methods=["POST"])
 @admin_required
@@ -583,7 +601,8 @@ def api_edit_chapter():
         supabase_admin.table("chapters").update({"name": name, "slug": _slugify(name)}).eq("id", id).execute()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        logger.error(f"Chapter edit error: {e}")
+        return jsonify({"ok": False, "error": "Failed to edit chapter."}), 500
 
 
 @admin_bp.route("/api/streams/delete", methods=["POST"])
@@ -598,7 +617,8 @@ def api_delete_stream():
         supabase_admin.table("streams").delete().eq("id", stream_id).execute()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        logger.error(f"Stream delete error: {e}")
+        return jsonify({"ok": False, "error": "Failed to delete stream."}), 500
 
 @admin_bp.route("/api/subjects/delete", methods=["POST"])
 @admin_required
@@ -612,7 +632,8 @@ def api_delete_subject():
         supabase_admin.table("subjects").delete().eq("id", subject_id).execute()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        logger.error(f"Subject delete error: {e}")
+        return jsonify({"ok": False, "error": "Failed to delete subject."}), 500
 
 @admin_bp.route("/api/chapters/delete", methods=["POST"])
 @admin_required
@@ -625,7 +646,8 @@ def api_delete_chapter():
         supabase_admin.table("chapters").delete().eq("id", chapter_id).execute()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        logger.error(f"Chapter delete error: {e}")
+        return jsonify({"ok": False, "error": "Failed to delete chapter."}), 500
 
 
 # ==========================================
@@ -635,26 +657,31 @@ def api_delete_chapter():
 @admin_required
 def questions_edit(question_id):
     raw = request.json
-    old_q = supabase_admin.table("questions").select("chapter_id, folder_name, set_name, category, image_url, has_image").eq("id", question_id).single().execute().data
-    difficulty_ids = {d["id"] for d in supabase_admin.table("difficulty_levels").select("id").execute().data}
-
-    payload, error = _validate_bulk_question(raw, difficulty_ids, old_q["chapter_id"], old_q["folder_name"], old_q["set_name"], old_q["category"])
-    if error: return jsonify({"ok": False, "error": error}), 400
-
-    if old_q.get("image_url") and not payload.get("has_image"):
-        _delete_image_from_storage(old_q["image_url"])
-        payload["image_url"] = None
-
     try:
+        old_q = supabase_admin.table("questions").select("chapter_id, folder_name, set_name, category, image_url, has_image").eq("id", question_id).single().execute().data
+        difficulty_ids = {d["id"] for d in supabase_admin.table("difficulty_levels").select("id").execute().data}
+
+        payload, error = _validate_bulk_question(raw, difficulty_ids, old_q["chapter_id"], old_q["folder_name"], old_q["set_name"], old_q["category"])
+        if error: return jsonify({"ok": False, "error": error}), 400
+
+        if old_q.get("image_url") and not payload.get("has_image"):
+            _delete_image_from_storage(old_q["image_url"])
+            payload["image_url"] = None
+
         supabase_admin.table("questions").update(payload).eq("id", question_id).execute()
         return jsonify({"ok": True, "has_image": payload.get("has_image")})
     except Exception as exc:
         if "marks" in str(exc):
             payload.pop("marks", None)
             payload.pop("negative_marks", None)
-            supabase_admin.table("questions").update(payload).eq("id", question_id).execute()
-            return jsonify({"ok": True, "has_image": payload.get("has_image")})
-        return jsonify({"ok": False, "error": str(exc)}), 500
+            try:
+                supabase_admin.table("questions").update(payload).eq("id", question_id).execute()
+                return jsonify({"ok": True, "has_image": payload.get("has_image")})
+            except Exception as inner_exc:
+                logger.error(f"Fallback edit failed: {inner_exc}")
+                return jsonify({"ok": False, "error": "Failed to update question."}), 500
+        logger.error(f"Question edit failed: {exc}")
+        return jsonify({"ok": False, "error": "Failed to update question."}), 500
 
 
 @admin_bp.route("/questions/<question_id>/delete", methods=["POST"])
@@ -671,7 +698,8 @@ def questions_delete(question_id):
         supabase_admin.table("questions").delete().eq("id", question_id).execute()
         flash("Question permanently deleted.", "success")
     except Exception as exc:
-        flash(f"Delete failed: {exc}", "error")
+        logger.error(f"Question delete failed: {exc}")
+        flash("Failed to delete question.", "error")
 
     if folder_name and set_name:
         return redirect(url_for("admin.questions_set_manage", stream_id=stream_id, subject_id=subject_id, chapter_id=chapter_id, type=q_type, category=category, folder=folder_name, set=set_name))
