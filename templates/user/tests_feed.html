@@ -4,56 +4,52 @@
 <section class="max-w-5xl mx-auto px-6 pt-12 pb-24 relative z-10">
   
   <div class="mb-12 border-b border-white/10 pb-6">
-    <a href="{{ url_for('user.my_dashboard') }}" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-block transition-colors">
-      &larr; Back to Workspace
+    <a href="{{ url_for('user.my_dashboard') }}" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-flex items-center gap-2 transition-colors">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+      </svg>
+      Back to Workspace
     </a>
     <div class="flex items-center gap-3 mb-2">
-        <span class="text-xs font-bold tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full">{{ stream.name }}</span>
+        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full">{{ stream.name }}</span>
     </div>
-    <h1 class="font-display text-3xl font-bold text-white mb-2">Evaluation Modules</h1>
-    <p class="text-gray-400 text-sm font-medium tracking-wide">Select a designated test series folder to access strictly verified examination mock tests.</p>
+    <h1 class="font-display text-4xl font-bold text-white mb-2 tracking-tight">Evaluation Modules</h1>
+    <p class="text-gray-400 text-sm font-medium">Select a designated test series folder to access strictly verified examination mock tests.</p>
   </div>
   
-  <!-- FOLDER GRID (Strict Isolation Level 1) -->
   <div class="grid md:grid-cols-2 gap-6">
-    
-    <!-- LOOP THROUGH SERIES (FOLDERS) NOT FLAT TESTS -->
     {% for s in series_list %}
     <a href="{{ url_for('user.series_tests', slug=stream.slug, series_id=s.id) }}"
-       class="block p-8 border border-white/10 rounded-2xl hover:border-gold/40 hover:shadow-[0_0_30px_rgba(212,160,23,0.1)] transition-all duration-300 bg-scholar-card backdrop-blur-xl group relative overflow-hidden">
+       class="block p-8 border border-white/10 rounded-2xl hover:border-gold/50 hover:shadow-[0_0_30px_rgba(212,160,23,0.15)] transition-all duration-300 bg-[#161616]/90 backdrop-blur-xl group relative overflow-hidden">
       
-      <!-- Subtle Premium Glow -->
-      <div class="absolute top-0 right-0 w-32 h-32 bg-gold/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-gold/15 transition-colors"></div>
+      <div class="absolute top-0 right-0 w-32 h-32 bg-gold/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-gold/20 transition-colors"></div>
 
       <div class="flex items-start gap-5 relative z-10">
-        <!-- Stylish Folder Icon -->
-        <div class="bg-white/5 border border-white/10 text-gray-300 p-4 rounded-xl group-hover:text-gold group-hover:border-gold/30 transition-colors duration-300 shadow-sm">
+        <!-- Premium Folder Icon -->
+        <div class="bg-white/5 border border-white/10 text-gold p-4 rounded-xl group-hover:bg-gold/10 group-hover:scale-110 transition-all duration-300 shadow-sm">
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
             <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/>
           </svg>
         </div>
         
         <div>
-          <h2 class="font-display text-2xl font-bold text-white mb-1 group-hover:text-gold transition-colors">{{ s.name }}</h2>
-          <p class="text-sm font-bold text-gray-400 group-hover:text-gold-light transition-colors flex items-center gap-1">
+          <h2 class="font-display text-2xl font-bold text-white mb-2 group-hover:text-gold transition-colors">{{ s.name }}</h2>
+          <p class="text-sm font-bold text-gray-400 group-hover:text-white transition-colors flex items-center gap-1">
             Access module contents &rarr;
           </p>
         </div>
       </div>
     </a>
-    
     {% else %}
-    <!-- EMPTY STATE IF NO FOLDERS CREATED -->
-    <div class="md:col-span-2 text-center p-16 bg-white/5 rounded-2xl border border-dashed border-white/20 backdrop-blur-md">
+    <div class="md:col-span-2 text-center p-16 bg-[#161616]/90 rounded-2xl border border-dashed border-white/20 backdrop-blur-md">
         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="text-gray-600 mx-auto mb-4" viewBox="0 0 16 16">
           <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 14A6 6 0 1 1 8 2a6 6 0 0 1 0 12z"/>
           <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
         </svg>
-        <p class="text-gray-300 font-bold text-xl mb-1">No Evaluation Modules Available</p>
+        <p class="text-white font-bold text-xl mb-1">No Evaluation Modules Available</p>
         <p class="text-gray-500 text-sm font-medium">Check back later for new exclusive examination mock tests.</p>
     </div>
     {% endfor %}
-    
   </div>
 </section>
 {% endblock %}
