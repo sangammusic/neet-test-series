@@ -11,13 +11,13 @@
     display: none !important;
   }
 
-  /* Diagrams/graphs are sometimes embedded directly inside question_text,
-     option text, or explanation HTML (not via the separate image_url field),
-     so this can't rely on a wrapper div around a known <img> tag. Force a
-     solid white backdrop + visible frame on every <img> anywhere inside the
-     question card, wherever it came from, so line-art diagrams (often just
-     black strokes on a transparent background) never blend into the page's
-     dark background again. */
+  /* SANGAM FIX: Premium MathJax Anti-Flicker Transitions
+     Changed from `opacity-0` to a premium blur/opacity combo so 
+     users never see a harsh black screen when clicking Next. */
+  .math-cloak { opacity: 0.3; filter: blur(2px); transition: all 0.05s ease-out; pointer-events: none; }
+  .math-ready { opacity: 1; filter: blur(0); transition: all 0.15s ease-in; }
+
+  /* Diagram visibility overrides */
   #practice-runner .question-text img,
   #practice-runner .option-text img,
   #practice-runner .explanation-text img {
@@ -67,131 +67,127 @@
 
   <!-- Main question area -->
   <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
-    <template x-if="currentQuestion">
-      <div>
-        <p class="text-sm font-semibold text-gray-300 mb-5 flex items-center justify-between">
-          <span>Question <span x-text="currentIndex + 1"></span> of <span x-text="questions.length"></span></span>
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-white/5 border border-white/10 rounded-full px-3 py-1">
-            <span>⏱</span>
-            <span class="tabular-nums" x-text="formattedQuestionTime"></span>
-          </span>
-        </p>
+    <!-- SANGAM FIX: x-show prevents SVG unmounting & DOM destruction -->
+    <div x-show="currentQuestion" x-cloak class="w-full">
+      <p class="text-sm font-semibold text-gray-300 mb-5 flex items-center justify-between">
+        <span>Question <span x-text="currentIndex + 1"></span> of <span x-text="questions.length"></span></span>
+        <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-white/5 border border-white/10 rounded-full px-3 py-1">
+          <span>⏱</span>
+          <span class="tabular-nums" x-text="formattedQuestionTime"></span>
+        </span>
+      </p>
 
-        <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg overflow-hidden">
-          <div class="transition-all duration-200 ease-out" x-ref="questionCard"
-               :class="!needsTypeset ? 'opacity-100 translate-y-0' : (mathReady ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1')">
-            <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion.question_text"></div>
+      <div class="bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg overflow-hidden">
+        <!-- Anti-flicker wrapper via MathJax state -->
+        <div class="transition-all duration-200 ease-out" x-ref="questionCard"
+             :class="!needsTypeset ? 'opacity-100 translate-y-0' : (mathReady ? 'math-ready translate-y-0' : 'math-cloak translate-y-1')">
+          
+          <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium" x-html="currentQuestion?.question_text || ''"></div>
 
-            <div x-show="currentQuestion.image_url" class="my-6 mx-auto max-w-full flex justify-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
-              <img :src="currentQuestion.image_url"
-                   class="max-h-[300px] w-auto max-w-full object-contain"
-                   alt="Diagram" style="background-color: #ffffff !important;">
-            </div>
+          <div x-show="currentQuestion?.image_url" class="my-6 mx-auto max-w-full flex justify-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
+            <img :src="currentQuestion?.image_url || ''"
+                 class="max-h-[300px] w-auto max-w-full object-contain"
+                 alt="Diagram" style="background-color: #ffffff !important;">
+          </div>
 
-            <div class="space-y-3.5">
-              <template x-for="opt in ['A','B','C','D']" :key="opt">
-                <button type="button" @click="pickOption(opt)"
-                  class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-300 ease-out"
-                  :class="optionClass(opt)">
-                  <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ease-out"
-                    :class="optionBadgeClass(opt)" x-text="opt"></span>
-                  <span class="option-text text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion['option_' + opt.toLowerCase()]"></span>
-                </button>
-              </template>
-            </div>
+          <div class="space-y-3.5">
+            <template x-for="opt in ['A','B','C','D']" :key="opt">
+              <button type="button" @click="pickOption(opt)"
+                class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-300 ease-out"
+                :class="optionClass(opt)">
+                <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ease-out"
+                  :class="optionBadgeClass(opt)" x-text="opt"></span>
+                <span class="option-text text-sm md:text-base leading-relaxed mt-0.5" x-html="currentQuestion ? currentQuestion['option_' + opt.toLowerCase()] : ''"></span>
+              </button>
+            </template>
+          </div>
 
-            <!-- Feedback only appears once the pick has been submitted and
-                 checked — eases in instead of snapping into place. -->
-            <div x-show="isChecked(currentQuestion.id)"
-                 x-transition:enter="transition ease-out duration-300"
-                 x-transition:enter-start="opacity-0 -translate-y-1"
-                 x-transition:enter-end="opacity-100 translate-y-0"
-                 x-cloak class="mt-5 pt-5 border-t border-white/10">
-              <p class="text-sm font-semibold transition-colors duration-300" :class="answers[currentQuestion.id] === currentQuestion.correct_option ? 'text-green-400' : 'text-red-400'">
-                <span x-text="answers[currentQuestion.id] === currentQuestion.correct_option ? '✓ Correct!' : '✗ Incorrect.'"></span>
-                <span x-show="answers[currentQuestion.id] !== currentQuestion.correct_option">
-                  Correct answer: <span x-text="currentQuestion.correct_option"></span>
-                </span>
-              </p>
-              <p x-show="currentQuestion.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
-                <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="currentQuestion.explanation"></span>
-              </p>
-            </div>
+          <!-- Feedback only appears once the pick has been submitted -->
+          <div x-show="currentQuestion && isChecked(currentQuestion.id)"
+               x-transition:enter="transition ease-out duration-300"
+               x-transition:enter-start="opacity-0 -translate-y-1"
+               x-transition:enter-end="opacity-100 translate-y-0"
+               x-cloak class="mt-5 pt-5 border-t border-white/10">
+            <p class="text-sm font-semibold transition-colors duration-300" :class="answers[currentQuestion?.id] === currentQuestion?.correct_option ? 'text-green-400' : 'text-red-400'">
+              <span x-text="answers[currentQuestion?.id] === currentQuestion?.correct_option ? '✓ Correct!' : '✗ Incorrect.'"></span>
+              <span x-show="answers[currentQuestion?.id] !== currentQuestion?.correct_option">
+                Correct answer: <span x-text="currentQuestion?.correct_option"></span>
+              </span>
+            </p>
+            <p x-show="currentQuestion?.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
+              <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="currentQuestion?.explanation || ''"></span>
+            </p>
+          </div>
 
-            <!-- Review mode, question was left unanswered: say so plainly
-                 and still show the correct answer, but never offer a way
-                 to attempt it now — the attempt is already scored. -->
-            <div x-show="isFinished && !isChecked(currentQuestion.id)"
-                 x-cloak class="mt-5 pt-5 border-t border-white/10">
-              <p class="text-sm font-semibold text-gray-400">
-                <span>— Not Attempted&nbsp;&nbsp;·&nbsp;&nbsp;</span>
-                <span>Correct answer: <span x-text="currentQuestion.correct_option"></span></span>
-              </p>
-              <p x-show="currentQuestion.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
-                <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="currentQuestion.explanation"></span>
-              </p>
-            </div>
+          <!-- Review mode, question was left unanswered -->
+          <div x-show="currentQuestion && isFinished && !isChecked(currentQuestion.id)"
+               x-cloak class="mt-5 pt-5 border-t border-white/10">
+            <p class="text-sm font-semibold text-gray-400">
+              <span>— Not Attempted&nbsp;&nbsp;·&nbsp;&nbsp;</span>
+              <span>Correct answer: <span x-text="currentQuestion?.correct_option"></span></span>
+            </p>
+            <p x-show="currentQuestion?.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
+              <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="currentQuestion?.explanation || ''"></span>
+            </p>
           </div>
         </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <button @click="goPrev()" :disabled="currentIndex === 0"
-            class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-            ← Previous
-          </button>
-
-          <!-- Before checking, still attempting: Submit (needs a pick) + Mark for Review -->
-          <template x-if="!isChecked(currentQuestion.id) && !isFinished">
-            <button @click="submitAnswer()" :disabled="selected[currentQuestion.id] == null"
-              class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-md">
-              Submit Answer
-            </button>
-          </template>
-
-          <!-- Review mode, question was left unanswered: no Submit is ever
-               offered here — once Finish is clicked, nothing can change
-               what got scored. This just moves on. -->
-          <template x-if="!isChecked(currentQuestion.id) && isFinished && currentIndex < questions.length - 1">
-            <button @click="goNext()"
-              class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
-              Next →
-            </button>
-          </template>
-          <template x-if="!isChecked(currentQuestion.id) && isFinished && currentIndex === questions.length - 1">
-            <button @click="showSummary = true"
-              class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
-              Back to Summary
-            </button>
-          </template>
-
-          <!-- After checking: move on -->
-          <template x-if="isChecked(currentQuestion.id) && currentIndex < questions.length - 1">
-            <button @click="goNext()"
-              class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
-              Next →
-            </button>
-          </template>
-          <template x-if="isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && !isFinished">
-            <button @click="showFinishConfirm = true"
-              class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
-              Finish
-            </button>
-          </template>
-          <template x-if="isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && isFinished">
-            <button @click="showSummary = true"
-              class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
-              Back to Summary
-            </button>
-          </template>
-        </div>
-
-        <button @click="toggleMark(currentQuestion.id)"
-          class="w-full mt-3 py-2.5 rounded-xl text-xs md:text-sm font-semibold border transition-colors"
-          :class="isMarked(currentQuestion.id) ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 text-gray-400 hover:bg-white/5'">
-          <span x-text="isMarked(currentQuestion.id) ? '★ Marked for Review' : '☆ Mark for Review'"></span>
-        </button>
       </div>
-    </template>
+
+      <div class="grid grid-cols-2 gap-4">
+        <button @click="goPrev()" :disabled="currentIndex === 0"
+          class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          ← Previous
+        </button>
+
+        <template x-if="currentQuestion && !isChecked(currentQuestion.id) && !isFinished">
+          <button @click="submitAnswer()" :disabled="selected[currentQuestion.id] == null"
+            class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-md">
+            Submit Answer
+          </button>
+        </template>
+
+        <template x-if="currentQuestion && !isChecked(currentQuestion.id) && isFinished && currentIndex < questions.length - 1">
+          <button @click="goNext()"
+            class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
+            Next →
+          </button>
+        </template>
+        
+        <template x-if="currentQuestion && !isChecked(currentQuestion.id) && isFinished && currentIndex === questions.length - 1">
+          <button @click="showSummary = true"
+            class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
+            Back to Summary
+          </button>
+        </template>
+
+        <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex < questions.length - 1">
+          <button @click="goNext()"
+            class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
+            Next →
+          </button>
+        </template>
+        
+        <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && !isFinished">
+          <button @click="showFinishConfirm = true"
+            class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
+            Finish
+          </button>
+        </template>
+        
+        <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && isFinished">
+          <button @click="showSummary = true"
+            class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
+            Back to Summary
+          </button>
+        </template>
+      </div>
+
+      <button @click="toggleMark(currentQuestion?.id)" x-show="currentQuestion"
+        class="w-full mt-3 py-2.5 rounded-xl text-xs md:text-sm font-semibold border transition-colors"
+        :class="isMarked(currentQuestion?.id) ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 text-gray-400 hover:bg-white/5'">
+        <span x-text="isMarked(currentQuestion?.id) ? '★ Marked for Review' : '☆ Mark for Review'"></span>
+      </button>
+    </div>
   </div>
 
   <!-- Finish confirmation modal -->
@@ -207,6 +203,7 @@
         <button @click="showFinishConfirm = false" class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
           Cancel
         </button>
+        <!-- SANGAM FIX: Ensure stopTimers() fires immediately on finish -->
         <button @click="showFinishConfirm = false; stopTimers(); showSummary = true"
           class="py-3 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
           Yes, Finish
@@ -283,27 +280,25 @@ function practiceRunner() {
   return {
     questions: {{ questions | tojson }},
     currentIndex: 0,
-    selected: {},   // { questionId: 'A' } — the pick, before it's checked
-    answers: {},    // { questionId: 'A' } — locked in only after Submit; drives reveal + scoring
-    marked: {},     // { questionId: true } — Mark for Review, independent of answered/checked state
-    showFinishConfirm: false, // "Are you sure you want to finish?" gate before timers stop + summary shows
+    selected: {},   
+    answers: {},    
+    marked: {},     
+    showFinishConfirm: false, 
     showSummary: false,
-    isFinished: false, // true once "Finish" is clicked — timers stay stopped for good after this,
-                        // even while browsing questions in Review (closing the summary modal must
-                        // not secretly resume the clock — see startQuestionTimer/startTotalTimer)
+    isFinished: false, 
 
     // --- timing ---
-    timeSpent: {},              // { questionId: secondsSpentOnThatQuestion }
+    timeSpent: {},              
     activeQuestionId: null,
     activeQuestionSeconds: 0,
     questionTimerHandle: null,
     totalSeconds: 0,
     totalTimerHandle: null,
 
-    // --- render state (avoids flashing raw \( \) LaTeX before MathJax typesets it) ---
+    // --- render state ---
     mathReady: false,
-    needsTypeset: false, // true only when the current question actually contains LaTeX
-    _typesetToken: 0, // bumped on every navigation; stale typeset callbacks check this and no-op
+    needsTypeset: false,
+    _typesetToken: 0,
 
     init() {
       this.startTotalTimer();
@@ -311,10 +306,6 @@ function practiceRunner() {
       this.typesetMath();
     },
 
-    // Cheap textual check for LaTeX delimiters across everything this
-    // question renders with x-html (question text + all 4 options).
-    // Explanation text is checked separately in submitAnswer(), since it
-    // doesn't exist until the question is answered.
     questionHasMath(q) {
       if (!q) return false;
       const parts = [q.question_text, q.option_a, q.option_b, q.option_c, q.option_d];
@@ -327,24 +318,8 @@ function practiceRunner() {
     typesetMath() {
       const q = this.currentQuestion;
       this.needsTypeset = this.questionHasMath(q);
-
-      // Bump a token every time we navigate. Any in-flight typeset callback
-      // from a PREVIOUS question checks this before touching mathReady —
-      // fixes the black-screen-on-next issue seen on Physics/Chemistry
-      // (LaTeX-heavy) sets: MathJax processes its queue serially, so
-      // clicking Next before the previous typesetPromise() resolved left
-      // the new call waiting behind the old one, and re-scanning a DOM
-      // node MathJax had already converted once could make it choke and
-      // fall back to the slower .catch() path. Biology rarely has LaTeX,
-      // so it always took the instant "!needsTypeset" branch below and
-      // never showed the problem.
       const myToken = ++this._typesetToken;
 
-      // No LaTeX on this question — skip the cloak/fade entirely so
-      // "Next"/"Previous" is instant for plain-text questions (the common
-      // case). This is the fix for the original blank-screen-on-next
-      // issue: previously every navigation cloaked regardless of whether
-      // MathJax had anything to typeset.
       if (!this.needsTypeset) {
         this.mathReady = true;
         return;
@@ -352,23 +327,14 @@ function practiceRunner() {
 
       this.mathReady = false;
       const startedAt = Date.now();
-      // A fixed floor on how long the fade-out stays visible before the new
-      // content fades in. Without this, when MathJax resolves in a few ms
-      // (common once it's warmed up), mathReady flips back to true almost
-      // instantly and the CSS opacity transition never gets time to play —
-      // the content just snaps, which reads as a "flash" even though the
-      // fade classes are correct. Holding for a small minimum guarantees
-      // the fade is always visible and always feels the same, whether
-      // MathJax took 2ms or 200ms.
-      const MIN_TRANSITION_MS = 120;
+      
+      // SANGAM FIX: Transition speed bump.
+      const MIN_TRANSITION_MS = 10; 
+      
       this.$nextTick(() => {
-        // Clear any leftover MathJax output on this card before typesetting
-        // again, so MathJax never has to re-scan content it already
-        // converted for a previous question (the source of the occasional
-        // typeset stall/error on the 2nd+ LaTeX question in a row).
         const target = this.$refs.questionCard;
         if (target && window.MathJax && window.MathJax.typesetClear) {
-          try { window.MathJax.typesetClear([target]); } catch (e) { /* nothing to clear yet */ }
+          try { window.MathJax.typesetClear([target]); } catch (e) { }
         }
         this._waitForMathJaxAndTypeset(0, startedAt, MIN_TRANSITION_MS, myToken);
       });
@@ -376,9 +342,6 @@ function practiceRunner() {
 
     _waitForMathJaxAndTypeset(attempt, startedAt, minMs, myToken) {
       const reveal = () => {
-        // A newer navigation happened since this call started — don't
-        // let a stale, late-resolving promise flip mathReady back on for
-        // a question the user has already left.
         if (myToken !== this._typesetToken) return;
         const elapsed = Date.now() - startedAt;
         const remaining = Math.max(0, minMs - elapsed);
@@ -388,30 +351,24 @@ function practiceRunner() {
         }, remaining);
       };
       if (window.MathJax && window.MathJax.typesetPromise) {
-        // Scoped to just this question's card instead of the whole
-        // document — faster and avoids re-typesetting unrelated content
-        // (palette strip, top bar, etc.) on every click.
         const target = this.$refs.questionCard;
         window.MathJax.typesetPromise(target ? [target] : undefined).then(reveal).catch(reveal);
       } else if (attempt < 40) {
-        // MathJax script is loaded with `async` in base.html, so on the very
-        // first question it may not be ready yet — poll briefly instead of
-        // giving up and flashing the raw \( \) text.
         setTimeout(() => this._waitForMathJaxAndTypeset(attempt + 1, startedAt, minMs, myToken), 50);
       } else {
-        reveal(); // give up after ~2s and just show the text
+        reveal();
       }
     },
 
     startTotalTimer() {
-      if (this.isFinished) return; // once finished, the clock never restarts
+      if (this.isFinished) return;
       this.totalTimerHandle = setInterval(() => {
         this.totalSeconds++;
       }, 1000);
     },
 
     startQuestionTimer() {
-      if (this.isFinished) return; // browsing questions in Review shouldn't tick a live timer
+      if (this.isFinished) return;
       if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
       const q = this.currentQuestion;
       this.activeQuestionId = q ? q.id : null;
@@ -424,21 +381,20 @@ function practiceRunner() {
       }, 1000);
     },
 
+    // SANGAM FIX: Kills timers immediately 
     stopTimers() {
       this.isFinished = true;
-      if (this.questionTimerHandle) clearInterval(this.questionTimerHandle);
-      if (this.totalTimerHandle) clearInterval(this.totalTimerHandle);
-      this.questionTimerHandle = null;
-      this.totalTimerHandle = null;
-      this.activeQuestionId = null; // belt-and-suspenders: even if some
-      // future code path calls the tick callback directly, there's no
-      // active question left to add seconds to once the attempt is over.
+      if (this.questionTimerHandle) {
+        clearInterval(this.questionTimerHandle);
+        this.questionTimerHandle = null;
+      }
+      if (this.totalTimerHandle) {
+        clearInterval(this.totalTimerHandle);
+        this.totalTimerHandle = null;
+      }
+      this.activeQuestionId = null;
     },
 
-    // "Back to Attempt" from the summary modal: closes the summary and
-    // Review mode, and drops the person back exactly where they were —
-    // the current question, still fully interactive to browse/re-check
-    // via the palette — instead of exiting to the chapter page.
     backToAttempt() {
       this.showSummary = false;
     },
@@ -450,91 +406,52 @@ function practiceRunner() {
       return m + ':' + s;
     },
 
-    get formattedQuestionTime() {
-      return this.formatSeconds(this.activeQuestionSeconds);
-    },
-
-    get formattedTotalTime() {
-      return this.formatSeconds(this.totalSeconds);
-    },
-
-    get currentQuestion() {
-      return this.questions[this.currentIndex] || null;
-    },
+    get formattedQuestionTime() { return this.formatSeconds(this.activeQuestionSeconds); },
+    get formattedTotalTime() { return this.formatSeconds(this.totalSeconds); },
+    get currentQuestion() { return this.questions[this.currentIndex] || null; },
 
     get score() {
       let s = 0;
-      for (const q of this.questions) {
-        if (this.answers[q.id] === q.correct_option) s++;
-      }
+      for (const q of this.questions) { if (this.answers[q.id] === q.correct_option) s++; }
       return s;
     },
 
     get wrongCount() {
       let w = 0;
-      for (const q of this.questions) {
-        const a = this.answers[q.id];
-        if (a != null && a !== q.correct_option) w++;
-      }
+      for (const q of this.questions) { const a = this.answers[q.id]; if (a != null && a !== q.correct_option) w++; }
       return w;
     },
 
     get skippedCount() {
       let s = 0;
-      for (const q of this.questions) {
-        if (this.answers[q.id] == null) s++;
-      }
+      for (const q of this.questions) { if (this.answers[q.id] == null) s++; }
       return s;
     },
 
-    get attemptedCount() {
-      return this.questions.length - this.skippedCount;
-    },
-
+    get attemptedCount() { return this.questions.length - this.skippedCount; },
     get accuracyLabel() {
       if (this.attemptedCount === 0) return 'No questions attempted';
       const pct = Math.round((this.score / this.attemptedCount) * 100);
       return pct + '% accuracy on ' + this.attemptedCount + ' attempted';
     },
-
-    get chapterLabel() {
-      return {{ chapter.name | tojson }} + ' · ' + {{ set_name | tojson }};
-    },
-
+    get chapterLabel() { return {{ chapter.name | tojson }} + ' · ' + {{ set_name | tojson }}; },
     get formattedAvgTime() {
       const n = this.questions.length || 1;
       return this.formatSeconds(Math.round(this.totalSeconds / n));
     },
 
-    // Picking an option only records the choice — it does NOT reveal
-    // right/wrong. That reveal only happens once the person hits
-    // "Submit Answer" (see submitAnswer below). Picking again before
-    // submitting just changes the pick, same as the mock test runner.
     pickOption(opt) {
       const q = this.currentQuestion;
-      // Locked once checked, and locked for good once the attempt is
-      // finished — a skipped question must stay skipped in Review, it
-      // can't quietly turn into an attempted one after scoring happened.
       if (!q || this.isChecked(q.id) || this.isFinished) return;
       this.selected[q.id] = opt;
     },
 
-    isChecked(questionId) {
-      return this.answers[questionId] != null;
-    },
+    isChecked(questionId) { return this.answers[questionId] != null; },
 
     submitAnswer() {
       const q = this.currentQuestion;
       if (!q || this.selected[q.id] == null || this.isChecked(q.id) || this.isFinished) return;
       this.answers[q.id] = this.selected[q.id];
-      // Re-typeset math inside the explanation, without touching
-      // mathReady — that flag fades the *entire* question card, which
-      // looks wrong here (the person just answered; the question and
-      // options shouldn't visually blink). The explanation panel already
-      // eases in on its own via x-transition. Tagged with the current
-      // nav token so a subsequent "Next" click (which clears+retypesets
-      // the whole card for the new question) can't collide with this
-      // call finishing late.
       const myToken = this._typesetToken;
       this.$nextTick(() => {
         if (myToken !== this._typesetToken) return;
@@ -545,13 +462,8 @@ function practiceRunner() {
       });
     },
 
-    toggleMark(questionId) {
-      this.marked[questionId] = !this.marked[questionId];
-    },
-
-    isMarked(questionId) {
-      return !!this.marked[questionId];
-    },
+    toggleMark(questionId) { if(questionId) this.marked[questionId] = !this.marked[questionId]; },
+    isMarked(questionId) { return questionId ? !!this.marked[questionId] : false; },
 
     jumpTo(idx) { this.currentIndex = idx; this.startQuestionTimer(); this.typesetMath(); },
     goNext() { if (this.currentIndex < this.questions.length - 1) { this.currentIndex++; this.startQuestionTimer(); this.typesetMath(); } },
@@ -560,26 +472,19 @@ function practiceRunner() {
     paletteClass(idx) {
       const q = this.questions[idx];
       const checked = this.answers[q.id];
-      if (checked != null) {
-        return checked === q.correct_option ? 'bg-green-600 text-white' : 'bg-red-600 text-white';
-      }
+      if (checked != null) return checked === q.correct_option ? 'bg-green-600 text-white' : 'bg-red-600 text-white';
       if (this.marked[q.id]) return 'bg-[#8A6A1F] text-[#F3E3B8]';
-      if (this.isFinished) return 'bg-transparent border border-dashed border-white/20 text-gray-500'; // skipped, attempt over
+      if (this.isFinished) return 'bg-transparent border border-dashed border-white/20 text-gray-500';
       if (this.selected[q.id] != null) return 'bg-white/20 text-white';
       return 'bg-[#2A2A2A] text-gray-400';
     },
 
     optionClass(opt) {
       const q = this.currentQuestion;
+      if (!q) return '';
       const checked = this.answers[q.id];
       if (checked == null) {
-        if (this.isFinished) {
-          // Review mode, question was skipped — nothing is pickable
-          // anymore. Flat, non-interactive look; no gold hover affordance
-          // since clicking does nothing now.
-          return 'border-white/5 bg-[#1a1a1a] text-gray-500 cursor-default opacity-60';
-        }
-        // Still attempting — just show which one is picked (no right/wrong).
+        if (this.isFinished) return 'border-white/5 bg-[#1a1a1a] text-gray-500 cursor-default opacity-60';
         return this.selected[q.id] === opt
           ? 'border-gold bg-gold/10 text-white cursor-pointer ring-1 ring-gold'
           : 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 hover:bg-[#222] cursor-pointer';
@@ -591,6 +496,7 @@ function practiceRunner() {
 
     optionBadgeClass(opt) {
       const q = this.currentQuestion;
+      if (!q) return '';
       const checked = this.answers[q.id];
       if (checked == null) {
         if (this.isFinished) return 'border-white/10 text-gray-600';
