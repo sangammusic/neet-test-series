@@ -43,12 +43,24 @@
   #practice-runner mjx-container { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
   #practice-runner mjx-container[display="true"] { margin: 0.6em 0; }
 
-  /* Diagram visibility overrides */
+  /* ---------------------------------------------------------------
+     DIAGRAM FIX (white-square bug)
+     Purana rule `img, svg { background:#fff !important }` ek hi
+     jagah laga di gayi thi. Raster <img> (JPEG/PNG scan) ko white
+     backdrop chahiye — warna dark theme par transparent PNG ka
+     background site ke kaale background se mix ho jata hai. Lekin
+     inline <svg> (diagram markup jo seedha question_text ke andar
+     aata hai) apne aap me ek complete drawing hai jiska apna
+     background aur stroke colors already sahi hain. Usi rule ko svg
+     par bhi force karne se, agar SVG white strokes / transparent
+     fill use kar raha ho, poora diagram white-on-white hokar GAAYAB
+     ho jata tha — yahi "safed square" bug tha.
+     Ab: sirf <img> ko white backdrop milega. <svg> apne colors ke
+     saath, bina forced background ke render hoga.
+     --------------------------------------------------------------- */
   #practice-runner .question-text img,
   #practice-runner .option-text img,
-  #practice-runner .explanation-text img,
-  #practice-runner .question-text svg,
-  #practice-runner .explanation-text svg {
+  #practice-runner .explanation-text img {
     background-color: #ffffff !important;
     border: 2px solid #9ca3af;
     border-radius: 0.5rem;
@@ -56,6 +68,16 @@
     display: block;
     margin: 1rem auto;
     max-height: 300px;
+    max-width: 100%;
+    height: auto;
+  }
+
+  #practice-runner .question-text svg,
+  #practice-runner .option-text svg,
+  #practice-runner .explanation-text svg {
+    display: block;
+    margin: 1rem auto;
+    max-height: 320px;
     max-width: 100%;
     height: auto;
   }
@@ -124,10 +146,19 @@
         <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium"
              x-html="rendered.question_text"></div>
 
-        <div x-show="currentQuestion?.image_url" class="my-6 mx-auto max-w-full flex justify-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
+        <div x-show="currentQuestion?.image_url" class="my-6 mx-auto max-w-full flex flex-col items-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
           <img :src="currentQuestion?.image_url || ''"
                class="max-h-[300px] w-auto max-w-full object-contain"
-               decoding="async" alt="Diagram" style="background-color: #ffffff !important;">
+               decoding="async" alt="Diagram" style="background-color: #ffffff !important;"
+               @load="onImageLoad($event, currentQuestion)"
+               @error="onImageError($event, currentQuestion)">
+          <!-- SANGAM DIAGNOSTIC: agar image load fail ho (broken URL, deleted
+               file, CORS block, etc.) to yeh khaali safed box ki jagah
+               spasht error dikhayega — silent white square ab kabhi nahi. -->
+          <p x-show="imageErrorIds[currentQuestion?.id]" x-cloak
+             class="text-xs font-semibold text-red-600 mt-2 text-center px-2">
+            ⚠ Diagram failed to load. <span class="underline">Report this question</span> — image link may be broken.
+          </p>
         </div>
 
         <div class="space-y-3.5">
@@ -319,6 +350,7 @@ function practiceRunner() {
     selected: {},
     answers: {},
     marked: {},
+    imageErrorIds: {},
     showFinishConfirm: false,
     showSummary: false,
     isFinished: false,
@@ -604,6 +636,31 @@ function practiceRunner() {
     },
 
     toggleMark(questionId) { if (questionId) this.marked[questionId] = !this.marked[questionId]; },
+
+    /* SANGAM DIAGNOSTIC: broken-image detector.
+       Pehle: image load fail hone par sirf khaali safed box dikhta tha,
+       koi signal nahi milta tha ki galti kahan hai (broken URL? deleted
+       file? CORS?). Ab load/error dono track hote hain aur ?debug=1 me
+       x-ray HUD par bhi likha jata hai — turant pata chal jayega ki
+       kaunsa question ka diagram actually broken hai vs sirf CSS issue. */
+    onImageLoad(evt, q) {
+      if (!q) return;
+      if (this.imageErrorIds[q.id]) delete this.imageErrorIds[q.id];
+      const img = evt.target;
+      // naturalWidth 0 matlab browser ne "load" fire kiya par asal me
+      // koi decode-able pixel data nahi hai (corrupt file) — usko bhi
+      // error jaisa treat karo.
+      if (img.naturalWidth === 0) { this.onImageError(evt, q); return; }
+      SangamQuiz.xray.set('image Q' + (this.currentIndex + 1),
+        'loaded ' + img.naturalWidth + 'x' + img.naturalHeight);
+    },
+
+    onImageError(evt, q) {
+      if (!q) return;
+      this.imageErrorIds[q.id] = true;
+      SangamQuiz.xray.warn('IMAGE FAILED for question', { id: q.id, url: q.image_url });
+      SangamQuiz.xray.set('image Q' + (this.currentIndex + 1), 'BROKEN ✗ ' + (q.image_url || 'no url'));
+    },
     isMarked(questionId) { return questionId ? !!this.marked[questionId] : false; },
 
     _goto(idx) {
