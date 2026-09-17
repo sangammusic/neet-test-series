@@ -309,6 +309,7 @@ function testAttempt() {
     submitError: null,
     mathLoaded: false, // Anti-flicker control flag
     needsTypeset: false, // true only when the current question actually contains LaTeX
+    _typesetToken: 0, // bumped on every navigation; stale typeset callbacks check this and no-op
     saveUrl: "{{ url_for('user.test_attempt_save_answer', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     submitUrl: "{{ url_for('user.test_attempt_submit', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     resultUrl: "{{ url_for('user.test_result', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
@@ -355,12 +356,28 @@ function testAttempt() {
       const q = this.currentQuestion;
       this.needsTypeset = this.questionHasMath(q);
 
+      // Bump a token every time we navigate. Any in-flight typeset callback
+      // from a PREVIOUS question checks this before touching mathLoaded —
+      // this is the fix for the black-screen-on-next issue on Physics/
+      // Chemistry: those subjects almost always contain LaTeX, so fast
+      // "Next" clicks were starting a new typesetPromise() before the
+      // previous one had resolved. MathJax processes its queue serially,
+      // so the new call sat waiting behind the old one — and worse, when
+      // it did run, it could scan a DOM node MathJax had already converted
+      // once (leftover mjx-container wrappers from the prior question),
+      // which MathJax can choke on and only recover from via its slower
+      // .catch() path. Both added up to the visible ~1s blank freeze.
+      // Biology questions rarely contain LaTeX, so they always took the
+      // instant "!needsTypeset" path below and never hit any of this.
+      const myToken = ++this._typesetToken;
+
       // No LaTeX on this question at all — skip the cloak/fade dance
       // entirely so "Next" is instant, which is the common case (most
       // questions are plain text). This is the actual fix for the
-      // blank-screen-on-next issue: previously every navigation cloaked
-      // (opacity: 0) regardless of whether MathJax had anything to do,
-      // so even plain-text questions produced a guaranteed blank flash.
+      // original blank-screen-on-next issue: previously every navigation
+      // cloaked (opacity: 0) regardless of whether MathJax had anything
+      // to do, so even plain-text questions produced a guaranteed blank
+      // flash.
       if (!this.needsTypeset) {
         this.mathLoaded = true;
         return;
@@ -378,15 +395,31 @@ function testAttempt() {
       // MathJax took 2ms or 200ms.
       const MIN_TRANSITION_MS = 120;
       this.$nextTick(() => {
-        this._waitForMathJaxAndTypeset(0, startedAt, MIN_TRANSITION_MS);
+        // Clear any leftover MathJax output on this card BEFORE typesetting
+        // again, so MathJax never has to re-scan content it already
+        // converted on a previous question. Without this, re-typesetting
+        // the same reused DOM node is what causes MathJax's occasional
+        // "Math input error" / stall on the second+ LaTeX question in a row.
+        const target = this.$refs.questionCard;
+        if (target && window.MathJax && window.MathJax.typesetClear) {
+          try { window.MathJax.typesetClear([target]); } catch (e) { /* first-ever call, nothing to clear yet */ }
+        }
+        this._waitForMathJaxAndTypeset(0, startedAt, MIN_TRANSITION_MS, myToken);
       });
     },
 
-    _waitForMathJaxAndTypeset(attempt, startedAt, minMs) {
+    _waitForMathJaxAndTypeset(attempt, startedAt, minMs, myToken) {
       const reveal = () => {
+        // A newer navigation has happened since this call started —
+        // don't let a stale, late-resolving promise flip mathLoaded back
+        // on for a question the user has already left.
+        if (myToken !== this._typesetToken) return;
         const elapsed = Date.now() - startedAt;
         const remaining = Math.max(0, minMs - elapsed);
-        setTimeout(() => { this.mathLoaded = true; }, remaining);
+        setTimeout(() => {
+          if (myToken !== this._typesetToken) return;
+          this.mathLoaded = true;
+        }, remaining);
       };
       if (window.MathJax && window.MathJax.typesetPromise) {
         // Scoped to just this question's card instead of the whole
@@ -399,7 +432,7 @@ function testAttempt() {
         // MathJax is loaded with `async` in base.html, so on the very first
         // question it may not be ready yet — poll briefly instead of giving
         // up and flashing raw \( \) LaTeX text.
-        setTimeout(() => this._waitForMathJaxAndTypeset(attempt + 1, startedAt, minMs), 50);
+        setTimeout(() => this._waitForMathJaxAndTypeset(attempt + 1, startedAt, minMs, myToken), 50);
       } else {
         reveal(); // give up after ~2s and just show the text
       }
