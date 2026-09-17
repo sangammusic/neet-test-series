@@ -1,8 +1,9 @@
 import re
 from flask import render_template, request, redirect, url_for, session, jsonify, abort, flash
+from supabase import create_client
 
 from app.user import user_bp
-from app.extensions import supabase_admin, supabase_public
+from app.extensions import supabase_admin, supabase_public, SUPABASE_URL, SUPABASE_ANON_KEY
 from app.shared.models import (
     get_active_streams, get_streams_for_user_or_guest, get_stream_by_slug,
     get_subjects_for_stream, get_chapters_for_subject, get_chapter_by_id,
@@ -586,6 +587,58 @@ def change_username():
     return jsonify({"ok": True, "username": new_username, "message": "Username updated successfully."})
 
 
+def _verify_current_password(user_id, current_password, username):
+    """
+    Returns True if `current_password` is correct for the given user,
+    False otherwise. Always verifies via a real sign-in attempt against
+    a brand-new, isolated Supabase client — see change_password's
+    original comment for why: the shared `supabase_public` client's
+    internal session state is mutated by sign_in_with_password, and
+    since that client is a single global object shared by every
+    concurrent request, two sign-ins happening at the same time (e.g.
+    another user logging in right as this check runs) could clobber
+    each other and make a correct password look wrong. A fresh,
+    throwaway client has its own isolated session and can't be affected
+    by, or affect, any other request.
+    """
+    dummy_email = f"{username}@sangam.local"
+    try:
+        verify_client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        verify_result = verify_client.auth.sign_in_with_password(
+            {"email": dummy_email, "password": current_password}
+        )
+        return bool(verify_result and verify_result.session)
+    except Exception:
+        return False
+
+
+@user_bp.route("/settings/verify-password", methods=["POST"])
+def verify_password():
+    """
+    Checks the current password WITHOUT changing anything. Backs the
+    "unlock" step in the settings UI: the New Password field only
+    appears after this returns ok=True, so a user can never even see
+    the new-password form without first proving they know the current
+    one.
+    """
+    if not is_logged_in():
+        return jsonify({"ok": False, "error": "Not logged in."}), 401
+
+    user_id = current_user_id()
+    current_password = request.form.get("current_password", "")
+
+    if not current_password:
+        return jsonify({"ok": False, "error": "Please enter your current password."}), 400
+
+    profile_res = supabase_admin.table("profiles").select("username").eq("id", user_id).execute()
+    username = (profile_res.data[0].get("username") if profile_res.data else None) or ""
+
+    if not _verify_current_password(user_id, current_password, username):
+        return jsonify({"ok": False, "error": "Incorrect password. Please try again."}), 401
+
+    return jsonify({"ok": True})
+
+
 @user_bp.route("/settings/password", methods=["POST"])
 def change_password():
     """
@@ -615,19 +668,8 @@ def change_password():
 
     profile_res = supabase_admin.table("profiles").select("username").eq("id", user_id).execute()
     username = (profile_res.data[0].get("username") if profile_res.data else None) or ""
-    dummy_email = f"{username}@sangam.local"
 
-    # Verify the current password is actually correct by attempting a real
-    # sign-in with it, using the ANON-key client so this never bypasses
-    # Supabase's own password check. We never trust a client-supplied
-    # "yes this is correct" — this is the only way to be sure.
-    try:
-        verify_result = supabase_public.auth.sign_in_with_password(
-            {"email": dummy_email, "password": current_password}
-        )
-        if not verify_result or not verify_result.session:
-            raise ValueError("no session")
-    except Exception:
+    if not _verify_current_password(user_id, current_password, username):
         return jsonify({"ok": False, "error": "Your current password is incorrect."}), 401
 
     try:
@@ -636,3 +678,64 @@ def change_password():
         return jsonify({"ok": False, "error": "Something went wrong while updating your password. Please try again."}), 500
 
     return jsonify({"ok": True, "message": "Password updated successfully."})
+
+
+@user_bp.route("/settings/delete-account", methods=["POST"])
+def delete_account():
+    """
+    Permanently deletes the logged-in user's account.
+
+    Requires the current password, re-verified the same way as
+    change_password (a real sign-in attempt against a fresh, isolated
+    client — never trusted from the client). This is a destructive,
+    irreversible action, so we do not accept "yes I confirmed on the
+    frontend" as proof; the password is checked again here regardless
+    of what the UI already showed the user.
+
+    Deleting the Supabase Auth user cascades (via `profiles.id
+    references auth.users(id) on delete cascade` and the various
+    `... references profiles(id) on delete cascade` foreign keys in
+    schema.sql) to remove: the profile row, their test_attempts,
+    attempt_answers, transactions, test_access_grants, and
+    user_streams rows. Nothing about other users' data is touched.
+
+    Note: if this account ever created content as an admin (chapters,
+    questions, tests, or mock_questions via their `created_by` column),
+    Postgres will refuse the delete with a foreign key violation, since
+    those `created_by` columns have no ON DELETE behavior defined. We
+    catch that and return a clear explanation instead of a raw database
+    error — self-service delete should never be able to silently orphan
+    or destroy content other users depend on.
+    """
+    if not is_logged_in():
+        return jsonify({"ok": False, "error": "Not logged in."}), 401
+
+    user_id = current_user_id()
+    current_password = request.form.get("current_password", "")
+
+    if not current_password:
+        return jsonify({"ok": False, "error": "Please enter your current password to confirm."}), 400
+
+    profile_res = supabase_admin.table("profiles").select("username").eq("id", user_id).execute()
+    username = (profile_res.data[0].get("username") if profile_res.data else None) or ""
+
+    if not _verify_current_password(user_id, current_password, username):
+        return jsonify({"ok": False, "error": "Your current password is incorrect."}), 401
+
+    try:
+        supabase_admin.auth.admin.delete_user(user_id)
+    except Exception as exc:
+        error_msg = str(exc).lower()
+        if "foreign key" in error_msg or "violates" in error_msg:
+            return jsonify({
+                "ok": False,
+                "error": "This account can't be deleted because it has created content (tests, "
+                         "questions, or streams) that other users depend on. Please contact an "
+                         "administrator to transfer or remove that content first."
+            }), 409
+        return jsonify({"ok": False, "error": "Something went wrong while deleting your account. Please try again."}), 500
+
+    # Account is gone — clear the session so nothing about this browser
+    # still thinks the (now-deleted) user is logged in.
+    session.clear()
+    return jsonify({"ok": True, "message": "Your account has been permanently deleted.", "redirect": url_for("user.landing")})
