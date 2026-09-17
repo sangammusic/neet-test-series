@@ -182,7 +182,13 @@
         <img :src="currentQuestion?.image_url || ''"
              x-show="currentQuestion?.image_url"
              decoding="async"
-             class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-6 shadow-sm" alt="Diagram">
+             class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-6 shadow-sm" alt="Diagram"
+             @load="onImageLoad($event, currentQuestion)"
+             @error="onImageError($event, currentQuestion)">
+        <p x-show="currentQuestion && imageErrorIds[currentQuestion.id]" x-cloak
+           class="text-xs font-semibold text-red-400 text-center -mt-4 mb-4">
+          ⚠ Diagram failed to load — image link may be broken.
+        </p>
 
         <div class="space-y-3.5">
           <template x-for="opt in ['A','B','C','D']" :key="opt">
@@ -315,6 +321,7 @@ function testAttempt() {
     currentSubject: null,
     currentIndexInSubject: 0,
     progress: {},
+    imageErrorIds: {},
     timeSpent: {},
     activeQuestionId: null,
     activeQuestionSeconds: 0,
@@ -658,6 +665,21 @@ function testAttempt() {
         };
       }
       this.persist(questionId);
+    },
+
+    onImageLoad(evt, q) {
+      if (!q) return;
+      if (this.imageErrorIds[q.id]) delete this.imageErrorIds[q.id];
+      const img = evt.target;
+      if (img.naturalWidth === 0) { this.onImageError(evt, q); return; }
+      SangamQuiz.xray.set('image', 'loaded ' + img.naturalWidth + 'x' + img.naturalHeight);
+    },
+
+    onImageError(evt, q) {
+      if (!q) return;
+      this.imageErrorIds[q.id] = true;
+      SangamQuiz.xray.warn('IMAGE FAILED for question', { id: q.id, url: q.image_url });
+      SangamQuiz.xray.set('image', 'BROKEN ✗ ' + (q.image_url || 'no url'));
     },
 
     toggleMark(questionId) {
