@@ -23,9 +23,14 @@
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
   /* Anti-flicker wrapper styling for MathJax / LaTeX.
-     Transition both directions (fade OUT on question change, fade IN once
-     MathJax has re-typeset) so the swap always eases instead of snapping —
-     paired with the MIN_TRANSITION_MS floor in typesetMath() below. */
+     Only questions that actually contain LaTeX get cloaked while MathJax
+     typesets (see needsTypeset() in the script below) — plain-text
+     questions render immediately with no fade at all, so "Next" never
+     produces a blank flash on the majority of questions that have no
+     math in them. Transition both directions (fade OUT on question
+     change, fade IN once MathJax has re-typeset) so the swap always
+     eases instead of snapping — paired with the MIN_TRANSITION_MS floor
+     in typesetMath() below. */
   .math-cloak { opacity: 0; transition: opacity 0.12s ease-out; }
   .math-ready { opacity: 1; transition: opacity 0.15s ease-in; }
 
@@ -107,7 +112,7 @@
   <!-- Main question area (Anti-flicker container applied) -->
   <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
     <template x-if="currentQuestion">
-      <div class="animate-fade-in math-cloak" :class="{ 'math-ready': mathLoaded }">
+      <div class="animate-fade-in" :class="needsTypeset ? (mathLoaded ? 'math-ready math-cloak' : 'math-cloak') : ''" x-ref="questionCard">
         <div class="flex items-center justify-between mb-5">
           <div class="flex items-center gap-3">
             <p class="text-sm font-semibold text-gray-300">
@@ -303,6 +308,7 @@ function testAttempt() {
     submitting: false,
     submitError: null,
     mathLoaded: false, // Anti-flicker control flag
+    needsTypeset: false, // true only when the current question actually contains LaTeX
     saveUrl: "{{ url_for('user.test_attempt_save_answer', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     submitUrl: "{{ url_for('user.test_attempt_submit', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     resultUrl: "{{ url_for('user.test_result', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
@@ -331,7 +337,35 @@ function testAttempt() {
       this.typesetMath();
     },
 
+    // Cheap textual check for LaTeX delimiters across everything this
+    // question renders with x-html (question text, all 4 options). Plain
+    // string search — fast, no regex backtracking risk — run once per
+    // navigation so we know whether there is anything for MathJax to do
+    // at all.
+    questionHasMath(q) {
+      if (!q) return false;
+      const parts = [q.question_text, q.option_a, q.option_b, q.option_c, q.option_d];
+      return parts.some(p => typeof p === 'string' && (
+        p.includes('\\(') || p.includes('\\[') || p.includes('$$') ||
+        /\$[^$]+\$/.test(p)
+      ));
+    },
+
     typesetMath() {
+      const q = this.currentQuestion;
+      this.needsTypeset = this.questionHasMath(q);
+
+      // No LaTeX on this question at all — skip the cloak/fade dance
+      // entirely so "Next" is instant, which is the common case (most
+      // questions are plain text). This is the actual fix for the
+      // blank-screen-on-next issue: previously every navigation cloaked
+      // (opacity: 0) regardless of whether MathJax had anything to do,
+      // so even plain-text questions produced a guaranteed blank flash.
+      if (!this.needsTypeset) {
+        this.mathLoaded = true;
+        return;
+      }
+
       this.mathLoaded = false;
       const startedAt = Date.now();
       // A fixed floor on how long the fade-out stays visible before the new
@@ -355,7 +389,12 @@ function testAttempt() {
         setTimeout(() => { this.mathLoaded = true; }, remaining);
       };
       if (window.MathJax && window.MathJax.typesetPromise) {
-        window.MathJax.typesetPromise().then(reveal).catch(reveal);
+        // Scoped to just this question's card instead of the whole
+        // document — faster (MathJax isn't re-scanning the palette strip,
+        // top bar, modals, etc. on every click) and avoids any chance of
+        // re-typesetting content that shouldn't change.
+        const target = this.$refs.questionCard;
+        window.MathJax.typesetPromise(target ? [target] : undefined).then(reveal).catch(reveal);
       } else if (attempt < 40) {
         // MathJax is loaded with `async` in base.html, so on the very first
         // question it may not be ready yet — poll briefly instead of giving
