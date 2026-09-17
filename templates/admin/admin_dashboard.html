@@ -215,7 +215,134 @@
 
         </div>
 
-        <!-- Minimalist Overall DB Stats (Consolidated at the bottom to remove clutter) -->
+        <!-- 3. BROKEN DIAGRAM SCANNER
+             SANGAM FIX: Students were hitting "Diagram failed to load"
+             warnings mid-test with no way for the admin to know how many
+             questions were affected or why. This panel actually opens
+             every stored image_url + cross-checks the Storage bucket and
+             lists exactly which questions are broken, so they can be
+             cleared in one click instead of discovering them one at a
+             time while a student is mid-exam. -->
+        <div class="bg-[#111622] border border-white/10 rounded-3xl p-8 shadow-xl mt-8">
+            <div class="mb-6 border-b border-white/10 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="font-display text-2xl font-bold text-white mb-2 flex items-center gap-3">
+                        <svg class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                        Broken Diagram Scanner
+                    </h2>
+                    <p class="text-sm text-gray-400 font-medium">Checks every question's diagram URL against the live server and the storage bucket, so a "diagram failed to load" a student hits mid-test never has to be tracked down blind.</p>
+                </div>
+                <button id="scan-broken-images-btn" onclick="scanBrokenImages()"
+                    class="shrink-0 text-sm font-bold bg-gold/10 text-gold border border-gold/30 hover:bg-gold hover:text-ink px-6 py-3 rounded-xl transition-all whitespace-nowrap">
+                    Scan All Diagrams
+                </button>
+            </div>
+
+            <div id="broken-images-status" class="text-sm text-gray-500 font-medium"></div>
+            <div id="broken-images-results" class="mt-4 space-y-2 max-h-[420px] overflow-y-auto"></div>
+            <div id="broken-images-actions" class="hidden mt-5 pt-5 border-t border-white/10 flex items-center justify-between">
+                <label class="flex items-center gap-2 text-sm text-gray-400 font-medium">
+                    <input type="checkbox" id="broken-images-select-all" onchange="toggleAllBroken(this)" class="rounded border-white/20 bg-[#080b12]">
+                    Select all
+                </label>
+                <button onclick="clearSelectedBroken()"
+                    class="text-sm font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white px-5 py-2.5 rounded-xl transition-all">
+                    Clear Selected Diagrams
+                </button>
+            </div>
+        </div>
+
+        <script>
+        let _brokenImagesData = null;
+
+        async function scanBrokenImages() {
+            const btn = document.getElementById('scan-broken-images-btn');
+            const status = document.getElementById('broken-images-status');
+            const results = document.getElementById('broken-images-results');
+            const actions = document.getElementById('broken-images-actions');
+
+            btn.disabled = true;
+            btn.textContent = 'Scanning… (this checks every diagram URL live, may take a moment)';
+            status.textContent = '';
+            results.innerHTML = '';
+            actions.classList.add('hidden');
+
+            try {
+                const res = await fetch("{{ url_for('admin.diagnostics_broken_images') }}");
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error || 'scan failed');
+
+                _brokenImagesData = data;
+
+                if (data.total_broken === 0) {
+                    status.innerHTML = '<span class="text-emerald-400 font-bold">✓ All diagrams are healthy — 0 broken links found.</span>';
+                    btn.textContent = 'Scan All Diagrams';
+                    btn.disabled = false;
+                    return;
+                }
+
+                status.innerHTML = '<span class="text-red-400 font-bold">' + data.total_broken + ' broken diagram(s) found' +
+                    (data.bucket_listing_available ? '' : ' <span class="text-gray-500 font-normal">(bucket cross-check unavailable — HTTP status only)</span>') + '.</span>';
+
+                const rows = [];
+                for (const table of ['questions', 'mock_questions']) {
+                    for (const row of (data[table] || [])) {
+                        rows.push({ table, ...row });
+                    }
+                }
+
+                results.innerHTML = rows.map((r, i) => `
+                    <label class="flex items-start gap-3 p-3 bg-[#080b12] rounded-xl border border-white/5 cursor-pointer hover:border-red-500/30 transition-colors">
+                        <input type="checkbox" class="broken-img-check mt-1 rounded border-white/20 bg-[#080b12]" data-table="${r.table}" data-id="${r.id}" checked>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">${r.table === 'mock_questions' ? 'Mock Question' : 'Practice Question'}</p>
+                            <p class="text-sm text-gray-200 truncate">${(r.question_text || '(no text)').replace(/</g, '&lt;')}</p>
+                            <p class="text-xs text-gray-500 mt-1 font-mono truncate">${r.image_url}</p>
+                            <p class="text-xs mt-1 ${r.object_in_bucket === false ? 'text-red-400' : 'text-amber-400'}">
+                                HTTP: ${r.http_status}${r.object_in_bucket === false ? ' · object missing from bucket' : ''}
+                            </p>
+                        </div>
+                    </label>
+                `).join('');
+
+                actions.classList.remove('hidden');
+                btn.textContent = 'Scan All Diagrams';
+                btn.disabled = false;
+            } catch (e) {
+                status.innerHTML = '<span class="text-red-400 font-bold">Scan failed: ' + e.message + '</span>';
+                btn.textContent = 'Scan All Diagrams';
+                btn.disabled = false;
+            }
+        }
+
+        function toggleAllBroken(master) {
+            document.querySelectorAll('.broken-img-check').forEach(cb => { cb.checked = master.checked; });
+        }
+
+        async function clearSelectedBroken() {
+            const checked = [...document.querySelectorAll('.broken-img-check:checked')];
+            if (checked.length === 0) { alert('Nothing selected.'); return; }
+            if (!confirm('This will remove the diagram from ' + checked.length + ' question(s) — the question text/options stay, only the broken image is cleared. Proceed?')) return;
+
+            const payload = { questions: [], mock_questions: [] };
+            checked.forEach(cb => payload[cb.dataset.table].push({ id: cb.dataset.id }));
+
+            const res = await fetch("{{ url_for('admin.diagnostics_clear_broken_images') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                alert('Cleared: ' + data.cleared.questions + ' practice question(s), ' + data.cleared.mock_questions + ' mock question(s).');
+                scanBrokenImages();
+            } else {
+                alert('Clear failed: ' + (data.error || 'unknown error'));
+            }
+        }
+        </script>
+
+
         <div class="mt-8 flex flex-wrap items-center justify-center gap-6 bg-[#111622] border border-white/5 rounded-2xl p-6 shadow-sm">
             <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">Database Content:</span>
             {% for label, key in [('Streams','streams'), ('Subjects','subjects'), ('Chapters','chapters'), ('Questions','questions'), ('Tests','tests')] %}
