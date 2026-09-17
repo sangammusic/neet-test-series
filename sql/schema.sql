@@ -265,12 +265,21 @@ create table if not exists attempt_answers (
     )
 );
 
--- Unique indexes to support Supabase UPSERT (on_conflict) logic safely
-create unique index if not exists uq_attempt_answers_chapter 
-    on attempt_answers(attempt_id, question_id) where question_id is not null;
-    
-create unique index if not exists uq_attempt_answers_mock 
-    on attempt_answers(attempt_id, mock_question_id) where mock_question_id is not null;
+-- Unique CONSTRAINTS (not partial indexes) to support Supabase UPSERT
+-- (on_conflict) logic. ON CONFLICT can only target a real unique
+-- constraint or a non-partial unique index — a partial index (e.g.
+-- "... where mock_question_id is not null") looks like it enforces
+-- the same uniqueness but is invisible to ON CONFLICT's constraint
+-- matching, and Postgres raises 42P10 ("no unique or exclusion
+-- constraint matching the ON CONFLICT specification") on every upsert.
+-- NULLs are naturally distinct under a unique constraint, so no WHERE
+-- clause is needed even though question_id/mock_question_id are
+-- nullable.
+alter table attempt_answers
+    add constraint uq_attempt_answers_chapter_conflict unique (attempt_id, question_id);
+
+alter table attempt_answers
+    add constraint uq_attempt_answers_mock_conflict unique (attempt_id, mock_question_id);
 
 -- ---------- TRANSACTIONS (manual UTR-based payment verification) ----------
 create table if not exists transactions (
