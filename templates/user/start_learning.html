@@ -1,0 +1,18 @@
+{% extends "shared/base.html" %}
+{% block title %}Welcome — SANGAM STUDY{% endblock %}
+
+{% block content %}
+<section class="max-w-2xl mx-auto px-6 pt-20 pb-24 text-center">
+    <p class="text-gold font-semibold text-sm tracking-wide mb-3">YOU'RE ALL SET</p>
+    <h1 class="font-display text-4xl font-semibold mb-4 text-ink">Welcome to Sangam Study</h1>
+    <p class="text-ink/60 mb-12 max-w-md mx-auto">
+        Mock test series, chapter-wise practice, and PYQs for NEET and JEE —
+        all in one place. Let's set up your board and start preparing.
+    </p>
+
+    <a href="{{ url_for('user.stream_select') }}"
+       class="inline-block bg-ink text-paper px-10 py-4 rounded-sm font-semibold text-lg hover:bg-ink-light transition-colors">
+        Start Learning
+    </a>
+</section>
+{% endblock %}
