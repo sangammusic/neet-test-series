@@ -22,9 +22,12 @@
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-  /* Anti-flicker wrapper styling for MathJax / LaTeX */
-  .math-cloak { opacity: 0; transition: opacity 0.15s ease-in; }
-  .math-ready { opacity: 1; }
+  /* Anti-flicker wrapper styling for MathJax / LaTeX.
+     Transition both directions (fade OUT on question change, fade IN once
+     MathJax has re-typeset) so the swap always eases instead of snapping —
+     paired with the MIN_TRANSITION_MS floor in typesetMath() below. */
+  .math-cloak { opacity: 0; transition: opacity 0.12s ease-out; }
+  .math-ready { opacity: 1; transition: opacity 0.15s ease-in; }
 
   /* This page is a distraction-free full-screen runner — the global
      footer is still included by base.html, so hide it here with a scoped rule. */
@@ -330,17 +333,37 @@ function testAttempt() {
 
     typesetMath() {
       this.mathLoaded = false;
+      const startedAt = Date.now();
+      // A fixed floor on how long the fade-out stays visible before the new
+      // content fades in. Without this, when MathJax resolves in a few ms
+      // (common once it's warmed up), mathLoaded flips back to true almost
+      // instantly and the CSS opacity transition never gets time to play —
+      // the content just snaps back, which reads as a flash/flicker even
+      // though the fade classes are correct. Holding for a small minimum
+      // guarantees the fade is always visible and feels the same, whether
+      // MathJax took 2ms or 200ms.
+      const MIN_TRANSITION_MS = 120;
       this.$nextTick(() => {
-        if (window.MathJax && window.MathJax.typesetPromise) {
-          window.MathJax.typesetPromise().then(() => {
-            this.mathLoaded = true;
-          }).catch(() => {
-            this.mathLoaded = true;
-          });
-        } else {
-          this.mathLoaded = true;
-        }
+        this._waitForMathJaxAndTypeset(0, startedAt, MIN_TRANSITION_MS);
       });
+    },
+
+    _waitForMathJaxAndTypeset(attempt, startedAt, minMs) {
+      const reveal = () => {
+        const elapsed = Date.now() - startedAt;
+        const remaining = Math.max(0, minMs - elapsed);
+        setTimeout(() => { this.mathLoaded = true; }, remaining);
+      };
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise().then(reveal).catch(reveal);
+      } else if (attempt < 40) {
+        // MathJax is loaded with `async` in base.html, so on the very first
+        // question it may not be ready yet — poll briefly instead of giving
+        // up and flashing raw \( \) LaTeX text.
+        setTimeout(() => this._waitForMathJaxAndTypeset(attempt + 1, startedAt, minMs), 50);
+      } else {
+        reveal(); // give up after ~2s and just show the text
+      }
     },
 
     get currentSubjectQuestions() {
@@ -493,10 +516,25 @@ function testAttempt() {
       this.goNext();
     },
 
+    // Shared retry helper: retries a fetch a few times with a short backoff
+    // before giving up, so a single dropped packet or momentary connection
+    // blip (common on mobile / low battery, as in a spotty-network session)
+    // doesn't silently lose an answer or strand a full submission.
+    fetchWithRetry(url, options, attempts = 3, delayMs = 600) {
+      return fetch(url, options).then(res => {
+        if (!res.ok) throw new Error('request failed: ' + res.status);
+        return res;
+      }).catch(err => {
+        if (attempts <= 1) throw err;
+        return new Promise(resolve => setTimeout(resolve, delayMs))
+          .then(() => this.fetchWithRetry(url, options, attempts - 1, delayMs * 2));
+      });
+    },
+
     persist(questionId) {
       const entry = this.progress[questionId];
       if (!entry) return;
-      fetch(this.saveUrl, {
+      this.fetchWithRetry(this.saveUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -505,7 +543,11 @@ function testAttempt() {
           status: entry.status,
           time_taken_sec: this.timeSpent[questionId] || 0,
         }),
-      }).catch(() => {});
+      }, 3, 500).catch(() => {
+        // Autosave is best-effort per-question; the full answer set is
+        // resent anyway on final submit (see submitTest), so a failure
+        // here after retries is not fatal — just don't crash the UI.
+      });
     },
 
     goNext() {
@@ -589,21 +631,22 @@ function testAttempt() {
         }
       }
 
-      fetch(this.submitUrl, {
+      // Retries with backoff before surfacing the error banner — a
+      // 127-answer submission is exactly the kind of request that
+      // shouldn't be lost to one dropped packet or a momentary drop
+      // in signal, so it gets a few extra tries first.
+      this.fetchWithRetry(this.submitUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers }),
-      })
-        .then(res => {
-          if (!res.ok) throw new Error('submit failed');
-          return res.json();
-        })
+      }, 4, 800)
+        .then(res => res.json())
         .then(data => {
           window.location.href = data.redirect || this.resultUrl;
         })
         .catch(() => {
           this.submitting = false;
-          this.submitError = "Couldn't submit — check your connection and try again.";
+          this.submitError = "Couldn't submit — check your connection and try again. Your answers are saved, so it's safe to retry.";
         });
     },
   };
