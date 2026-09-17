@@ -27,17 +27,12 @@
      typesets (see needsTypeset() in the script below) — plain-text
      questions render immediately with no fade at all, so "Next" never
      produces a blank flash on the majority of questions that have no
-     math in them.
-
-     IMPORTANT: cloaking (hiding the old/raw content) must be INSTANT —
-     no transition — otherwise the moment .math-ready is added back on
-     top of .math-cloak, both an opacity:0->something transition and a
-     opacity:something->1 transition can be in flight on the same
-     property at once, and the element can visually get stuck at
-     opacity:0 for a frame (the "black flash" / raw-bracket flash).
-     Only the REVEAL (math-cloak -> math-cloak.math-ready) animates. */
-  .math-cloak { opacity: 0; }
-  .math-cloak.math-ready { opacity: 1; transition: opacity 0.15s ease-in; }
+     math in them. Transition both directions (fade OUT on question
+     change, fade IN once MathJax has re-typeset) so the swap always
+     eases instead of snapping — paired with the MIN_TRANSITION_MS floor
+     in typesetMath() below. */
+  .math-cloak { opacity: 0; transition: opacity 0.12s ease-out; }
+  .math-ready { opacity: 1; transition: opacity 0.15s ease-in; }
 
   /* This page is a distraction-free full-screen runner — the global
      footer is still included by base.html, so hide it here with a scoped rule. */
@@ -117,7 +112,7 @@
   <!-- Main question area (Anti-flicker container applied) -->
   <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
     <template x-if="currentQuestion">
-      <div class="animate-fade-in" :class="needsTypeset ? (mathLoaded ? 'math-cloak math-ready' : 'math-cloak') : ''" x-ref="questionCard">
+      <div class="animate-fade-in" :class="needsTypeset ? (mathLoaded ? 'math-ready math-cloak' : 'math-cloak') : ''" x-ref="questionCard">
         <div class="flex items-center justify-between mb-5">
           <div class="flex items-center gap-3">
             <p class="text-sm font-semibold text-gray-300">
@@ -357,18 +352,24 @@ function testAttempt() {
       ));
     },
 
-    // token/precomputedNeedsTypeset are passed in by navigateTo(), which
-    // already set this.needsTypeset and pre-cloaked (mathLoaded=false)
-    // BEFORE the question index changed, so the DOM never paints raw
-    // un-typeset LaTeX. Falls back to computing them itself when called
-    // directly (e.g. from init(), where there's no "previous" render to
-    // race against).
-    typesetMath(token, precomputedNeedsTypeset) {
-      const myToken = token !== undefined ? token : ++this._typesetToken;
-      const needsTypeset = precomputedNeedsTypeset !== undefined
-        ? precomputedNeedsTypeset
-        : this.questionHasMath(this.currentQuestion);
-      this.needsTypeset = needsTypeset;
+    typesetMath() {
+      const q = this.currentQuestion;
+      this.needsTypeset = this.questionHasMath(q);
+
+      // Bump a token every time we navigate. Any in-flight typeset callback
+      // from a PREVIOUS question checks this before touching mathLoaded —
+      // this is the fix for the black-screen-on-next issue on Physics/
+      // Chemistry: those subjects almost always contain LaTeX, so fast
+      // "Next" clicks were starting a new typesetPromise() before the
+      // previous one had resolved. MathJax processes its queue serially,
+      // so the new call sat waiting behind the old one — and worse, when
+      // it did run, it could scan a DOM node MathJax had already converted
+      // once (leftover mjx-container wrappers from the prior question),
+      // which MathJax can choke on and only recover from via its slower
+      // .catch() path. Both added up to the visible ~1s blank freeze.
+      // Biology questions rarely contain LaTeX, so they always took the
+      // instant "!needsTypeset" path below and never hit any of this.
+      const myToken = ++this._typesetToken;
 
       // No LaTeX on this question at all — skip the cloak/fade dance
       // entirely so "Next" is instant, which is the common case (most
@@ -377,7 +378,7 @@ function testAttempt() {
       // cloaked (opacity: 0) regardless of whether MathJax had anything
       // to do, so even plain-text questions produced a guaranteed blank
       // flash.
-      if (!needsTypeset) {
+      if (!this.needsTypeset) {
         this.mathLoaded = true;
         return;
       }
@@ -509,33 +510,19 @@ function testAttempt() {
     },
 
     switchSubject(subject) {
-      const nextQuestion = (this.questionsBySubject[subject] || [])[0];
-      const nextNeedsTypeset = this.questionHasMath(nextQuestion);
-      const myToken = ++this._typesetToken;
-
-      this.needsTypeset = nextNeedsTypeset;
-      if (nextNeedsTypeset) this.mathLoaded = false;
-
       this.currentSubject = subject;
       this.currentIndexInSubject = 0;
       this.markVisited();
       this.startQuestionTimer();
-      this.typesetMath(myToken, nextNeedsTypeset);
+      this.typesetMath();
     },
 
     jumpTo(subject, idx) {
-      const nextQuestion = (this.questionsBySubject[subject] || [])[idx];
-      const nextNeedsTypeset = this.questionHasMath(nextQuestion);
-      const myToken = ++this._typesetToken;
-
-      this.needsTypeset = nextNeedsTypeset;
-      if (nextNeedsTypeset) this.mathLoaded = false;
-
       this.currentSubject = subject;
       this.currentIndexInSubject = idx;
       this.markVisited();
       this.startQuestionTimer();
-      this.typesetMath(myToken, nextNeedsTypeset);
+      this.typesetMath();
     },
 
     markVisited() {
@@ -637,38 +624,20 @@ function testAttempt() {
 
     goNext() {
       if (this.currentIndexInSubject < this.currentSubjectQuestions.length - 1) {
-        this.navigateTo(this.currentIndexInSubject + 1);
+        this.currentIndexInSubject++;
+        this.markVisited();
+        this.startQuestionTimer();
+        this.typesetMath();
       }
     },
 
     goPrev() {
       if (this.currentIndexInSubject > 0) {
-        this.navigateTo(this.currentIndexInSubject - 1);
+        this.currentIndexInSubject--;
+        this.markVisited();
+        this.startQuestionTimer();
+        this.typesetMath();
       }
-    },
-
-    // Central navigation helper. The critical ordering fix: we cloak
-    // (hide) the question card BEFORE swapping currentIndexInSubject,
-    // not after. If we swap the index first and only then set
-    // needsTypeset/mathLoaded, Alpine can paint the new question's raw
-    // un-typeset HTML (literal "\(...\)" text) for one frame before the
-    // cloak class lands — that's the "raw bracket flash" symptom.
-    // Pre-cloaking based on the NEXT question's own content means the
-    // wrapper is already opacity:0 (or already visible, for plain-text
-    // questions) at the exact moment the new HTML is swapped in, so
-    // there is nothing to flash.
-    navigateTo(newIndex) {
-      const nextQuestion = this.currentSubjectQuestions[newIndex];
-      const nextNeedsTypeset = this.questionHasMath(nextQuestion);
-      const myToken = ++this._typesetToken;
-
-      this.needsTypeset = nextNeedsTypeset;
-      if (nextNeedsTypeset) this.mathLoaded = false; // cloak now, before the swap paints
-
-      this.currentIndexInSubject = newIndex;
-      this.markVisited();
-      this.startQuestionTimer();
-      this.typesetMath(myToken, nextNeedsTypeset);
     },
 
     paletteClass(question) {
