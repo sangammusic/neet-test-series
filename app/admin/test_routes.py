@@ -15,6 +15,7 @@ Flow:
 """
 import json
 import logging
+import re  # Added for auto-generating slugs
 
 from flask import render_template, request, redirect, url_for, flash, jsonify
 
@@ -37,7 +38,6 @@ def _delete_image_from_storage(image_url):
         return
     try:
         if "question-images/" in image_url:
-            # Extract path and cleanly strip any query parameters
             path = image_url.split("question-images/")[1].split("?")[0]
             supabase_admin.storage.from_(BUCKET_NAME).remove([path])
     except Exception as e:
@@ -75,9 +75,6 @@ def test_series_list():
 @admin_bp.route("/test-series/<series_id>/edit", methods=["POST"])
 @admin_required
 def test_series_edit(series_id):
-    """
-    Renames an existing Test Series Folder.
-    """
     new_name = request.form.get("name", "").strip()
     if not new_name:
         flash("Folder name cannot be empty.", "error")
@@ -94,15 +91,9 @@ def test_series_edit(series_id):
 @admin_bp.route("/test-series/<series_id>/delete", methods=["POST"])
 @admin_required
 def test_series_delete(series_id):
-    """
-    Deep Storage Permanent Cleanup for an ENTIRE FOLDER.
-    SANGAM FIX: Implemented Batch Chunking to prevent 414 URI Too Long error, 
-    ensuring absolutely NO ghost data remains in the DB or Storage.
-    """
     try:
         tests_in_series = supabase_admin.table("tests").select("id").eq("series_id", series_id).execute().data
         test_ids = [t["id"] for t in tests_in_series]
-        logger.info(f"[test_series_delete:{series_id}] tests in folder: {len(test_ids)}")
 
         question_ids = []
         image_paths = []
@@ -122,7 +113,6 @@ def test_series_delete(series_id):
                         question_ids.append(qid)
 
             unique_question_ids = list(set(question_ids))
-            logger.info(f"[test_series_delete:{series_id}] unique question_ids: {len(unique_question_ids)}")
             if unique_question_ids:
                 for i in range(0, len(unique_question_ids), 100):
                     chunk = unique_question_ids[i:i + 100]
@@ -135,49 +125,32 @@ def test_series_delete(series_id):
                     )
                     for q in rows:
                         if q.get("image_url") and "question-images/" in q["image_url"]:
-                            # Strip trailing ? to ensure bucket matches exactly
                             clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
                             image_paths.append(clean_path)
 
-            logger.info(f"[test_series_delete:{series_id}] image_paths to remove ({len(image_paths)}): {image_paths}")
-
-            # 1. Chunked Image Deletion from Bucket (Max 50 per batch)
             if image_paths:
                 for i in range(0, len(image_paths), 50):
                     batch = image_paths[i:i+50]
                     try:
-                        result = supabase_admin.storage.from_(BUCKET_NAME).remove(batch)
-                        removed_names = [r.get("name") for r in (result or []) if isinstance(r, dict)]
-                        if len(removed_names) < len(batch):
-                            logger.warning(
-                                f"[test_series_delete:{series_id}] MISMATCH — "
-                                f"{len(batch) - len(removed_names)} path(s) did not delete."
-                            )
+                        supabase_admin.storage.from_(BUCKET_NAME).remove(batch)
                     except Exception as e:
-                        logger.error(f"[test_series_delete:{series_id}] Bucket batch delete raised an exception: {e}")
+                        logger.error(f"Bucket batch delete raised an exception: {e}")
 
-            # 2. Chunked Test Mapping Deletion
             for tid in test_ids:
                 supabase_admin.table("mock_test_questions").delete().eq("test_id", tid).execute()
             
-            # 3. Chunked Test Deletion
             for tid in test_ids:
                 supabase_admin.table("tests").delete().eq("id", tid).execute()
             
-            # 4. Chunked Question Deletion (Batches of 40)
             if question_ids:
                 unique_question_ids = list(set(question_ids))
                 for i in range(0, len(unique_question_ids), 40):
                     chunk = unique_question_ids[i:i+40]
                     supabase_admin.table("mock_questions").delete().in_("id", chunk).execute()
 
-        # 5. Finally, delete the folder itself
         supabase_admin.table("mock_test_series").delete().eq("id", series_id).execute()
-
-        logger.info(f"[test_series_delete:{series_id}] DB cleanup complete.")
         flash("Folder and ALL its tests, questions, and images were permanently wiped.", "success")
     except Exception as exc:
-        logger.error(f"[test_series_delete:{series_id}] Delete failed with exception: {exc}")
         flash(f"Could not completely delete folder: {exc}", "error")
 
     return redirect(url_for("admin.test_series_list"))
@@ -199,7 +172,6 @@ def series_tests(series_id):
         marks_per_question_raw = request.form.get("marks_per_question")
         stream_id = request.form.get("stream_id")
         
-        # SANGAM FIX: Capture the new dynamic category text input instead of the old dropdown ID
         category_name = request.form.get("category_name", "").strip()
 
         if not title or not marks_per_question_raw or not str(marks_per_question_raw).strip() or not category_name or not stream_id:
@@ -207,21 +179,25 @@ def series_tests(series_id):
             return redirect(url_for("admin.series_tests", series_id=series_id))
 
         # ==========================================
-        # SANGAM STUDY HUB: AUTO-RESOLVE CATEGORY
+        # SANGAM STUDY HUB: AUTO-RESOLVE CATEGORY WITH SLUG
         # ==========================================
         category_id = None
         try:
-            # 1. Look for an existing category with the same name under this stream
+            # 1. Look for an existing category
             existing_cats = supabase_admin.table("test_categories").select("id, name").eq("stream_id", stream_id).execute().data
             for cat in existing_cats:
                 if cat["name"].strip().lower() == category_name.lower():
                     category_id = cat["id"]
                     break
             
-            # 2. If it doesn't exist, create it dynamically!
+            # 2. If it doesn't exist, generate a slug and create it
             if not category_id:
+                # Generate a clean URL-friendly slug (e.g. "Minor Test" -> "minor-test")
+                generated_slug = re.sub(r'[^a-z0-9]+', '-', category_name.lower()).strip('-')
+                
                 new_cat = supabase_admin.table("test_categories").insert({
                     "name": category_name,
+                    "slug": generated_slug, # SANGAM FIX: Added required slug field
                     "stream_id": stream_id
                 }).execute().data
                 if new_cat:
@@ -241,7 +217,7 @@ def series_tests(series_id):
             "title": title,
             "description": request.form.get("description", "").strip() or None,
             "duration_minutes": int(request.form.get("duration_minutes") or 180),
-            "total_marks": 0, # Auto-calculated from Page 2
+            "total_marks": 0, 
             "negative_marking": negative_marking,
             "is_premium": request.form.get("is_premium") == "on",
             "price_inr": float(request.form.get("price_inr") or 0),
@@ -259,7 +235,6 @@ def series_tests(series_id):
 
     streams = supabase_admin.table("streams").select("id, name").order("display_order").execute().data
     
-    # We still fetch categories for background operations, though the dropdown is gone.
     raw_categories = supabase_admin.table("test_categories").select("id, name, stream_id").order("display_order").execute().data
     seen_cats = set()
     categories = []
@@ -299,9 +274,6 @@ def tests_upload(test_id):
 @admin_bp.route("/tests/<test_id>/lock-targets", methods=["POST"])
 @admin_required
 def tests_lock_targets(test_id):
-    """
-    Auto Calculates and Locks Total Marks dynamically.
-    """
     data = request.json
     total_marks = data.get("total_marks")
     
@@ -381,11 +353,7 @@ def tests_bulk_map_questions(test_id):
         else:
             valid_payloads.append(payload)
 
-    # ==========================================
-    # SANGAM STUDY HUB: DUPLICATE DETECTION LOGIC
-    # ==========================================
     if valid_payloads:
-        # 1. Fetch existing questions already mapped to this specific test
         existing_mapped = (
             supabase_admin.table("mock_test_questions")
             .select("mock_questions(question_text)")
@@ -400,19 +368,16 @@ def tests_bulk_map_questions(test_id):
             if q and q.get("question_text"):
                 existing_texts.add(q["question_text"].strip().lower())
 
-        # 2. Check the incoming chunk against existing DB and against itself
         incoming_texts = set()
         for p in valid_payloads:
             clean_text = p["question_text"].strip().lower()
             
-            # DB Collision
             if clean_text in existing_texts:
                 error_msg = f"Duplicate Detected: The question starting with '{clean_text[:40]}...' already exists in this test!"
                 if is_ajax: return jsonify({"ok": False, "error": error_msg}), 400
                 flash(error_msg, "error")
                 return redirect(url_for("admin.test_series_list"))
             
-            # Internal Chunk Collision
             if clean_text in incoming_texts:
                 error_msg = f"Duplicate Detected: The question starting with '{clean_text[:40]}...' appears multiple times in your pasted JSON chunk!"
                 if is_ajax: return jsonify({"ok": False, "error": error_msg}), 400
@@ -421,9 +386,6 @@ def tests_bulk_map_questions(test_id):
             
             incoming_texts.add(clean_text)
 
-    # ==========================================
-    # SANGAM STUDY HUB: 45-45-90 RULE VALIDATION
-    # ==========================================
     if test.get("total_marks") == 720 and not errors:
         existing = supabase_admin.table("mock_test_questions").select("mock_questions(subjects(name))").eq("test_id", test_id).execute().data
         
@@ -480,11 +442,6 @@ def tests_bulk_map_questions(test_id):
 @admin_bp.route("/tests/<test_id>/questions/undo-chunk", methods=["POST"])
 @admin_required
 def tests_undo_chunk(test_id):
-    """
-    PERMANENT DELETION ROUTE. 
-    Accepts an array of question_ids and wipes them from mapping, question bank, 
-    and deletes any attached images from the Storage Bucket in batches.
-    """
     payload = request.json
     if not payload or not payload.get("question_ids"):
         return jsonify({"ok": False, "error": "No question IDs provided for undo."}), 400
@@ -492,16 +449,13 @@ def tests_undo_chunk(test_id):
     question_ids = payload["question_ids"]
     
     try:
-        # 1. Fetch images to delete from Storage
         questions = supabase_admin.table("mock_questions").select("image_url").in_("id", question_ids).execute().data
         image_paths = []
         for q in questions:
             if q.get("image_url") and "question-images/" in q["image_url"]:
-                # Clean path by removing trailing '?' before deleting
                 clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
                 image_paths.append(clean_path)
         
-        # Batch delete from storage
         if image_paths:
             for i in range(0, len(image_paths), 50):
                 try:
@@ -509,10 +463,7 @@ def tests_undo_chunk(test_id):
                 except Exception:
                     pass
         
-        # 2. Delete test mapping
         supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).in_("mock_question_id", question_ids).execute()
-        
-        # 3. Delete from actual question bank
         supabase_admin.table("mock_questions").delete().in_("id", question_ids).execute()
         
         return jsonify({"ok": True, "message": "Chunk successfully undone and wiped."})
@@ -656,7 +607,7 @@ def tests_delete(test_id):
                 try:
                     supabase_admin.storage.from_(BUCKET_NAME).remove(batch)
                 except Exception as e:
-                    logger.error(f"[tests_delete:{test_id}] Bucket batch delete raised an exception: {e}")
+                    logger.error(f"Bucket batch delete raised an exception: {e}")
 
         supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).execute()
         supabase_admin.table("tests").delete().eq("id", test_id).execute()
