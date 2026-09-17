@@ -22,6 +22,10 @@
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+  /* Anti-flicker wrapper styling for MathJax / LaTeX */
+  .math-cloak { opacity: 0; transition: opacity 0.15s ease-in; }
+  .math-ready { opacity: 1; }
+
   /* This page is a distraction-free full-screen runner — the global
      footer is still included by base.html, so hide it here with a scoped rule. */
   body:has(#nta-runner) > footer,
@@ -97,17 +101,17 @@
     </button>
   </div>
 
-  <!-- Main question area -->
+  <!-- Main question area (Anti-flicker container applied) -->
   <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
     <template x-if="currentQuestion">
-      <div class="animate-fade-in">
+      <div class="animate-fade-in math-cloak" :class="{ 'math-ready': mathLoaded }">
         <div class="flex items-center justify-between mb-5">
           <div class="flex items-center gap-3">
             <p class="text-sm font-semibold text-gray-300">
               Question <span x-text="currentIndexInSubject + 1"></span> of <span x-text="currentSubjectQuestions.length"></span>
               <span class="text-gray-500 font-normal ml-1">· <span x-text="currentSubject"></span></span>
             </p>
-            <!-- Premium Bookmark Icon (Replaces clunky Mark for Review button) -->
+            <!-- Premium Bookmark Icon -->
             <button x-show="!isReviewMode" type="button" @click="toggleMark(currentQuestion.id)"
               class="w-7 h-7 rounded flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gold/50"
               :class="isMarked(currentQuestion.id) ? 'text-gold bg-gold/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'"
@@ -160,7 +164,7 @@
           </div>
         </div>
 
-        <!-- Navigation Actions (Only 2 buttons, highly intuitive) -->
+        <!-- Navigation Actions -->
         <div class="grid grid-cols-2 gap-4">
           <button @click="goPrev()" :disabled="currentIndexInSubject === 0"
             class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
@@ -185,7 +189,7 @@
     </template>
   </div>
 
-  <!-- Full Question Grid Modal (For Palette Navigation) -->
+  <!-- Full Question Grid Modal -->
   <div x-show="showGridModal" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" @click.self="showGridModal = false">
     <div class="bg-[#161616] border border-white/10 rounded-xl p-6 max-w-xl w-full max-h-[85vh] overflow-y-auto shadow-2xl">
       <div class="flex items-center justify-between mb-6">
@@ -265,7 +269,6 @@
   </div>
 </div>
 
-<!-- Add Custom CSS for fade-in animation -->
 <style>
   .animate-fade-in {
     animation: fadeIn 0.2s ease-in-out;
@@ -276,7 +279,6 @@
   }
 </style>
 
-<!-- Alpine.js is now loaded globally in shared/base.html -->
 <script>
 function testAttempt() {
   return {
@@ -297,6 +299,7 @@ function testAttempt() {
     showGridModal: false,
     submitting: false,
     submitError: null,
+    mathLoaded: false, // Anti-flicker control flag
     saveUrl: "{{ url_for('user.test_attempt_save_answer', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     submitUrl: "{{ url_for('user.test_attempt_submit', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     resultUrl: "{{ url_for('user.test_result', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
@@ -309,7 +312,6 @@ function testAttempt() {
         return;
       }
 
-      // Hydrate from DB payload provided by routes.py
       const saved = {{ saved_progress | tojson if saved_progress else '{}' }};
       for (const qid in saved) {
         const entry = saved[qid];
@@ -327,9 +329,16 @@ function testAttempt() {
     },
 
     typesetMath() {
+      this.mathLoaded = false;
       this.$nextTick(() => {
         if (window.MathJax && window.MathJax.typesetPromise) {
-          window.MathJax.typesetPromise();
+          window.MathJax.typesetPromise().then(() => {
+            this.mathLoaded = true;
+          }).catch(() => {
+            this.mathLoaded = true;
+          });
+        } else {
+          this.mathLoaded = true;
         }
       });
     },
@@ -439,7 +448,6 @@ function testAttempt() {
       return status === 'marked' || status === 'answered_marked';
     },
 
-    // Clicking an already-selected option unchecks it (Clear Response fix)
     selectOption(questionId, opt) {
       if (this.isReviewMode) return;
       const entry = this.progress[questionId] || {};
@@ -460,7 +468,6 @@ function testAttempt() {
       this.persist(questionId);
     },
 
-    // Toggles the bookmark icon logic
     toggleMark(questionId) {
       if (this.isReviewMode) return;
       const entry = this.progress[questionId] || {};
@@ -498,7 +505,7 @@ function testAttempt() {
           status: entry.status,
           time_taken_sec: this.timeSpent[questionId] || 0,
         }),
-      }).catch(() => { /* handled by foolproof bulk sync on submit */ });
+      }).catch(() => {});
     },
 
     goNext() {
@@ -532,7 +539,6 @@ function testAttempt() {
       return 'status-not-answered';
     },
 
-    // Premium Aesthetics applied: Dark grey box for neutral, Red/Green for review mode
     optionClass(opt) {
       const q = this.currentQuestion;
       if (this.isReviewMode) {
@@ -566,7 +572,6 @@ function testAttempt() {
       this.showSubmitConfirm = true;
     },
 
-    // BULK JSON SUBMIT - Fixes BUG 1 permanently by capturing the exact truth of Alpine state
     submitTest() {
       if (this.submitting) return;
       this.submitting = true;
