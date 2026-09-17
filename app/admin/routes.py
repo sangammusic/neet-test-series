@@ -1,5 +1,6 @@
 import logging
-from flask import render_template, redirect, url_for, flash
+from flask import render_template, redirect, url_for, flash, request, jsonify
+from datetime import datetime
 
 from app.admin import admin_bp
 from app.admin.decorators import admin_required
@@ -41,7 +42,6 @@ def dashboard():
     """
     def _count(table):
         try:
-            # limit(1) is a massive performance boost for count="exact" queries in Supabase
             res = supabase_admin.table(table).select("id", count="exact").limit(1).execute()
             return res.count or 0
         except Exception as e:
@@ -64,7 +64,6 @@ def dashboard():
             return 0
 
     def _count_uploaded_images(table):
-        """Fast DB-level count of questions that actually have an image_url mapped."""
         try:
             res = (
                 supabase_admin.table(table)
@@ -86,10 +85,6 @@ def dashboard():
         "tests": _count("tests"),
     }
 
-    # FEATURE: Garbage tracking (Abandoned attempts).
-    # NOTE: guest-attempt tracking was removed along with guest mode --
-    # every test_attempts row now always has a user_id, so a
-    # "guest_attempts" count would always read zero going forward.
     try:
         incomplete_count = supabase_admin.table("test_attempts").select("id", count="exact").is_("submitted_at", "null").limit(1).execute().count or 0
     except Exception:
@@ -99,8 +94,6 @@ def dashboard():
         "incomplete_attempts": incomplete_count,
     }
 
-    # O(1) FAST STORAGE CALCULATION: Replaces the N+1 API crash bug!
-    # A compressed NEET diagram is roughly ~100KB, so 10 images = ~1MB.
     try:
         q_images = _count_uploaded_images("questions")
         mq_images = _count_uploaded_images("mock_questions")
@@ -134,19 +127,6 @@ def dashboard():
 @admin_bp.route("/cleanup/legacy-guest-attempts", methods=["POST"])
 @admin_required
 def cleanup_legacy_guest_attempts():
-    """
-    One-time historical cleanup only.
-
-    Guest mode has been permanently removed from the app -- no new
-    test_attempts row will ever be created without a user_id again.
-    This route exists purely so an admin can purge any *old* guest
-    attempt rows (user_id IS NULL) that were created back when guest
-    mode still existed, freeing their storage via the DB's ON DELETE
-    CASCADE (which also removes their attempt_answers rows).
-
-    Safe to run repeatedly -- once there are no more NULL-user_id
-    rows left, this is a no-op.
-    """
     try:
         res = supabase_admin.table("test_attempts").delete().is_("user_id", "null").execute()
         deleted_count = len(res.data) if res.data else 0
@@ -159,10 +139,6 @@ def cleanup_legacy_guest_attempts():
 @admin_bp.route("/cleanup/incomplete", methods=["POST"])
 @admin_required
 def cleanup_incomplete_attempts():
-    """
-    Nuclear option for Admin: Deletes all abandoned test attempts (never submitted).
-    Frees up storage taken by students who started a test but closed the tab.
-    """
     try:
         res = supabase_admin.table("test_attempts").delete().is_("submitted_at", "null").execute()
         deleted_count = len(res.data) if res.data else 0
@@ -175,12 +151,6 @@ def cleanup_incomplete_attempts():
 @admin_bp.route("/cleanup/orphaned-mock-questions", methods=["POST"])
 @admin_required
 def cleanup_orphaned_mock_questions():
-    """
-    Sweeps up mock_questions rows (and their bucket images) that got left
-    behind by a previous test/folder delete.
-    SANGAM STUDY HUB FIX: Strips trailing '?' from paths to ensure Supabase 
-    Storage deletes the orphaned images correctly instead of silently failing.
-    """
     try:
         all_ids = {r["id"] for r in supabase_admin.table("mock_questions").select("id").execute().data}
         mapped_ids = {
@@ -194,7 +164,6 @@ def cleanup_orphaned_mock_questions():
             flash("No orphaned questions found — system is already 100% clean.", "success")
             return redirect(url_for("admin.dashboard"))
 
-        # 1. Delete their bucket images first
         image_paths = []
         for i in range(0, len(orphan_ids), 100):
             chunk = orphan_ids[i:i + 100]
@@ -207,7 +176,6 @@ def cleanup_orphaned_mock_questions():
             )
             for q in rows:
                 if q.get("image_url") and "question-images/" in q["image_url"]:
-                    # SANGAM STUDY HUB FIX: Extract path and strip trailing ?
                     clean_path = q["image_url"].split("question-images/")[1].split("?")[0]
                     image_paths.append(clean_path)
 
@@ -217,7 +185,6 @@ def cleanup_orphaned_mock_questions():
             except Exception as e:
                 logger.warning(f"Orphan sweep: bucket batch delete error: {e}")
 
-        # 2. Delete the orphaned rows themselves
         for i in range(0, len(orphan_ids), 40):
             chunk = orphan_ids[i:i+40]
             supabase_admin.table("mock_questions").delete().in_("id", chunk).execute()
@@ -231,3 +198,62 @@ def cleanup_orphaned_mock_questions():
         flash(f"Orphan cleanup failed: {exc}", "error")
 
     return redirect(url_for("admin.dashboard"))
+
+
+# ==========================================
+# MISSING TEST SUBMIT LOGIC FIX
+# ==========================================
+@admin_bp.route("/tests/submit", methods=["POST"])
+def submit_test():
+    """
+    CRITICAL FIX: Handles the final test submission and calculates the score.
+    """
+    data = request.json
+    if not data or "attempt_id" not in data:
+        return jsonify({"ok": False, "error": "Missing attempt ID"}), 400
+
+    attempt_id = data["attempt_id"]
+
+    try:
+        # Get answers associated with this attempt
+        answers = supabase_admin.table("attempt_answers").select("mock_question_id, selected_option").eq("attempt_id", attempt_id).execute().data
+        
+        # Get attempt details and test settings
+        attempt = supabase_admin.table("test_attempts").select("test_id").eq("id", attempt_id).maybe_single().execute().data
+        if not attempt:
+            return jsonify({"ok": False, "error": "Attempt not found"}), 404
+            
+        test = supabase_admin.table("tests").select("marks_per_question, negative_marking").eq("id", attempt["test_id"]).maybe_single().execute().data
+        
+        marks_per_question = test.get("marks_per_question", 4)
+        negative_marking = test.get("negative_marking", 1)
+
+        # Calculate score
+        score = 0
+        correct_count = 0
+        incorrect_count = 0
+        
+        for ans in answers:
+            if ans.get("selected_option"):
+                q_data = supabase_admin.table("mock_questions").select("correct_option").eq("id", ans["mock_question_id"]).maybe_single().execute().data
+                if q_data:
+                    if ans["selected_option"] == q_data.get("correct_option"):
+                        score += marks_per_question
+                        correct_count += 1
+                    else:
+                        score -= negative_marking
+                        incorrect_count += 1
+
+        # Finalize the attempt
+        supabase_admin.table("test_attempts").update({
+            "score": score,
+            "correct_answers": correct_count,
+            "incorrect_answers": incorrect_count,
+            "submitted_at": datetime.utcnow().isoformat()
+        }).eq("id", attempt_id).execute()
+
+        return jsonify({"ok": True, "redirect": url_for('user.test_result', attempt_id=attempt_id)})
+
+    except Exception as e:
+        logger.error(f"Test submission failed: {e}")
+        return jsonify({"ok": False, "error": "Server calculation error"}), 500
