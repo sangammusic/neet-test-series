@@ -236,10 +236,16 @@ def diagnostics_broken_images():
         copy-pasted for several questions without clearing it).
       - Bucket made private / renamed after upload, so every
         previously-working public URL now 400s.
+      - image_url holding whitespace or other non-URL junk (not
+        NULL, not empty string, but not a real http(s) URL either)
+        left over from some earlier data-entry step. These are
+        reported separately under "junk", not "broken" — no image
+        was ever there for these, so there's nothing to fetch or
+        flag as a dead link; they just need the stray value cleared.
 
     This is read-only — it reports, it does not delete anything.
     Use /admin/diagnostics/broken-images/clear to wipe the ones
-    confirmed dead.
+    confirmed dead (accepts ids from both "broken" and "junk").
     """
     import urllib.request
     import urllib.error
@@ -269,7 +275,7 @@ def diagnostics_broken_images():
         except Exception as e:
             return f"error: {e}"
 
-    results = {"questions": [], "mock_questions": []}
+    results = {"questions": [], "mock_questions": [], "junk": {"questions": [], "mock_questions": []}}
 
     # Which files actually exist in the bucket right now (for the
     # "URL looks fine but object is gone" case, and to avoid hammering
@@ -293,6 +299,9 @@ def diagnostics_broken_images():
         logger.warning(f"broken-images: could not list bucket contents: {e}")
         bucket_files = None  # unknown — skip the bucket cross-check, HTTP check still runs
 
+    import re
+    _URL_RE = re.compile(r'^https?://', re.IGNORECASE)
+
     def _path_from_url(url):
         for marker in (f"/{BUCKET_NAME}/", f"{BUCKET_NAME}/"):
             if marker in url:
@@ -308,9 +317,26 @@ def diagnostics_broken_images():
             .data
         )
         broken = []
+        junk = []
         for row in rows:
-            url = (row.get("image_url") or "").strip()
-            if not url:
+            raw_url = row.get("image_url")
+            url = (raw_url or "").strip()
+
+            # SANGAM FIX: a non-null, non-empty-string image_url that
+            # ISN'T a real http(s) URL (whitespace-only, a stray "-",
+            # leftover placeholder text from a bulk-paste template row,
+            # etc.) is not "a broken image" — there was never an image
+            # to begin with. Treating it as broken and running a network
+            # check against it is exactly what produced a false
+            # "diagram failed to load" on questions that never had a
+            # diagram. These get reported separately as "junk" so they
+            # can be cleared without implying any image was ever there.
+            if not url or not _URL_RE.match(url):
+                junk.append({
+                    "id": row["id"],
+                    "question_text": (row.get("question_text") or "")[:120],
+                    "image_url": raw_url,
+                })
                 continue
 
             path = _path_from_url(url)
@@ -327,21 +353,23 @@ def diagnostics_broken_images():
                     "http_status": status,
                     "object_in_bucket": in_bucket,
                 })
-        return broken
+        return broken, junk
 
     try:
-        results["questions"] = _check_table("questions")
+        results["questions"], results["junk"]["questions"] = _check_table("questions")
     except Exception as e:
         logger.error(f"broken-images: questions check failed: {e}")
     try:
-        results["mock_questions"] = _check_table("mock_questions")
+        results["mock_questions"], results["junk"]["mock_questions"] = _check_table("mock_questions")
     except Exception as e:
         logger.error(f"broken-images: mock_questions check failed: {e}")
 
     total_broken = len(results["questions"]) + len(results["mock_questions"])
+    total_junk = len(results["junk"]["questions"]) + len(results["junk"]["mock_questions"])
     return jsonify({
         "ok": True,
         "total_broken": total_broken,
+        "total_junk": total_junk,
         "bucket_listing_available": bucket_files is not None,
         **results,
     })
