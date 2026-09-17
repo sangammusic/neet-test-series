@@ -2,25 +2,43 @@
 {% block title %}{{ chapter.name }} — {{ 'PYQ' if mode == 'pyq' else 'MCQ' }}{% endblock %}
 
 {% block content %}
-<section class="max-w-2xl mx-auto px-6 pt-12 pb-24">
-  <p class="text-gold font-semibold text-sm mb-2">{{ chapter.name }}</p>
-  <h1 class="font-display text-2xl font-semibold text-ink mb-8">
-    {{ 'PYQ Practice' if mode == 'pyq' else 'MCQ Practice' }}
-  </h1>
+<section class="max-w-4xl mx-auto px-6 pt-12 pb-24 relative z-10">
+  
+  <div class="mb-10 border-b border-white/10 pb-6">
+    <a href="javascript:history.back()" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-flex items-center gap-2 transition-colors">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+      </svg>
+      Back to Mode Selection
+    </a>
+    <div class="flex items-center gap-3 mb-2">
+        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full">{{ chapter.name }}</span>
+    </div>
+    <h1 class="font-display text-4xl font-bold text-white mb-2 tracking-tight">
+      {{ 'PYQ Practice' if mode == 'pyq' else 'MCQ Practice' }}
+    </h1>
+    <p class="text-gray-400 text-sm font-medium">How would you like to structure your practice session?</p>
+  </div>
   
   <div class="grid sm:grid-cols-2 gap-6">
-    <!-- TOPIC-WISE BUTTON (Points to Folders list with category='topic') -->
+    <!-- TOPIC-WISE BUTTON -->
     <a href="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category='topic') }}"
-       class="block p-8 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-md transition-all bg-white text-center">
-      <p class="font-display text-lg font-semibold text-ink">Topic-wise Practice</p>
-      <p class="text-sm text-ink/60 mt-1">Pick a specific topic to drill</p>
+       class="block p-8 border border-white/10 rounded-2xl hover:border-gold/40 hover:shadow-[0_0_30px_rgba(212,160,23,0.15)] transition-all duration-300 bg-[#161616]/90 backdrop-blur-xl group relative overflow-hidden text-center flex flex-col items-center justify-center min-h-[200px]">
+      
+      <div class="absolute inset-y-0 left-0 w-1 bg-transparent group-hover:bg-gold transition-colors"></div>
+
+      <p class="font-display text-2xl font-bold text-white group-hover:text-gold transition-colors relative z-10 mb-2">Topic-wise Practice</p>
+      <p class="text-sm text-gray-400 group-hover:text-gray-300 transition-colors relative z-10">Pick a specific topic to drill</p>
     </a>
     
-    <!-- RANDOM BUTTON (Points to Folders list with category='random') -->
+    <!-- RANDOM BUTTON -->
     <a href="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category='random') }}"
-       class="block p-8 border border-ink/10 rounded-lg hover:border-gold/50 hover:shadow-md transition-all bg-white text-center">
-      <p class="font-display text-lg font-semibold text-ink">Random {{ 'PYQ' if mode == 'pyq' else 'Chapter' }} Practice</p>
-      <p class="text-sm text-ink/60 mt-1">Mixed questions from the whole chapter</p>
+       class="block p-8 border border-white/10 rounded-2xl hover:border-gold/40 hover:shadow-[0_0_30px_rgba(212,160,23,0.15)] transition-all duration-300 bg-[#161616]/90 backdrop-blur-xl group relative overflow-hidden text-center flex flex-col items-center justify-center min-h-[200px]">
+      
+      <div class="absolute inset-y-0 left-0 w-1 bg-transparent group-hover:bg-gold transition-colors"></div>
+
+      <p class="font-display text-2xl font-bold text-white group-hover:text-gold transition-colors relative z-10 mb-2">Random {{ 'PYQ' if mode == 'pyq' else 'Chapter' }} Practice</p>
+      <p class="text-sm text-gray-400 group-hover:text-gray-300 transition-colors relative z-10">Mixed questions from the whole chapter</p>
     </a>
   </div>
 </section>
