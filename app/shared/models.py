@@ -8,11 +8,12 @@ app/admin/*_routes.py instead, using supabase_admin directly — no
 need to funnel every admin write through this shared file.
 """
 import logging
-from app.extensions import supabase_public, supabase_admin
+from app.extensions import supabase_public, supabase_admin, cache
 
 logger = logging.getLogger(__name__)
 
 
+@cache.memoize(timeout=900)  # 15 min — see app/extensions.py for cache setup
 def get_active_streams():
     """Public catalog read — used on the stream-selection page."""
     try:
@@ -68,6 +69,7 @@ def get_stream_by_slug(slug: str):
         return None
 
 
+@cache.memoize(timeout=600)
 def get_subjects_for_stream(stream_id: str):
     try:
         res = (
@@ -84,6 +86,7 @@ def get_subjects_for_stream(stream_id: str):
         return []
 
 
+@cache.memoize(timeout=600)
 def get_chapters_for_subject(subject_id: str):
     try:
         res = (
@@ -100,6 +103,7 @@ def get_chapters_for_subject(subject_id: str):
         return []
 
 
+@cache.memoize(timeout=900)
 def get_test_categories_for_stream(stream_id: str):
     try:
         res = (
@@ -115,6 +119,7 @@ def get_test_categories_for_stream(stream_id: str):
         return []
 
 
+@cache.memoize(timeout=900)
 def get_difficulty_levels():
     try:
         res = (
@@ -179,6 +184,7 @@ def get_questions_for_practice(chapter_id, is_pyq=False, topic_name=None):
         return []
 
 
+@cache.memoize(timeout=300)
 def get_all_tests_for_stream(stream_id):
     try:
         res = (
@@ -232,6 +238,12 @@ def get_test_syllabus(test_id):
         return {}
 
 
+@cache.memoize(timeout=300)  # 5 min: this is the heaviest per-question JOIN
+# query in the whole app and every student attempting/reloading a test
+# hits it, so it's the single highest-value cache target for surviving
+# a mock-test rush. 5 min (not 15, like the smaller catalog lookups
+# above) because an admin editing a live test's questions should not
+# stay stale for too long.
 def get_mock_questions_for_test(test_id):
     """
     Fetches every mock_questions row mapped to this test via mock_test_questions.
@@ -273,6 +285,7 @@ def get_mock_questions_for_test(test_id):
         return {}
 
 
+@cache.memoize(timeout=300)
 def get_mock_question_ids_for_test(test_id):
     """Lightweight helper: just the mock_question_id list for a test, for validating a submission."""
     try:
@@ -437,13 +450,25 @@ def get_mock_questions_for_test_review(test_id, attempt_id):
         return {}
 
 
-def submit_test_attempt(attempt_id, test_id, answers=None, time_by_question=None):
+def submit_test_attempt(attempt_id, test_id, progress_map=None, valid_ids=None, answers=None, time_by_question=None):
     """
     Scores and finalizes an attempt using the database as the absolute source of truth.
+
+    PERF NOTE: pass `progress_map` (the dict returned by
+    get_attempt_answers_map(attempt_id)) when the caller has already
+    fetched it -- e.g. right after bulk_save_attempt_progress(), which
+    is the normal submit flow. This function used to always re-fetch
+    attempt_answers itself even when the caller had just read the exact
+    same rows a moment earlier, costing one extra Supabase round-trip on
+    every single test submission. If progress_map isn't supplied (e.g.
+    called from elsewhere without a pre-fetched map), it's fetched here
+    as before so this stays a safe drop-in.
+
+    `answers` / `time_by_question` (legacy dict-per-field shape) are
+    still accepted for backward compatibility but are ignored once
+    progress_map is available, since progress_map already carries both.
     """
     import datetime
-    answers = answers or {}
-    time_by_question = time_by_question or {}
 
     try:
         # SANGAM FIX: maybe_single() protects against crash on invalid test_id
@@ -461,7 +486,15 @@ def submit_test_attempt(attempt_id, test_id, answers=None, time_by_question=None
         if not mapped:
             return None
 
-        progress_map = get_attempt_answers_map(attempt_id)
+        if valid_ids is not None:
+            mapped = [row for row in mapped if row["mock_question_id"] in valid_ids]
+            if not mapped:
+                return None
+
+        if progress_map is None:
+            progress_map = get_attempt_answers_map(attempt_id)
+        answers = answers or {}
+        time_by_question = time_by_question or {}
 
         total_questions = len(mapped)
         total_marks = int(test.get("total_marks") or total_questions)
@@ -620,6 +653,12 @@ def get_attempt_time_breakdown(attempt_id, test_id):
 
 
 def user_has_access_to_test(test, user_id):
+    # BUGFIX: a bad/deleted test_id means get_test_by_id() returns None,
+    # and test.get(...) on None used to crash the whole request with a
+    # 500 instead of the caller's normal 404 handling. Treat "no test"
+    # as "no access" so callers can decide what to show.
+    if not test:
+        return False
     if not test.get("is_premium"):
         return True
     if not user_id:
