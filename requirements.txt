@@ -4,4 +4,4 @@ supabase==2.7.4
 python-dotenv==1.0.1
 Pillow==10.4.0
 Flask-Caching==2.3.0
-gevent==24.2.1
+gevent==24.11.1
