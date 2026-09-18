@@ -66,6 +66,25 @@
         }, true);
     </script>
 
+    <!-- GLOBAL BFCACHE GUARD
+         Backs up the server's `Cache-Control: no-store` header (see
+         app/__init__.py). That header should stop mobile browsers
+         (Chrome/Android, Safari/iOS) from bfcaching any dynamic page
+         in the first place, but this is a second layer in case some
+         browser/webview restores from bfcache anyway. `pageshow` fires
+         both on a normal load AND on a bfcache restore; `event.persisted`
+         is only true on the restore. Forcing a real reload there makes
+         the server re-run its page logic (e.g. "this test attempt is
+         already submitted -> send the user to the result page"
+         instead of showing the stale in-progress quiz/test screen. -->
+    <script>
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        });
+    </script>
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
     {% block extra_head %}{% endblock %}
 
