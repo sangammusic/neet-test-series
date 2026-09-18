@@ -22,11 +22,25 @@ from flask import render_template, request, redirect, url_for, flash, jsonify
 from app.admin import admin_bp
 from app.admin.decorators import admin_required
 from app.admin.mock_question_routes import _validate_mock_question
-from app.extensions import supabase_admin
+from app.extensions import supabase_admin, cache
 
 logger = logging.getLogger(__name__)
 
 BUCKET_NAME = "question-images"
+
+
+def _invalidate_test_questions_cache(test_id):
+    """
+    Call this after ANY change to a test's question set (upload, undo,
+    remove, wipe). get_mock_questions_for_test() and
+    get_mock_question_ids_for_test() are cached (see app/shared/models.py)
+    since students hit them constantly during a mock test -- but that
+    means without this, an admin's edit wouldn't show up for students
+    until the cache naturally expired (up to 5 min later).
+    """
+    from app.shared.models import get_mock_questions_for_test, get_mock_question_ids_for_test
+    cache.delete_memoized(get_mock_questions_for_test, test_id)
+    cache.delete_memoized(get_mock_question_ids_for_test, test_id)
 
 
 def _delete_image_from_storage(image_url):
@@ -446,6 +460,9 @@ def tests_bulk_map_questions(test_id):
             logger.error(f"Test Mapping Error: {exc}")
             if is_ajax: return jsonify({"ok": False, "error": "Mapping to test failed. Please try again."}), 500
 
+    if inserted_ids:
+        _invalidate_test_questions_cache(test_id)
+
     return jsonify({"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "inserted_ids": inserted_ids, "errors": errors})
 
 
@@ -478,7 +495,8 @@ def tests_undo_chunk(test_id):
         
         supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).in_("mock_question_id", question_ids).execute()
         supabase_admin.table("mock_questions").delete().in_("id", question_ids).execute()
-        
+
+        _invalidate_test_questions_cache(test_id)
         return jsonify({"ok": True, "message": "Chunk successfully undone and wiped."})
     except Exception as exc:
         logger.error(f"Undo error: {exc}")
@@ -495,6 +513,8 @@ def tests_remove_question(test_id, question_id):
 
         supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).eq("mock_question_id", question_id).execute()
         supabase_admin.table("mock_questions").delete().eq("id", question_id).execute()
+
+        _invalidate_test_questions_cache(test_id)
 
         is_ajax = request.args.get("ajax") == "1" or request.is_json
         if is_ajax:
