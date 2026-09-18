@@ -248,9 +248,11 @@ def tests_feed(slug):
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
+    if not stream:
+        abort(404)
     # Fetch all VIP Folders created by admin
     series_list = (
-        supabase_admin.table("mock_test_series")
+        supabase_public.table("mock_test_series")
         .select("*")
         .order("created_at", desc=True)
         .execute()
@@ -269,13 +271,26 @@ def series_tests(slug, series_id):
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
-    series = supabase_admin.table("mock_test_series").select("*").eq("id", series_id).single().execute().data
+    if not stream:
+        abort(404)
+    # BUGFIX: .single() throws a hard 500 the moment series_id doesn't
+    # match any row (deleted/bad link). .maybe_single() makes "no row"
+    # a normal None instead of a crash, matching the pattern used
+    # everywhere else in this app (see shared/models.py SANGAM FIXes).
+    series = (
+        supabase_public.table("mock_test_series")
+        .select("*")
+        .eq("id", series_id)
+        .maybe_single()
+        .execute()
+        .data
+    )
     if not series:
         abort(404)
-    
+
     # Strict isolation: series_id + stream_id
     tests = (
-        supabase_admin.table("tests")
+        supabase_public.table("tests")
         .select("*")
         .eq("series_id", series_id)
         .eq("stream_id", stream["id"])
@@ -292,6 +307,8 @@ def test_overview(slug, test_id):
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     test = get_test_by_id(test_id)
+    if not test:
+        abort(404)
     syllabus = get_test_syllabus(test_id)
     has_access = user_has_access_to_test(test, current_user_id())
     return render_template("test_overview.html", stream=stream, test=test, syllabus=syllabus, has_access=has_access)
@@ -405,19 +422,15 @@ def test_attempt_submit(slug, test_id, attempt_id):
     ]
     bulk_save_attempt_progress(attempt_id, bulk_entries)
 
+    # PERF FIX: read the just-saved progress ONCE here and hand the raw
+    # map straight to submit_test_attempt(), instead of the old flow
+    # (read here -> derive answers/time_by_question -> submit_test_attempt
+    # reads attempt_answers AGAIN internally via get_attempt_answers_map).
+    # That was two full round-trips to Supabase for the same rows on
+    # every single submission -- exactly the kind of extra network hop
+    # that turns into 502s when hundreds of students submit at once.
     progress = get_attempt_answers_map(attempt_id)
-    answers = {
-        qid: entry["selected_option"]
-        for qid, entry in progress.items()
-        if entry.get("selected_option") and qid in valid_ids
-    }
-    time_by_question = {
-        qid: entry.get("time_taken_sec") or 0
-        for qid, entry in progress.items()
-        if qid in valid_ids
-    }
-
-    submit_test_attempt(attempt_id, test_id, answers, time_by_question=time_by_question)
+    submit_test_attempt(attempt_id, test_id, progress_map=progress, valid_ids=valid_ids)
 
     return jsonify({
         "ok": True,
