@@ -10,9 +10,12 @@ def create_app():
     app.secret_key = os.environ["SECRET_KEY"]
     cache.init_app(app)
 
+    from app.shared.converters import NameConverter
+    app.url_map.converters["name"] = NameConverter
+
     # BUGFIX: without PERMANENT_SESSION_LIFETIME + session.permanent = True
     # (set per-login in app/auth/routes.py), Flask treats the login cookie
-    # as a browser-session cookie — it can be dropped on a tab close, a
+    # as a browser-session cookie -- it can be dropped on a tab close, a
     # redirect chain, or a server restart, which is what caused "login
     # immediately asks to log in again". 7 days is a reasonable default;
     # adjust if you want shorter/longer persistent logins.
