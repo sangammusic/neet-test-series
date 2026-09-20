@@ -238,6 +238,18 @@ def get_test_syllabus(test_id):
         return {}
 
 
+def _visible_image(q):
+    """
+    Image URL a STUDENT may see, or None. Honors the admin's "Image Uploading ON/OFF" switch:
+    when has_image is explicitly False the stored file is KEPT for the admin (toggle ON restores
+    it) but hidden from students. Legacy rows without has_image keep showing their image.
+    """
+    url = q.get("image_url")
+    if not url or q.get("has_image") is False:
+        return None
+    return url
+
+
 @cache.memoize(timeout=300)  # 5 min: this is the heaviest per-question JOIN
 # query in the whole app and every student attempting/reloading a test
 # hits it, so it's the single highest-value cache target for surviving
@@ -255,7 +267,7 @@ def get_mock_questions_for_test(test_id):
             .select(
                 "question_order, "
                 "mock_questions(id, question_text, option_a, option_b, option_c, "
-                "option_d, image_url, subjects(name))"
+                "option_d, image_url, has_image, subjects(name))"
             )
             .eq("test_id", test_id)
             .order("question_order")
@@ -275,7 +287,7 @@ def get_mock_questions_for_test(test_id):
                     "option_b": q["option_b"],
                     "option_c": q["option_c"],
                     "option_d": q["option_d"],
-                    "image_url": q.get("image_url"),
+                    "image_url": _visible_image(q),
                     "subject_name": subj_name,
                     "question_order": row.get("question_order", 0),
                 })
@@ -301,25 +313,35 @@ def get_mock_question_ids_for_test(test_id):
         return []
 
 
+def _discard_unsubmitted_full_attempts(table, filters):
+    """
+    A full attempt that was started but never submitted is an abandoned DRAFT, not history.
+    Starting a fresh full attempt drops such drafts (answers cascade) so the dashboard has no
+    ghost "In Progress" rows. SUBMITTED attempts are never touched.
+    """
+    try:
+        q = supabase_admin.table(table).delete().is_("submitted_at", "null").is_("parent_attempt_id", "null")
+        for col, val in filters.items():
+            q = q.eq(col, val)
+        q.execute()
+    except Exception as e:
+        logger.warning(f"Could not discard abandoned drafts in {table}: {e}")
+
+
 def create_test_attempt(test_id, user_id=None):
     """
-    Starts a new attempt row. Wipes out any existing attempts for this test by this user
-    to save storage and guarantee only the latest attempt is maintained.
+    Starts a brand-new FULL attempt (parent_attempt_id NULL). APPEND-ONLY: this used to DELETE
+    every earlier attempt of (test, user), so history never existed and a retake destroyed the old
+    Wrong Questions record. Now every submitted full attempt stays forever.
     """
     if not user_id:
         return None
-
+    _discard_unsubmitted_full_attempts("test_attempts", {"test_id": test_id, "user_id": user_id})
     try:
-        # 1. DELETE existing attempts for this test + user to save storage
-        supabase_admin.table("test_attempts").delete().eq("test_id", test_id).eq("user_id", user_id).execute()
-
-        # 2. INSERT the fresh new attempt
-        payload = {"test_id": test_id, "user_id": user_id}
-        res = supabase_admin.table("test_attempts").insert(payload).execute()
-        
-        if not res.data:
-            return None
-        return res.data[0]["id"]
+        res = supabase_admin.table("test_attempts").insert(
+            {"test_id": test_id, "user_id": user_id, "attempt_kind": "full", "parent_attempt_id": None}
+        ).execute()
+        return res.data[0]["id"] if res.data else None
     except Exception as e:
         logger.error(f"Error creating test attempt for test {test_id} user {user_id}: {e}")
         return None
@@ -427,7 +449,7 @@ def get_mock_questions_for_test_review(test_id, attempt_id):
             .select(
                 "question_order, "
                 "mock_questions(id, question_text, option_a, option_b, option_c, "
-                "option_d, image_url, correct_option, subjects(name))"
+                "option_d, image_url, has_image, correct_option, subjects(name))"
             )
             .eq("test_id", test_id)
             .order("question_order")
@@ -450,7 +472,7 @@ def get_mock_questions_for_test_review(test_id, attempt_id):
                     "option_b": q["option_b"],
                     "option_c": q["option_c"],
                     "option_d": q["option_d"],
-                    "image_url": q.get("image_url"),
+                    "image_url": _visible_image(q),
                     "correct_option": q["correct_option"],
                     "subject_name": subj_name,
                     "question_order": row.get("question_order", 0),
@@ -587,13 +609,23 @@ def get_attempts_for_user(user_id):
         res = (
             supabase_admin.table("test_attempts")
             .select("id, test_id, started_at, submitted_at, score, total_questions, "
-                    "correct_count, wrong_count, skipped_count, "
-                    "tests(title, total_marks, test_categories(name))")
+                    "correct_count, wrong_count, skipped_count, parent_attempt_id, "
+                    "tests(title, total_marks, streams(slug), test_categories(name))")
             .eq("user_id", user_id)
+            .is_("parent_attempt_id", "null")
             .order("started_at", desc=True)
             .execute()
         )
-        return res.data
+        rows = res.data or []
+        # number attempts per test (oldest = 1); the newest full attempt is the CURRENT record
+        totals, seen = {}, {}
+        for r in rows:
+            totals[r["test_id"]] = totals.get(r["test_id"], 0) + 1
+        for r in rows:  # newest first
+            seen[r["test_id"]] = seen.get(r["test_id"], 0) + 1
+            r["attempt_no"] = totals[r["test_id"]] - seen[r["test_id"]] + 1
+            r["is_latest"] = seen[r["test_id"]] == 1
+        return rows
     except Exception as e:
         logger.error(f"Error fetching attempts for user {user_id}: {e}")
         return []
@@ -732,33 +764,47 @@ def _quiz_filter(query, chapter_id, mode, category, folder_name, set_name):
 def get_practice_quiz_questions(chapter_id, mode, category, folder_name, set_name, columns="*"):
     """All questions of one practice quiz, in the stable order the runner uses."""
     try:
-        q = supabase_admin.table("questions").select(columns)
-        return _quiz_filter(q, chapter_id, mode, category, folder_name, set_name).order("id").execute().data or []
+        out, start, page = [], 0, 1000     # PostgREST caps one response at 1000 rows -> page through
+        while True:
+            q = supabase_admin.table("questions").select(columns)
+            chunk = (_quiz_filter(q, chapter_id, mode, category, folder_name, set_name)
+                     .order("id").range(start, start + page - 1).execute().data or [])
+            out.extend(chunk)
+            if len(chunk) < page:
+                return out
+            start += page
     except Exception as e:
         logger.error(f"Error fetching practice quiz questions ({chapter_id}/{mode}/{category}/{folder_name}/{set_name}): {e}")
         return []
 
 
 def get_latest_practice_attempt(user_id, chapter_id, mode, category, folder_name, set_name):
-    """The user's single stored attempt for this quiz (or None)."""
+    """Latest FULL attempt (parent_attempt_id IS NULL) for this quiz, or None."""
     if not user_id:
         return None
     try:
         res = (
-            supabase_admin.table("practice_attempts")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("chapter_id", chapter_id)
-            .eq("mode", mode)
-            .eq("category", category)
-            .eq("folder_name", folder_name)
-            .eq("set_name", set_name)
-            .limit(1)
-            .execute()
+            supabase_admin.table("practice_attempts").select("*")
+            .eq("user_id", user_id).eq("chapter_id", chapter_id).eq("mode", mode)
+            .eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name)
+            .is_("parent_attempt_id", "null").order("started_at", desc=True).limit(1).execute()
         )
         return res.data[0] if res.data else None
     except Exception as e:
         logger.error(f"Error fetching latest practice attempt for user {user_id}: {e}")
+        return None
+
+
+def get_latest_practice_reattempt_session(parent_attempt_id):
+    """Most recent reattempt session (any kind) under one full practice attempt, or None."""
+    try:
+        res = (
+            supabase_admin.table("practice_attempts").select("*")
+            .eq("parent_attempt_id", parent_attempt_id).order("started_at", desc=True).limit(1).execute()
+        )
+        return res.data[0] if res.data else None
+    except Exception as e:
+        logger.error(f"Error fetching reattempt session for parent {parent_attempt_id}: {e}")
         return None
 
 
@@ -790,6 +836,20 @@ def _is_marked(status):
     return status in ("marked", "answered_marked")
 
 
+def _is_wrong_or_unattempted(row):
+    """
+    WRONG QUESTIONS = wrongly attempted + NOT attempted.
+      no answer row               -> not attempted -> wrong
+      row without selected option -> only visited/marked -> wrong
+      answered and is_correct False -> wrong
+    """
+    if not row:
+        return True
+    if not row.get("selected_option"):
+        return True
+    return row.get("is_correct") is False
+
+
 def select_reattempt_question_ids(all_question_ids, old_answers, kind):
     """
     Which question ids a reattempt of `kind` replays.
@@ -798,16 +858,15 @@ def select_reattempt_question_ids(all_question_ids, old_answers, kind):
       wrong_only             -> questions the student got WRONG last time
       marked_and_wrong_only  -> questions that were MARKED or WRONG last time
 
-    "Wrong" means answered and incorrect (is_correct is False). Skipped
-    questions are not "wrong". Order follows `all_question_ids`.
+    "Wrong" = answered incorrectly OR never attempted. Order follows `all_question_ids`.
     """
     if kind == "full":
         return list(all_question_ids)
     picked = []
     for qid in all_question_ids:
-        row = old_answers.get(qid) or {}
-        wrong = row.get("is_correct") is False
-        marked = _is_marked(row.get("status"))
+        row = old_answers.get(qid)
+        wrong = _is_wrong_or_unattempted(row)
+        marked = _is_marked((row or {}).get("status"))
         if kind == "wrong_only" and wrong:
             picked.append(qid)
         elif kind == "marked_and_wrong_only" and (wrong or marked):
@@ -817,86 +876,63 @@ def select_reattempt_question_ids(all_question_ids, old_answers, kind):
 
 def start_practice_attempt(user_id, chapter_id, mode, category, folder_name, set_name, kind="full"):
     """
-    Creates the user's new latest attempt for this quiz and returns
-    (attempt_id, replay_question_ids) -- or (None, error_code).
-
-    Selective reset ("carry-forward"):
-      * questions being replayed start clean: no answer, NO mistake note;
-      * questions NOT replayed are copied from the previous attempt
-        (answer, correctness, status, time AND mistake note) with
-        was_replayed = false, so the Analyse page always shows the full
-        latest picture of the quiz and only replayed questions change.
-
-    Order of operations is create-new -> copy -> delete-old, so a failure
-    part-way never leaves the student with nothing.
+    APPEND-ONLY history.
+    'full' -> brand-new independent full attempt; nothing submitted is ever deleted.
+    'wrong_only' / 'marked_and_wrong_only' -> REATTEMPT SESSION under the latest SUBMITTED full
+    attempt (parent_attempt_id). The replay set is chosen from the PARENT's frozen answers and the
+    session never writes to the parent, so the parent's Wrong Questions record never changes.
+    Returns (attempt_id, replay_question_ids) or (None, error_code).
     """
     if not user_id:
         return None, "not_logged_in"
     if kind not in PRACTICE_ATTEMPT_KINDS:
         return None, "bad_kind"
-
-    all_questions = get_practice_quiz_questions(chapter_id, mode, category, folder_name, set_name, columns="id")
-    all_ids = [q["id"] for q in all_questions]
+    all_ids = [q["id"] for q in get_practice_quiz_questions(chapter_id, mode, category, folder_name, set_name, columns="id")]
     if not all_ids:
         return None, "no_questions"
+    base_row = {"user_id": user_id, "chapter_id": chapter_id, "mode": mode, "category": category,
+                "folder_name": folder_name, "set_name": set_name}
 
-    old = get_latest_practice_attempt(user_id, chapter_id, mode, category, folder_name, set_name)
-    old_answers = get_practice_answers_map(old["id"]) if old else {}
+    if kind == "full":
+        _discard_unsubmitted_full_attempts("practice_attempts", base_row)
+        try:
+            res = supabase_admin.table("practice_attempts").insert(
+                {**base_row, "attempt_kind": "full", "parent_attempt_id": None}).execute()
+            return (res.data[0]["id"], all_ids) if res.data else (None, "db_error")
+        except Exception as e:
+            logger.error(f"Error starting full practice attempt for user {user_id}: {e}")
+            return None, "db_error"
 
-    # A partial reattempt needs a SUBMITTED previous attempt to select from.
-    if kind != "full" and (not old or not old.get("submitted_at")):
+    parent = get_latest_practice_attempt(user_id, chapter_id, mode, category, folder_name, set_name)
+    if not parent or not parent.get("submitted_at"):
         return None, "no_previous_attempt"
-
-    replay_ids = select_reattempt_question_ids(all_ids, old_answers, kind)
+    parent_answers = get_practice_answers_map(parent["id"])
+    replay_ids = select_reattempt_question_ids(all_ids, parent_answers, kind)
     if not replay_ids:
         return None, "nothing_to_reattempt"
 
     new_id = None
     try:
-        # The UNIQUE(user, quiz) constraint allows only one row, so the old
-        # row must go before the new one can exist. Snapshot what we need
-        # first (done above), then swap.
-        if old:
-            supabase_admin.table("practice_attempts").delete().eq("id", old["id"]).execute()
-
-        res = supabase_admin.table("practice_attempts").insert({
-            "user_id": user_id,
-            "chapter_id": chapter_id,
-            "mode": mode,
-            "category": category,
-            "folder_name": folder_name,
-            "set_name": set_name,
-            "attempt_kind": kind,
-        }).execute()
+        res = supabase_admin.table("practice_attempts").insert(
+            {**base_row, "attempt_kind": kind, "parent_attempt_id": parent["id"]}).execute()
         if not res.data:
             raise RuntimeError("insert returned no row")
         new_id = res.data[0]["id"]
-
         replay_set = set(replay_ids)
         carry_rows = []
         for qid in all_ids:
-            if qid in replay_set:
-                continue
-            prev = old_answers.get(qid)
-            if not prev:
+            prev = parent_answers.get(qid)
+            if qid in replay_set or not prev:
                 continue
             carry_rows.append({
-                "attempt_id": new_id,
-                "question_id": qid,
-                "selected_option": prev.get("selected_option"),
-                "is_correct": prev.get("is_correct"),
-                "time_taken_sec": prev.get("time_taken_sec") or 0,
-                "status": prev.get("status"),
-                "mistake_note": prev.get("mistake_note"),
-                "was_replayed": False,
-            })
-        if carry_rows:
+                "attempt_id": new_id, "question_id": qid, "selected_option": prev.get("selected_option"),
+                "is_correct": prev.get("is_correct"), "time_taken_sec": prev.get("time_taken_sec") or 0,
+                "status": prev.get("status"), "mistake_note": prev.get("mistake_note"), "was_replayed": False})
+        if carry_rows:   # scoped to the NEW session's own attempt_id only
             supabase_admin.table("practice_attempt_answers").insert(carry_rows).execute()
-
         return new_id, replay_ids
     except Exception as e:
-        logger.error(f"Error starting practice attempt for user {user_id}: {e}")
-        # Best-effort rollback of the half-built new attempt.
+        logger.error(f"Error starting practice reattempt session for user {user_id}: {e}")
         if new_id:
             try:
                 supabase_admin.table("practice_attempts").delete().eq("id", new_id).execute()
@@ -1086,8 +1122,9 @@ def get_practice_review_items(attempt_id, filter_kind="full"):
 
     items = []
     for idx, q in enumerate(questions, start=1):
-        a = answers.get(q["id"], {})
-        is_wrong = a.get("is_correct") is False
+        a = answers.get(q["id"])
+        is_wrong = _is_wrong_or_unattempted(a)
+        a = a or {}
         is_marked = _is_marked(a.get("status"))
         if filter_kind == "wrong" and not is_wrong:
             continue
@@ -1099,7 +1136,7 @@ def get_practice_review_items(attempt_id, filter_kind="full"):
             "question_text": q.get("question_text"),
             "option_a": q.get("option_a"), "option_b": q.get("option_b"),
             "option_c": q.get("option_c"), "option_d": q.get("option_d"),
-            "image_url": q.get("image_url"),
+            "image_url": _visible_image(q),
             "correct_option": q.get("correct_option"),
             "explanation": q.get("explanation"),
             "selected_option": a.get("selected_option"),
@@ -1131,9 +1168,9 @@ def get_practice_analyse_counts(attempt_id):
     answers = get_practice_answers_map(attempt_id)
     wrong = marked = either = 0
     for q in questions:
-        a = answers.get(q["id"], {})
-        w = a.get("is_correct") is False
-        m = _is_marked(a.get("status"))
+        a = answers.get(q["id"])
+        w = _is_wrong_or_unattempted(a)
+        m = _is_marked((a or {}).get("status"))
         wrong += w
         marked += m
         either += (w or m)
@@ -1162,7 +1199,7 @@ def get_mock_review_items(attempt_id, test_id, filter_kind="full"):
             .select(
                 "question_order, "
                 "mock_questions(id, question_text, option_a, option_b, option_c, option_d, "
-                "image_url, correct_option, explanation, subjects(name))"
+                "image_url, has_image, correct_option, explanation, subjects(name))"
             )
             .eq("test_id", test_id)
             .order("question_order")
@@ -1186,8 +1223,9 @@ def get_mock_review_items(attempt_id, test_id, filter_kind="full"):
             if not q:
                 continue
             number += 1
-            a = answers.get(q["id"], {})
-            is_wrong = a.get("is_correct") is False
+            a = answers.get(q["id"])
+            is_wrong = _is_wrong_or_unattempted(a)
+            a = a or {}
             is_marked = _is_marked(a.get("status"))
             if filter_kind == "wrong" and not is_wrong:
                 continue
@@ -1200,7 +1238,7 @@ def get_mock_review_items(attempt_id, test_id, filter_kind="full"):
                 "question_text": q.get("question_text"),
                 "option_a": q.get("option_a"), "option_b": q.get("option_b"),
                 "option_c": q.get("option_c"), "option_d": q.get("option_d"),
-                "image_url": q.get("image_url"),
+                "image_url": _visible_image(q),
                 "correct_option": q.get("correct_option"),
                 "explanation": q.get("explanation"),
                 "selected_option": a.get("selected_option"),
@@ -1218,9 +1256,11 @@ def get_mock_review_items(attempt_id, test_id, filter_kind="full"):
 def get_mock_analyse_counts(attempt_id, test_id):
     """Counts for the mock Analyse / Reattempt chooser (same shape as practice)."""
     items = get_mock_review_items(attempt_id, test_id, "full")
-    wrong = sum(1 for i in items if i["is_correct"] is False)
+    def _w(i):
+        return (not i["selected_option"]) or i["is_correct"] is False
+    wrong = sum(1 for i in items if _w(i))
     marked = sum(1 for i in items if i["is_marked"])
-    either = sum(1 for i in items if i["is_correct"] is False or i["is_marked"])
+    either = sum(1 for i in items if _w(i) or i["is_marked"])
     return {"wrong": wrong, "marked": marked, "wrong_or_marked": either, "full": len(items)}
 
 
@@ -1252,87 +1292,81 @@ def save_mock_mistake_note(attempt_id, mock_question_id, note):
         return False
 
 
+def get_latest_full_mock_attempt(test_id, user_id):
+    """User's most recent FULL attempt (parent_attempt_id IS NULL) for this test, or None."""
+    if not user_id:
+        return None
+    try:
+        rows = (supabase_admin.table("test_attempts").select("*")
+                .eq("test_id", test_id).eq("user_id", user_id).is_("parent_attempt_id", "null")
+                .order("started_at", desc=True).limit(1).execute().data)
+        return rows[0] if rows else None
+    except Exception as e:
+        logger.error(f"Error reading latest full attempt for test {test_id}, user {user_id}: {e}")
+        return None
+
+
+def get_latest_mock_reattempt_session(parent_attempt_id):
+    """Most recent reattempt session (any kind) under one full mock attempt, or None."""
+    try:
+        rows = (supabase_admin.table("test_attempts").select("*")
+                .eq("parent_attempt_id", parent_attempt_id).order("started_at", desc=True).limit(1).execute().data)
+        return rows[0] if rows else None
+    except Exception as e:
+        logger.error(f"Error reading reattempt session for parent {parent_attempt_id}: {e}")
+        return None
+
+
 def start_mock_reattempt(test_id, user_id, kind="full"):
     """
-    Creates the user's new latest attempt for this mock test.
-
+    APPEND-ONLY history (same rules as start_practice_attempt).
+    'full' -> new independent full attempt. 'wrong_only' / 'marked_and_wrong_only' -> reattempt
+    SESSION under the latest submitted full attempt; the parent row/answers are never modified.
     Returns (attempt_id, replay_question_ids) or (None, error_code).
-
-    kind='full' behaves exactly like the old create_test_attempt (previous attempt
-    replaced, every answer and note cleared). For 'wrong_only' /
-    'marked_and_wrong_only' only those questions are replayed; every other
-    question's previous answer, correctness, status, time and mistake note is
-    carried into the new attempt (was_replayed = false) so the whole test's
-    latest state stays visible and only replayed questions change.
     """
     if not user_id:
         return None, "not_logged_in"
     if kind not in PRACTICE_ATTEMPT_KINDS:
         return None, "bad_kind"
-
     all_ids = list(get_mock_question_ids_for_test(test_id) or [])
     if not all_ids:
         return None, "no_questions"
+    if kind == "full":
+        new_id = create_test_attempt(test_id, user_id=user_id)
+        return (new_id, all_ids) if new_id else (None, "db_error")
 
-    try:
-        old_rows = (
-            supabase_admin.table("test_attempts").select("*")
-            .eq("test_id", test_id).eq("user_id", user_id).limit(1).execute().data
-        )
-    except Exception as e:
-        logger.error(f"Error reading previous attempt for test {test_id}: {e}")
-        return None, "db_error"
-    old = old_rows[0] if old_rows else None
-
-    old_answers = {}
-    if old:
-        try:
-            rows = (
-                supabase_admin.table("attempt_answers")
-                .select("mock_question_id, selected_option, is_correct, time_taken_sec, status, mistake_note")
-                .eq("attempt_id", old["id"]).execute().data or []
-            )
-            old_answers = {r["mock_question_id"]: r for r in rows if r.get("mock_question_id")}
-        except Exception as e:
-            logger.error(f"Error reading previous answers for attempt {old['id']}: {e}")
-            return None, "db_error"
-
-    if kind != "full" and (not old or not old.get("submitted_at")):
+    parent = get_latest_full_mock_attempt(test_id, user_id)
+    if not parent or not parent.get("submitted_at"):
         return None, "no_previous_attempt"
-
-    replay_ids = select_reattempt_question_ids(all_ids, old_answers, kind)
+    try:
+        rows = (supabase_admin.table("attempt_answers")
+                .select("mock_question_id, selected_option, is_correct, time_taken_sec, status, mistake_note")
+                .eq("attempt_id", parent["id"]).execute().data or [])
+        parent_answers = {r["mock_question_id"]: r for r in rows if r.get("mock_question_id")}
+    except Exception as e:
+        logger.error(f"Error reading parent answers for attempt {parent['id']}: {e}")
+        return None, "db_error"
+    replay_ids = select_reattempt_question_ids(all_ids, parent_answers, kind)
     if not replay_ids:
         return None, "nothing_to_reattempt"
 
     new_id = None
     try:
-        if old:
-            supabase_admin.table("test_attempts").delete().eq("id", old["id"]).execute()
         res = supabase_admin.table("test_attempts").insert(
-            {"test_id": test_id, "user_id": user_id, "attempt_kind": kind}
-        ).execute()
+            {"test_id": test_id, "user_id": user_id, "attempt_kind": kind, "parent_attempt_id": parent["id"]}).execute()
         if not res.data:
             raise RuntimeError("insert returned no row")
         new_id = res.data[0]["id"]
-
         replay_set = set(replay_ids)
         carry = []
         for qid in all_ids:
-            if qid in replay_set:
-                continue
-            prev = old_answers.get(qid)
-            if not prev:
+            prev = parent_answers.get(qid)
+            if qid in replay_set or not prev:
                 continue
             carry.append({
-                "attempt_id": new_id,
-                "mock_question_id": qid,
-                "selected_option": prev.get("selected_option"),
-                "is_correct": prev.get("is_correct"),
-                "time_taken_sec": prev.get("time_taken_sec") or 0,
-                "status": prev.get("status"),
-                "mistake_note": prev.get("mistake_note"),
-                "was_replayed": False,
-            })
+                "attempt_id": new_id, "mock_question_id": qid, "selected_option": prev.get("selected_option"),
+                "is_correct": prev.get("is_correct"), "time_taken_sec": prev.get("time_taken_sec") or 0,
+                "status": prev.get("status"), "mistake_note": prev.get("mistake_note"), "was_replayed": False})
         if carry:
             supabase_admin.table("attempt_answers").insert(carry).execute()
         return new_id, replay_ids
