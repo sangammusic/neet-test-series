@@ -131,15 +131,14 @@ def question_upload_image(table_name, question_id):
         logger.error(f"Image compression failed for {question_id}: {exc}")
         return jsonify({"ok": False, "error": f"Could not process image — is it a valid photo? ({exc})"}), 400
 
-    # ZERO-KACHRA: Check if an old image exists and safely delete it from storage before replacing.
-    # SANGAM FIX: using maybe_single() to prevent 500 error crashes if the question was deleted.
+    # Remember the OLD file; delete it only AFTER the new one is stored and linked (deleting first
+    # left the question pointing at a missing file whenever the upload failed).
+    old_image_url = None
     try:
         old_data = supabase_admin.table(table_name).select("image_url").eq("id", question_id).maybe_single().execute().data
-        if old_data and old_data.get("image_url"):
-            _delete_image_from_storage(old_data["image_url"])
+        old_image_url = (old_data or {}).get("image_url")
     except Exception as e:
-        logger.warning(f"Failed to fetch or delete old image before replacement for {question_id}: {e}")
-        pass  # If it fails to fetch, ignore safely and proceed with the new upload
+        logger.warning(f"Could not read old image for {question_id}: {e}")
 
     storage_path = f"{table_name}/{question_id}/{uuid.uuid4().hex}.jpg"
 
@@ -170,7 +169,11 @@ def question_upload_image(table_name, question_id):
         }).eq("id", question_id).execute()
     except Exception as exc:
         logger.error(f"Database URL update failed for {question_id}: {exc}")
+        _delete_image_from_storage(public_url)      # no orphan file
         return jsonify({"ok": False, "error": "Image uploaded but saving the link failed."}), 500
+
+    if old_image_url and old_image_url != public_url:
+        _delete_image_from_storage(old_image_url)
 
     return jsonify({
         "ok": True,
@@ -194,11 +197,10 @@ def question_remove_image(table_name, question_id):
         # Fetch the current image_url to permanently delete from storage
         # SANGAM FIX: using maybe_single() to prevent crash on non-existent records
         old_data = supabase_admin.table(table_name).select("image_url").eq("id", question_id).maybe_single().execute().data
+        # clear the link first, then delete the file: never leave a link to a deleted file
+        supabase_admin.table(table_name).update({"image_url": None}).eq("id", question_id).execute()
         if old_data and old_data.get("image_url"):
             _delete_image_from_storage(old_data["image_url"])
-
-        # Update database to clear the URL
-        supabase_admin.table(table_name).update({"image_url": None}).eq("id", question_id).execute()
     except Exception as exc:
         logger.error(f"Failed to remove image for question {question_id}: {exc}")
         return jsonify({"ok": False, "error": "Database error removing image."}), 500
