@@ -77,7 +77,7 @@ def chapters_create():
 @admin_bp.route("/chapters/<chapter_id>/toggle", methods=["POST"])
 @admin_required
 def chapters_toggle(chapter_id):
-    current = supabase_admin.table("chapters").select("is_active").eq("id", chapter_id).single().execute().data
+    current = supabase_admin.table("chapters").select("is_active").eq("id", chapter_id).maybe_single().execute().data
     if current:
         supabase_admin.table("chapters").update({"is_active": not current["is_active"]}).eq("id", chapter_id).execute()
     return redirect(url_for("admin.chapters_list"))
