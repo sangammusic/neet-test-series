@@ -165,19 +165,60 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_na
 
 
 def _fetch_set_questions(chapter_id, is_pyq, category, folder_name, set_name):
-    """Shared fetch for the question list inside one quiz (set) strictly by category."""
+    """Shared fetch for the question list inside one quiz (set) strictly by category.
+
+    The full question body (options, correct_option, explanation) is fetched
+    on purpose: the admin "Edit JSON" modal pre-fills its textarea from this
+    data. Without it the box opens empty and _validate_bulk_question rejects
+    any incomplete JSON the admin types from scratch.
+    """
     try:
         return supabase_admin.table("questions").select(
-            "id, question_text, is_pyq, pyq_year, category, folder_name, set_name, is_premium, "
+            "id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, "
+            "is_pyq, pyq_year, category, folder_name, set_name, is_premium, "
             "difficulty_id, has_image, image_url, marks, negative_marks"
         ).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).order("created_at", desc=True).execute().data
     except Exception as e:
         if "marks" in str(e) or "column" in str(e).lower():
             return supabase_admin.table("questions").select(
-                "id, question_text, is_pyq, pyq_year, category, folder_name, set_name, is_premium, "
+                "id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, "
+                "is_pyq, pyq_year, category, folder_name, set_name, is_premium, "
                 "difficulty_id, has_image, image_url"
             ).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).order("created_at", desc=True).execute().data
         raise
+
+
+def _question_to_edit_json(q):
+    """Builds the exact dict the Edit JSON modal is pre-filled with.
+
+    Keys mirror what _validate_bulk_question reads back, so a no-op
+    "Overwrite & Save" round-trips cleanly. Notes:
+      * question_type is derived from is_pyq -- the validator defaults a
+        missing question_type to "mcq", which would silently flip a PYQ
+        question to non-PYQ on save.
+      * image_url is included -- the validator sets image_url to None when
+        it is absent, which would wipe an already-uploaded diagram.
+    """
+    edit = {
+        "question_text": q.get("question_text") or "",
+        "option_a": q.get("option_a") or "",
+        "option_b": q.get("option_b") or "",
+        "option_c": q.get("option_c") or "",
+        "option_d": q.get("option_d") or "",
+        "correct_option": (q.get("correct_option") or "").strip(),
+        "difficulty_id": q.get("difficulty_id"),
+        "question_type": "pyq" if q.get("is_pyq") else "mcq",
+        "pyq_year": q.get("pyq_year"),
+        "explanation": q.get("explanation") or "",
+        "has_image": bool(q.get("has_image")),
+        "image_url": q.get("image_url") or "",
+        "is_premium": bool(q.get("is_premium")),
+    }
+    if q.get("marks") is not None:
+        edit["marks"] = q.get("marks")
+    if q.get("negative_marks") is not None:
+        edit["negative_marks"] = q.get("negative_marks")
+    return edit
 
 
 # ==========================================
@@ -275,9 +316,13 @@ def questions_set_manage():
     questions = _fetch_set_questions(chapter_id, is_pyq, category, folder_name, set_name)
     difficulty_levels = supabase_admin.table("difficulty_levels").select("id, name").order("display_order").execute().data
 
+    # id -> pre-filled JSON dict for the Edit JSON modal (rendered via |tojson)
+    edit_json_map = {q["id"]: _question_to_edit_json(q) for q in questions}
+
     return render_template(
         "admin_set_manage.html",
         chapter=chapter, questions=questions, difficulty_levels=difficulty_levels,
+        edit_json_map=edit_json_map,
         selected_stream_id=stream_id, selected_subject_id=subject_id, selected_chapter_id=chapter_id,
         selected_type=q_type, selected_category=category,
         selected_folder=folder_name, selected_set=set_name,
@@ -324,51 +369,97 @@ def questions_bulk_upload():
 
     difficulty_ids = {d["id"] for d in supabase_admin.table("difficulty_levels").select("id").execute().data}
 
-    valid_payloads, errors = [], []
+    # ------------------------------------------------------------------
+    # PARTIAL-SUCCESS UPLOAD
+    #
+    # Every row is judged on its own. A bad row (validation error) or a
+    # duplicate row is SKIPPED and reported; every other row in the chunk is
+    # still saved. Previously a single bad/duplicate row aborted the whole
+    # chunk, so pasting 250 questions in chunks of 25 could silently lose
+    # 25 at a time -- and the admin only saw a generic "Server error".
+    # ------------------------------------------------------------------
+    valid_payloads, valid_rownums = [], []
+    failed_validation = []      # [{"row": 14, "reason": "..."}]
     for i, raw in enumerate(parsed, start=1):
         payload, error = _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_name, category, default_marks, default_negative)
         if error:
-            errors.append(f"row {i}: {error}")
+            failed_validation.append({"row": i, "reason": error})
         else:
             valid_payloads.append(payload)
+            valid_rownums.append(i)
 
+    skipped_duplicates = []     # [{"row": 5, "reason": "..."}]
+    to_insert = []
     if valid_payloads:
         existing_questions = supabase_admin.table("questions").select("question_text").eq("chapter_id", chapter_id).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).execute().data
         existing_texts = {q["question_text"].strip().lower() for q in existing_questions if q.get("question_text")}
 
         incoming_texts = set()
-        for p in valid_payloads:
+        for rownum, p in zip(valid_rownums, valid_payloads):
             clean_text = p["question_text"].strip().lower()
+            preview = clean_text[:40] + ("..." if len(clean_text) > 40 else "")
             if clean_text in existing_texts:
-                return jsonify({"ok": False, "error": f"Duplicate Detected: '{clean_text[:40]}...' already exists in this quiz!"}), 400
+                skipped_duplicates.append({"row": rownum, "reason": f"already exists in this quiz: '{preview}'"})
+                continue
             if clean_text in incoming_texts:
-                return jsonify({"ok": False, "error": f"Duplicate Detected inside pasted chunk: '{clean_text[:40]}...'"}), 400
+                skipped_duplicates.append({"row": rownum, "reason": f"repeated inside this pasted chunk: '{preview}'"})
+                continue
             incoming_texts.add(clean_text)
+            to_insert.append(p)
 
     inserted_ids, warning_msg = [], None
 
-    if valid_payloads and not errors:
+    if to_insert:
         try:
-            result = supabase_admin.table("questions").insert(valid_payloads).execute()
+            result = supabase_admin.table("questions").insert(to_insert).execute()
             inserted_ids = [row["id"] for row in result.data]
         except Exception as exc:
             if "marks" in str(exc) or "column" in str(exc).lower():
-                fallback_payloads = [{k: v for k, v in p.items() if k not in ["marks", "negative_marks"]} for p in valid_payloads]
+                fallback_payloads = [{k: v for k, v in p.items() if k not in ["marks", "negative_marks"]} for p in to_insert]
                 try:
                     result = supabase_admin.table("questions").insert(fallback_payloads).execute()
                     inserted_ids = [row["id"] for row in result.data]
                     warning_msg = "Questions saved! BUT 'marks' were ignored. Run SQL Migration."
                 except Exception as fallback_exc:
                     logger.error(f"Fallback DB Upload failed: {fallback_exc}")
-                    return jsonify({"ok": False, "error": "Upload failed. Please try again."}), 500
+                    return jsonify({"ok": False, "error": "Upload failed. Please try again.", "pasted": len(parsed), "inserted": 0, "skipped_duplicates": len(skipped_duplicates), "failed_validation": len(failed_validation), "duplicate_details": skipped_duplicates, "errors": [f"row {e['row']}: {e['reason']}" for e in failed_validation]}), 500
             else:
                 logger.error(f"DB Upload failed: {exc}")
-                return jsonify({"ok": False, "error": "DB Upload failed."}), 500
+                return jsonify({"ok": False, "error": "DB Upload failed.", "pasted": len(parsed), "inserted": 0, "skipped_duplicates": len(skipped_duplicates), "failed_validation": len(failed_validation), "duplicate_details": skipped_duplicates, "errors": [f"row {e['row']}: {e['reason']}" for e in failed_validation]}), 500
 
-    resp = {"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "inserted_ids": inserted_ids, "errors": errors}
+    resp = {
+        "ok": bool(inserted_ids),
+        "pasted": len(parsed),
+        "inserted": len(inserted_ids),
+        "inserted_ids": inserted_ids,
+        "skipped_duplicates": len(skipped_duplicates),
+        "failed_validation": len(failed_validation),
+        "duplicate_details": skipped_duplicates,
+        "validation_details": failed_validation,
+        # kept for backward compatibility with older front-end code
+        "errors": [f"row {e['row']}: {e['reason']}" for e in failed_validation],
+    }
     if warning_msg:
         resp["warning"] = warning_msg
+
+    if not inserted_ids:
+        # Nothing saved -- always give the UI a human-readable `error` string
+        # (it used to be missing on this path, which showed "Server error").
+        resp["error"] = _bulk_nothing_saved_message(len(parsed), skipped_duplicates, failed_validation)
+        return jsonify(resp), 400
+
     return jsonify(resp)
+
+
+def _bulk_nothing_saved_message(pasted, skipped_duplicates, failed_validation):
+    parts = []
+    if failed_validation:
+        first = failed_validation[0]
+        parts.append(f"{len(failed_validation)} invalid (e.g. row {first['row']}: {first['reason']})")
+    if skipped_duplicates:
+        first = skipped_duplicates[0]
+        parts.append(f"{len(skipped_duplicates)} duplicate (e.g. row {first['row']}: {first['reason']})")
+    return f"0 of {pasted} questions saved — " + "; ".join(parts) + "." if parts else "No questions were saved."
 
 
 @admin_bp.route("/questions/set/undo-chunk", methods=["POST"])
