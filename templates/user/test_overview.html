@@ -55,6 +55,40 @@
   <!-- Call to Action -->
   <div class="text-center">
       {% if has_access %}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category_name, message in messages %}
+        <div class="mb-5 text-sm font-semibold rounded-xl px-4 py-3 border {{ 'bg-red-500/10 border-red-500/30 text-red-300' if category_name == 'error' else 'bg-green-500/10 border-green-500/30 text-green-300' }}">{{ message }}</div>
+        {% endfor %}
+      {% endwith %}
+
+      {% if attempt_state == 'submitted' %}
+      <!-- FINISHED: Analyse + Reattempt -->
+      <div class="grid grid-cols-3 gap-3 text-center mb-5">
+        <div class="bg-white/5 border border-white/10 rounded-xl py-3"><p class="text-2xl font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[10px] text-gray-500 uppercase tracking-widest font-black">Correct</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl py-3"><p class="text-2xl font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[10px] text-gray-500 uppercase tracking-widest font-black">Wrong</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl py-3"><p class="text-2xl font-display font-bold text-gray-400">{{ attempt.skipped_count }}</p><p class="text-[10px] text-gray-500 uppercase tracking-widest font-black">Skipped</p></div>
+      </div>
+      <a href="{{ url_for('user.test_analyse', slug=stream.slug, test_id=test.id) }}"
+         class="flex justify-center items-center gap-2 w-full py-4 px-8 rounded-xl bg-gold text-ink font-bold text-lg hover:bg-gold-light transition-all shadow-[0_4px_14px_0_rgba(212,160,23,0.2)]">
+        📊 Analyse your last test
+      </a>
+      <a href="{{ url_for('user.test_analyse', slug=stream.slug, test_id=test.id) }}#reattempt"
+         class="flex justify-center items-center gap-2 w-full mt-3 py-3.5 px-8 rounded-xl border border-gold/40 text-gold font-bold hover:bg-gold/10 transition-all">
+        🔁 Reattempt
+      </a>
+
+      {% elif attempt_state == 'in_progress' %}
+      <!-- STARTED, NOT SUBMITTED: resume -->
+      <a href="{{ url_for('user.test_attempt', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}"
+         class="flex justify-center items-center gap-2 w-full py-4 px-8 rounded-xl bg-gold text-ink font-bold text-lg hover:bg-gold-light transition-all shadow-[0_4px_14px_0_rgba(212,160,23,0.2)]">
+        ▶ Resume Attempt
+      </a>
+      <form action="{{ url_for('user.test_start', slug=stream.slug, test_id=test.id) }}" method="POST" class="m-0 mt-3"
+            onsubmit="return confirm('Start over? Your unfinished progress in this test will be discarded.');">
+        <button type="submit" class="w-full py-3 rounded-xl border border-white/15 text-sm font-semibold text-gray-300 hover:bg-white/5 transition-colors">Start Over</button>
+      </form>
+
+      {% else %}
       <form action="{{ url_for('user.test_start', slug=stream.slug, test_id=test.id) }}" method="POST">
         <button type="submit"
            class="inline-flex justify-center items-center gap-2 w-full sm:w-auto min-w-[240px] bg-gold text-ink font-bold text-lg py-4 px-8 rounded-xl hover:bg-gold-light shadow-[0_4px_14px_0_rgba(212,160,23,0.2)] hover:shadow-[0_6px_20px_rgba(212,160,23,0.3)] transition-all">
@@ -64,6 +98,7 @@
           </svg>
         </button>
       </form>
+      {% endif %}
       {% elif test.is_premium and not has_access %}
       <a href="{{ url_for('auth.login') if not session.get('user_id') else '#' }}"
          class="inline-flex justify-center items-center gap-2 w-full sm:w-auto min-w-[240px] bg-white/10 text-white font-bold text-lg py-4 px-8 rounded-xl hover:bg-white/20 border border-white/20 transition-all">
