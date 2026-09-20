@@ -58,7 +58,7 @@ def subjects_create():
 @admin_bp.route("/subjects/<subject_id>/toggle", methods=["POST"])
 @admin_required
 def subjects_toggle(subject_id):
-    current = supabase_admin.table("subjects").select("is_active").eq("id", subject_id).single().execute().data
+    current = supabase_admin.table("subjects").select("is_active").eq("id", subject_id).maybe_single().execute().data
     if current:
         supabase_admin.table("subjects").update({"is_active": not current["is_active"]}).eq("id", subject_id).execute()
     return redirect(url_for("admin.subjects_list"))
