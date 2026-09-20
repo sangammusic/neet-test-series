@@ -117,6 +117,12 @@
     </div>
   </div>
 
+  {% if attempt_kind != 'full' %}
+  <div class="bg-gold/10 border-b border-gold/20 px-4 py-2 text-center text-xs font-semibold text-gold-light">
+    🔁 Reattempt — {{ 'wrong questions only' if attempt_kind == 'wrong_only' else 'wrong + marked questions' }} ({{ questions|length }} question{{ '' if questions|length == 1 else 's' }})
+  </div>
+  {% endif %}
+
   <!-- Question palette strip -->
   <div class="bg-[#0f0f0f] border-b border-white/5 px-3 md:px-6 py-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar sticky top-[49px] z-10 shadow-sm w-full max-w-full">
     <template x-for="(q, idx) in questions" :key="'strip-' + q.id">
@@ -189,6 +195,28 @@
           <p x-show="currentQuestion?.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
             <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="rendered.explanation"></span>
           </p>
+
+          <!-- WRONG ANSWER: ask the student to note the mistake right away -->
+          <div x-show="currentQuestion && needsNote(currentQuestion.id)" x-cloak
+               x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+               class="mt-5 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+            <label class="block text-xs font-black uppercase tracking-widest text-red-300 mb-2">✍️ Enter the mistake you have done</label>
+            <textarea rows="2" maxlength="2000"
+                      x-model="notes[currentQuestion?.id]"
+                      @input="onNoteInput(currentQuestion.id)"
+                      @blur="if (noteState[currentQuestion.id] === 'dirty') saveNote(currentQuestion.id)"
+                      placeholder="e.g. Misread the sign / forgot the formula / silly calculation error…"
+                      class="w-full bg-[#0f0f0f] text-gray-100 text-sm border border-white/10 rounded-lg p-3 outline-none focus:border-red-400 resize-y placeholder-gray-600"></textarea>
+            <div class="flex items-center justify-between mt-2 min-h-[26px]">
+              <span class="text-xs font-semibold"
+                    :class="noteState[currentQuestion?.id] === 'error' ? 'text-red-400' : (noteState[currentQuestion?.id] === 'saved' ? 'text-green-400' : 'text-gray-500')"
+                    x-text="noteStatusText(currentQuestion?.id)"></span>
+              <button type="button" @click="saveNote(currentQuestion.id)"
+                      x-show="['dirty','error'].includes(noteState[currentQuestion?.id])" x-cloak
+                      class="text-xs font-bold bg-gold text-ink px-4 py-1.5 rounded-lg hover:bg-gold-light">Save note</button>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-1">Optional. You can also add or edit it later from Analyse.</p>
+          </div>
         </div>
 
         <!-- Review mode, question was left unanswered -->
@@ -270,13 +298,14 @@
     <div class="bg-[#161616] border border-white/10 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
       <h3 class="font-display text-xl font-bold text-white mb-3">Are you sure you want to finish?</h3>
       <p class="text-sm text-gray-400 mb-6">Your total time will stop counting once you finish. You can still review every question afterwards.</p>
+      <p x-show="submitError" x-cloak class="text-sm font-semibold text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-4" x-text="submitError"></p>
       <div class="grid grid-cols-2 gap-3">
-        <button @click="showFinishConfirm = false" class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
+        <button @click="showFinishConfirm = false" :disabled="isSubmitting" class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-40 transition-colors">
           Cancel
         </button>
-        <button @click="finishNow()"
-          class="py-3 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
-          Yes, Finish
+        <button @click="finishNow()" :disabled="isSubmitting"
+          class="py-3 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-60 transition-colors">
+          <span x-text="isSubmitting ? 'Submitting…' : (submitError ? 'Try again' : 'Yes, Finish')"></span>
         </button>
       </div>
     </div>
@@ -300,23 +329,25 @@
       <div class="relative overflow-hidden bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 mb-5">
         <div class="absolute top-0 right-0 w-24 h-24 bg-gold opacity-5 rounded-bl-full"></div>
         <p class="text-xs font-semibold text-gold-light mb-1 uppercase tracking-wider relative z-10">Score</p>
-        <p class="font-display text-4xl font-bold text-white relative z-10" x-text="score + ' / ' + questions.length"></p>
-        <p class="text-sm text-gray-400 mt-1 relative z-10" x-text="accuracyLabel"></p>
+        <p class="font-display text-4xl font-bold text-white relative z-10"
+           x-text="sv ? (sv.score + ' marks') : (score + ' / ' + questions.length)"></p>
+        <p class="text-sm text-gray-400 mt-1 relative z-10"
+           x-text="sv ? ('Whole quiz: ' + sv.correct_count + ' correct · ' + sv.wrong_count + ' wrong · ' + sv.skipped_count + ' skipped') : accuracyLabel"></p>
       </div>
 
       <!-- Correct / Wrong / Skipped breakdown -->
       <div class="grid grid-cols-3 gap-3 mb-5">
         <div class="bg-white/5 border border-white/10 rounded-xl p-3">
           <p class="text-2xl font-display font-bold text-green-400" x-text="score"></p>
-          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Correct</p>
+          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Correct (this run)</p>
         </div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-3">
           <p class="text-2xl font-display font-bold text-red-400" x-text="wrongCount"></p>
-          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Wrong</p>
+          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Wrong (this run)</p>
         </div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-3">
           <p class="text-2xl font-display font-bold text-gray-400" x-text="skippedCount"></p>
-          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Skipped</p>
+          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Skipped (this run)</p>
         </div>
       </div>
 
@@ -329,9 +360,13 @@
       <!-- SANGAM FIX #3: "Back to Attempt" button hata diya gaya hai.
            "Review Answers" wahi kaam karta tha, duplicate tha. -->
       <div class="grid grid-cols-1 gap-3">
-        <button @click="showSummary = false"
+        <a x-show="analyseUrl" x-cloak :href="analyseUrl"
           class="py-3 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
-          Review Answers
+          📊 Analyse &amp; Reattempt
+        </a>
+        <button @click="showSummary = false"
+          class="py-3 rounded-xl text-sm font-semibold border border-gold/40 text-gold hover:bg-gold/10 transition-colors">
+          Review Answers Here
         </button>
         <a href="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
            class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
@@ -343,13 +378,26 @@
 </div>
 
 <script>
+// Endpoints for THIS attempt (all server-side authorised + validated).
+const ANSWER_URL = {{ url_for('user.practice_save_answer', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt.id) | tojson }};
+const NOTE_URL   = {{ url_for('user.practice_save_note',   slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt.id) | tojson }};
+const SUBMIT_URL = {{ url_for('user.practice_submit',      slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt.id) | tojson }};
+
 function practiceRunner() {
   return {
     questions: {{ questions | tojson }},
+    // Server-saved progress for this attempt (resume support): {qid: {selected_option, status, time_taken_sec, mistake_note}}
+    savedProgress: {{ saved_progress | tojson }},
     currentIndex: 0,
     selected: {},
     answers: {},
     marked: {},
+    // "What mistake did I make" notes, keyed by question id
+    notes: {},
+    noteState: {},          // qid -> 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+    submitError: '',
+    isSubmitting: false,
+    serverSummary: null,    // authoritative numbers returned by /submit
     imageErrorIds: {},
     showFinishConfirm: false,
     showSummary: false,
@@ -386,6 +434,8 @@ function practiceRunner() {
 
       this._renderer = SangamQuiz.createRenderer();
 
+      this._hydrateFromServer();
+
       // Zombie ko har haal me pakdo
       SangamQuiz.armClockSentinel(() => this.isFinished);
 
@@ -398,6 +448,81 @@ function practiceRunner() {
     },
 
     destroy() { this._killClock(); },
+
+    /* Resume: put back answers / marks / time / notes that were saved on the server. */
+    _hydrateFromServer() {
+      let firstOpen = -1;
+      this.questions.forEach((q, idx) => {
+        const p = this.savedProgress[q.id];
+        if (!p) { if (firstOpen === -1) firstOpen = idx; return; }
+        if (p.selected_option) {
+          this.selected[q.id] = p.selected_option;
+          // A saved answer counts as SUBMITTED (feedback is shown), exactly as when it was made.
+          if (p.status === 'answered' || p.status === 'answered_marked') this.answers[q.id] = p.selected_option;
+        }
+        if (p.status === 'marked' || p.status === 'answered_marked') this.marked[q.id] = true;
+        if (p.time_taken_sec) this.timeSpent[q.id] = p.time_taken_sec;
+        if (p.mistake_note) { this.notes[q.id] = p.mistake_note; this.noteState[q.id] = 'saved'; }
+        if (this.answers[q.id] == null && firstOpen === -1) firstOpen = idx;
+      });
+      // Total time carries over too (sum of saved per-question time).
+      this.totalSeconds = Object.values(this.timeSpent).reduce((a, b) => a + (b || 0), 0);
+      // Jump to the first question that still needs an answer.
+      if (firstOpen > 0) this.currentIndex = firstOpen;
+    },
+
+    /* ---- server sync ------------------------------------------------- */
+    _statusFor(qid) {
+      const answered = this.answers[qid] != null;
+      const marked = !!this.marked[qid];
+      if (answered && marked) return 'answered_marked';
+      if (answered) return 'answered';
+      if (marked) return 'marked';
+      return 'not_answered';
+    },
+
+    async _post(url, body) {
+      try {
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json().catch(() => ({}));
+        return { ok: res.ok && !!data.ok, data };
+      } catch (e) { return { ok: false, data: {} }; }
+    },
+
+    /* Fire-and-forget durable save of one question. Retries once on failure. */
+    async _syncQuestion(qid) {
+      if (!qid) return;
+      const body = {
+        question_id: qid,
+        // Only a SUBMITTED answer is persisted. A merely-highlighted (unsubmitted) pick must never
+        // become an answer just because the student toggled the review mark.
+        selected_option: this.answers[qid] != null ? this.answers[qid] : null,
+        status: this._statusFor(qid),
+        time_taken_sec: this.timeSpent[qid] || 0,
+      };
+      let r = await this._post(ANSWER_URL, body);
+      if (!r.ok) r = await this._post(ANSWER_URL, body);
+      if (!r.ok) SangamQuiz.xray.warn('answer sync failed', { qid });
+    },
+
+    /* ---- mistake note ------------------------------------------------ */
+    needsNote(qid) {
+      // Only for a submitted answer that was WRONG.
+      const q = this.questions.find(x => x.id === qid);
+      return !!q && this.answers[qid] != null && this.answers[qid] !== q.correct_option;
+    },
+
+    onNoteInput(qid) { this.noteState[qid] = 'dirty'; },
+
+    async saveNote(qid) {
+      this.noteState[qid] = 'saving';
+      const r = await this._post(NOTE_URL, { question_id: qid, note: this.notes[qid] || '' });
+      this.noteState[qid] = r.ok ? 'saved' : 'error';
+    },
+
+    noteStatusText(qid) {
+      return { saving: 'Saving…', saved: '✓ Saved', error: 'Could not save — try again', dirty: 'Unsaved' }[this.noteState[qid]] || '';
+    },
 
     /* =============================================================
        CLOCK  —  ek hi interval, dono timers isi se chalte hain
@@ -440,11 +565,37 @@ function practiceRunner() {
 
     /* SANGAM FIX #1: Finish dabate hi sab kuch band — page ke har
        clock ko nuke kar diya jata hai, zombie bacha hi nahi sakta. */
-    finishNow() {
+    async finishNow() {
+      if (this.isSubmitting) return;
       this.showFinishConfirm = false;
+      this.isSubmitting = true;
+      this.submitError = '';
+
+      // Send the final state of every question; the SERVER decides what is correct.
+      const answers = {};
+      for (const q of this.questions) {
+        answers[q.id] = {
+          selected_option: this.answers[q.id] != null ? this.answers[q.id] : null,   // unsubmitted picks don't count
+          status: this._statusFor(q.id),
+          time_taken_sec: this.timeSpent[q.id] || 0,
+        };
+      }
+      const r = await this._post(SUBMIT_URL, { answers, total_time_sec: this.totalSeconds });
+      this.isSubmitting = false;
+
+      if (!r.ok) {
+        // Do NOT end the quiz locally -- nothing was saved, so let the student retry.
+        this.submitError = (r.data && r.data.error) || 'Could not submit. Check your connection and try again.';
+        this.showFinishConfirm = true;
+        return;
+      }
+      this.serverSummary = r.data.summary || null;
+      this.analyseUrl = r.data.redirect || null;
       this.stopTimers();
       this.showSummary = true;
     },
+
+    analyseUrl: null,
 
     stopTimers() {
       this.isFinished = true;
@@ -610,6 +761,9 @@ function practiceRunner() {
       return s;
     },
 
+    // Whole-quiz numbers from the server (authoritative; include carried-forward questions on partial reattempts).
+    get sv() { return this.serverSummary; },
+
     get wrongCount() {
       let w = 0;
       for (const q of this.questions) { const a = this.answers[q.id]; if (a != null && a !== q.correct_option) w++; }
@@ -654,9 +808,14 @@ function practiceRunner() {
       this.answers[q.id] = this.selected[q.id];
       // Explanation already prerendered hai cache me — kuch typeset karne
       // ki zaroorat nahi, isliye yahan koi MathJax call nahi.
+      this._syncQuestion(q.id);          // durable save (background)
     },
 
-    toggleMark(questionId) { if (questionId) this.marked[questionId] = !this.marked[questionId]; },
+    toggleMark(questionId) {
+      if (!questionId || this.isFinished) return;
+      this.marked[questionId] = !this.marked[questionId];
+      this._syncQuestion(questionId);    // marks must survive a reload too
+    },
 
     /* SANGAM DIAGNOSTIC: broken-image detector.
        Pehle: image load fail hone par sirf khaali safed box dikhta tha,
