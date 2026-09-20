@@ -383,24 +383,38 @@ def bulk_save_attempt_progress(attempt_id, entries):
         logger.error(f"Error bulk saving attempt progress for attempt {attempt_id}: {e}")
 
 
+_ANSWER_COLS_BASE = "mock_question_id, selected_option, is_correct, time_taken_sec, status"
+_ANSWER_COLS_FULL = _ANSWER_COLS_BASE + ", mistake_note, was_replayed"
+
+
 def get_attempt_answers_map(attempt_id):
     """
     Reads back every attempt_answers row for this attempt. Used to hydrate
     Alpine state on page reload, and to pull exact time/options for Review Mode.
+
+    Also returns mistake_note / was_replayed (added by
+    sql/migration_practice_attempts.sql). If that migration has not been run yet
+    those columns do not exist and the select would fail -- which used to mean
+    EVERY mock test breaking. So fall back to the original columns instead:
+    existing mock tests keep working before, during and after the migration.
     """
-    try:
-        res = (
-            supabase_admin.table("attempt_answers")
-            .select("mock_question_id, selected_option, is_correct, time_taken_sec, status")
-            .eq("attempt_id", attempt_id)
-            .execute()
-        )
-        if not res.data:
-            return {}
-        return {row["mock_question_id"]: row for row in res.data if row.get("mock_question_id")}
-    except Exception as e:
-        logger.error(f"Error fetching attempt answers map for attempt {attempt_id}: {e}")
-        return {}
+    for cols in (_ANSWER_COLS_FULL, _ANSWER_COLS_BASE):
+        try:
+            res = (
+                supabase_admin.table("attempt_answers")
+                .select(cols)
+                .eq("attempt_id", attempt_id)
+                .execute()
+            )
+            if not res.data:
+                return {}
+            return {row["mock_question_id"]: row for row in res.data if row.get("mock_question_id")}
+        except Exception as e:
+            if cols is _ANSWER_COLS_BASE:
+                logger.error(f"Error fetching attempt answers map for attempt {attempt_id}: {e}")
+                return {}
+            logger.warning(f"attempt_answers new columns unavailable (run migration_practice_attempts.sql): {e}")
+    return {}
 
 
 def get_mock_questions_for_test_review(test_id, attempt_id):
@@ -586,6 +600,13 @@ def get_attempts_for_user(user_id):
 
 
 def delete_all_attempts_for_user(user_id):
+    # Chapter-wise practice attempts are part of the same "history". Their answers go
+    # with them via ON DELETE CASCADE. Tolerate the table not existing yet (migration
+    # not run) so "Clear history" never breaks because of it.
+    try:
+        supabase_admin.table("practice_attempts").delete().eq("user_id", user_id).execute()
+    except Exception as e:
+        logger.warning(f"Could not clear practice attempts for user {user_id} (migration pending?): {e}")
     try:
         res = supabase_admin.table("test_attempts").delete().eq("user_id", user_id).execute()
         return res.data
@@ -675,3 +696,651 @@ def user_has_access_to_test(test, user_id):
     except Exception as e:
         logger.error(f"Error checking access for user {user_id}, test {test.get('id')}: {e}")
         return False
+
+
+# =====================================================================
+# CHAPTER-WISE PRACTICE: PERSISTENT ATTEMPTS  (practice_attempts /
+# practice_attempt_answers).  Mirrors the mock-test attempt helpers
+# above, but keyed by the quiz's natural identity instead of a
+# `tests` row.  See sql/migration_practice_attempts.sql.
+#
+# Design rules:
+#   * The SERVER is the source of truth for grading. is_correct / score
+#     are always computed from questions.correct_option at submit time,
+#     never taken from the browser.
+#   * Only the latest attempt per (user, quiz) is kept -- same as mock
+#     tests -- but a new attempt is created BEFORE the old one is deleted,
+#     so a failure half-way never destroys the student's only copy.
+# =====================================================================
+
+PRACTICE_ATTEMPT_KINDS = ("full", "wrong_only", "marked_and_wrong_only")
+_VALID_OPTIONS = ("A", "B", "C", "D")
+_VALID_STATUSES = ("answered", "marked", "answered_marked", "not_answered", "not_visited")
+MISTAKE_NOTE_MAX_LEN = 2000
+
+
+def _quiz_filter(query, chapter_id, mode, category, folder_name, set_name):
+    return (
+        query.eq("chapter_id", chapter_id)
+        .eq("is_pyq", mode == "pyq")
+        .eq("category", category)
+        .eq("folder_name", folder_name)
+        .eq("set_name", set_name)
+    )
+
+
+def get_practice_quiz_questions(chapter_id, mode, category, folder_name, set_name, columns="*"):
+    """All questions of one practice quiz, in the stable order the runner uses."""
+    try:
+        q = supabase_admin.table("questions").select(columns)
+        return _quiz_filter(q, chapter_id, mode, category, folder_name, set_name).order("id").execute().data or []
+    except Exception as e:
+        logger.error(f"Error fetching practice quiz questions ({chapter_id}/{mode}/{category}/{folder_name}/{set_name}): {e}")
+        return []
+
+
+def get_latest_practice_attempt(user_id, chapter_id, mode, category, folder_name, set_name):
+    """The user's single stored attempt for this quiz (or None)."""
+    if not user_id:
+        return None
+    try:
+        res = (
+            supabase_admin.table("practice_attempts")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("chapter_id", chapter_id)
+            .eq("mode", mode)
+            .eq("category", category)
+            .eq("folder_name", folder_name)
+            .eq("set_name", set_name)
+            .limit(1)
+            .execute()
+        )
+        return res.data[0] if res.data else None
+    except Exception as e:
+        logger.error(f"Error fetching latest practice attempt for user {user_id}: {e}")
+        return None
+
+
+def get_practice_attempt_by_id(attempt_id):
+    try:
+        res = supabase_admin.table("practice_attempts").select("*").eq("id", attempt_id).maybe_single().execute()
+        return res.data
+    except Exception as e:
+        logger.error(f"Error fetching practice attempt {attempt_id}: {e}")
+        return None
+
+
+def get_practice_answers_map(attempt_id):
+    """{question_id: answer_row} for one practice attempt."""
+    try:
+        res = (
+            supabase_admin.table("practice_attempt_answers")
+            .select("question_id, selected_option, is_correct, time_taken_sec, status, mistake_note, was_replayed")
+            .eq("attempt_id", attempt_id)
+            .execute()
+        )
+        return {row["question_id"]: row for row in (res.data or [])}
+    except Exception as e:
+        logger.error(f"Error fetching practice answers for attempt {attempt_id}: {e}")
+        return {}
+
+
+def _is_marked(status):
+    return status in ("marked", "answered_marked")
+
+
+def select_reattempt_question_ids(all_question_ids, old_answers, kind):
+    """
+    Which question ids a reattempt of `kind` replays.
+
+      full                   -> every question of the quiz
+      wrong_only             -> questions the student got WRONG last time
+      marked_and_wrong_only  -> questions that were MARKED or WRONG last time
+
+    "Wrong" means answered and incorrect (is_correct is False). Skipped
+    questions are not "wrong". Order follows `all_question_ids`.
+    """
+    if kind == "full":
+        return list(all_question_ids)
+    picked = []
+    for qid in all_question_ids:
+        row = old_answers.get(qid) or {}
+        wrong = row.get("is_correct") is False
+        marked = _is_marked(row.get("status"))
+        if kind == "wrong_only" and wrong:
+            picked.append(qid)
+        elif kind == "marked_and_wrong_only" and (wrong or marked):
+            picked.append(qid)
+    return picked
+
+
+def start_practice_attempt(user_id, chapter_id, mode, category, folder_name, set_name, kind="full"):
+    """
+    Creates the user's new latest attempt for this quiz and returns
+    (attempt_id, replay_question_ids) -- or (None, error_code).
+
+    Selective reset ("carry-forward"):
+      * questions being replayed start clean: no answer, NO mistake note;
+      * questions NOT replayed are copied from the previous attempt
+        (answer, correctness, status, time AND mistake note) with
+        was_replayed = false, so the Analyse page always shows the full
+        latest picture of the quiz and only replayed questions change.
+
+    Order of operations is create-new -> copy -> delete-old, so a failure
+    part-way never leaves the student with nothing.
+    """
+    if not user_id:
+        return None, "not_logged_in"
+    if kind not in PRACTICE_ATTEMPT_KINDS:
+        return None, "bad_kind"
+
+    all_questions = get_practice_quiz_questions(chapter_id, mode, category, folder_name, set_name, columns="id")
+    all_ids = [q["id"] for q in all_questions]
+    if not all_ids:
+        return None, "no_questions"
+
+    old = get_latest_practice_attempt(user_id, chapter_id, mode, category, folder_name, set_name)
+    old_answers = get_practice_answers_map(old["id"]) if old else {}
+
+    # A partial reattempt needs a SUBMITTED previous attempt to select from.
+    if kind != "full" and (not old or not old.get("submitted_at")):
+        return None, "no_previous_attempt"
+
+    replay_ids = select_reattempt_question_ids(all_ids, old_answers, kind)
+    if not replay_ids:
+        return None, "nothing_to_reattempt"
+
+    new_id = None
+    try:
+        # The UNIQUE(user, quiz) constraint allows only one row, so the old
+        # row must go before the new one can exist. Snapshot what we need
+        # first (done above), then swap.
+        if old:
+            supabase_admin.table("practice_attempts").delete().eq("id", old["id"]).execute()
+
+        res = supabase_admin.table("practice_attempts").insert({
+            "user_id": user_id,
+            "chapter_id": chapter_id,
+            "mode": mode,
+            "category": category,
+            "folder_name": folder_name,
+            "set_name": set_name,
+            "attempt_kind": kind,
+        }).execute()
+        if not res.data:
+            raise RuntimeError("insert returned no row")
+        new_id = res.data[0]["id"]
+
+        replay_set = set(replay_ids)
+        carry_rows = []
+        for qid in all_ids:
+            if qid in replay_set:
+                continue
+            prev = old_answers.get(qid)
+            if not prev:
+                continue
+            carry_rows.append({
+                "attempt_id": new_id,
+                "question_id": qid,
+                "selected_option": prev.get("selected_option"),
+                "is_correct": prev.get("is_correct"),
+                "time_taken_sec": prev.get("time_taken_sec") or 0,
+                "status": prev.get("status"),
+                "mistake_note": prev.get("mistake_note"),
+                "was_replayed": False,
+            })
+        if carry_rows:
+            supabase_admin.table("practice_attempt_answers").insert(carry_rows).execute()
+
+        return new_id, replay_ids
+    except Exception as e:
+        logger.error(f"Error starting practice attempt for user {user_id}: {e}")
+        # Best-effort rollback of the half-built new attempt.
+        if new_id:
+            try:
+                supabase_admin.table("practice_attempts").delete().eq("id", new_id).execute()
+            except Exception:
+                pass
+        return None, "db_error"
+
+
+def save_practice_progress(attempt_id, question_id, selected_option, status, time_taken_sec):
+    """Durable per-question save (called after every Submit Answer / mark toggle)."""
+    try:
+        if selected_option not in _VALID_OPTIONS:
+            selected_option = None
+        if status not in _VALID_STATUSES:
+            status = "answered" if selected_option else "not_answered"
+        row = {
+            "attempt_id": attempt_id,
+            "question_id": question_id,
+            "selected_option": selected_option,
+            "status": status,
+            "time_taken_sec": max(0, int(time_taken_sec or 0)),
+            "was_replayed": True,
+        }
+        supabase_admin.table("practice_attempt_answers").upsert(row, on_conflict="attempt_id,question_id").execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error saving practice progress for attempt {attempt_id}, question {question_id}: {e}")
+        return False
+
+
+def save_practice_mistake_note(attempt_id, question_id, note):
+    """
+    Stores / clears the student's "what mistake did I make" note for one
+    question. Only updates the note column; an empty note clears it.
+    Returns True on success.
+    """
+    note = (note or "").strip()
+    if len(note) > MISTAKE_NOTE_MAX_LEN:
+        note = note[:MISTAKE_NOTE_MAX_LEN]
+    try:
+        existing = (
+            supabase_admin.table("practice_attempt_answers")
+            .select("id")
+            .eq("attempt_id", attempt_id)
+            .eq("question_id", question_id)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            supabase_admin.table("practice_attempt_answers").update({"mistake_note": note or None}).eq("id", existing[0]["id"]).execute()
+        else:
+            supabase_admin.table("practice_attempt_answers").insert({
+                "attempt_id": attempt_id,
+                "question_id": question_id,
+                "mistake_note": note or None,
+                "status": "not_visited",
+                "was_replayed": True,
+            }).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error saving mistake note for attempt {attempt_id}, question {question_id}: {e}")
+        return False
+
+
+def submit_practice_attempt(attempt_id, replay_question_ids, submitted_answers=None, total_time_sec=0):
+    """
+    Grades the replayed questions on the SERVER and finalizes the attempt.
+
+    `submitted_answers` = {question_id: {"selected_option", "status", "time_taken_sec"}}
+    is merged on top of what was already saved durably; only ids in
+    `replay_question_ids` are accepted (anything else is ignored).
+
+    Summary counts describe the WHOLE quiz's latest state (replayed
+    questions re-graded + carried-forward ones as they were), so score /
+    correct / wrong / skipped always add up to the full quiz.
+    """
+    import datetime
+    try:
+        attempt = get_practice_attempt_by_id(attempt_id)
+        if not attempt:
+            return None
+
+        questions = get_practice_quiz_questions(
+            attempt["chapter_id"], attempt["mode"], attempt["category"],
+            attempt["folder_name"], attempt["set_name"],
+            columns="id, correct_option, marks, negative_marks",
+        )
+        if not questions:
+            return None
+        by_id = {q["id"]: q for q in questions}
+        replay_set = {qid for qid in replay_question_ids if qid in by_id}
+
+        progress = get_practice_answers_map(attempt_id)
+        for qid, entry in (submitted_answers or {}).items():
+            if qid not in replay_set or not isinstance(entry, dict):
+                continue
+            sel = entry.get("selected_option")
+            sel = sel if sel in _VALID_OPTIONS else None
+            st = entry.get("status")
+            if st not in _VALID_STATUSES:
+                st = "answered" if sel else "not_answered"
+            prev = progress.get(qid, {})
+            progress[qid] = {
+                **prev,
+                "selected_option": sel,
+                "status": st,
+                "time_taken_sec": max(0, int(entry.get("time_taken_sec") or 0)),
+            }
+
+        correct = wrong = skipped = 0
+        score = 0.0
+        upserts = []
+        for qid, q in by_id.items():
+            row = progress.get(qid) or {}
+            selected = row.get("selected_option")
+            marks = float(q.get("marks") if q.get("marks") is not None else 4)
+            neg = abs(float(q.get("negative_marks") if q.get("negative_marks") is not None else 1))
+
+            if qid in replay_set:
+                if not selected:
+                    is_correct = None
+                else:
+                    is_correct = (selected == q["correct_option"])
+                upserts.append({
+                    "attempt_id": attempt_id,
+                    "question_id": qid,
+                    "selected_option": selected,
+                    "is_correct": is_correct,
+                    "time_taken_sec": int(row.get("time_taken_sec") or 0),
+                    "status": row.get("status") or ("answered" if selected else "not_visited"),
+                    "was_replayed": True,
+                })
+            else:
+                # carried-forward question: keep its stored correctness
+                is_correct = row.get("is_correct")
+                if selected and is_correct is None:
+                    is_correct = (selected == q["correct_option"])
+
+            if not selected:
+                skipped += 1
+            elif is_correct:
+                correct += 1
+                score += marks
+            else:
+                wrong += 1
+                score -= neg
+
+        if upserts:
+            supabase_admin.table("practice_attempt_answers").upsert(upserts, on_conflict="attempt_id,question_id").execute()
+
+        summary = {
+            "submitted_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "score": round(score, 2),
+            "total_questions": len(by_id),
+            "correct_count": correct,
+            "wrong_count": wrong,
+            "skipped_count": skipped,
+            "total_time_sec": max(0, int(total_time_sec or 0)),
+        }
+        supabase_admin.table("practice_attempts").update(summary).eq("id", attempt_id).execute()
+        summary["attempt_id"] = attempt_id
+        return summary
+    except Exception as e:
+        logger.error(f"Error submitting practice attempt {attempt_id}: {e}")
+        return None
+
+
+def get_practice_review_items(attempt_id, filter_kind="full"):
+    """
+    Questions + the student's saved answers for the Analyse page.
+
+    filter_kind: 'full' | 'wrong' | 'marked'
+      wrong  -> answered & incorrect
+      marked -> status in (marked, answered_marked)
+    Returns a list of dicts in quiz order, each including correct_option and
+    explanation (safe: the attempt is already submitted).
+    """
+    attempt = get_practice_attempt_by_id(attempt_id)
+    if not attempt:
+        return []
+    questions = get_practice_quiz_questions(
+        attempt["chapter_id"], attempt["mode"], attempt["category"],
+        attempt["folder_name"], attempt["set_name"],
+    )
+    answers = get_practice_answers_map(attempt_id)
+
+    items = []
+    for idx, q in enumerate(questions, start=1):
+        a = answers.get(q["id"], {})
+        is_wrong = a.get("is_correct") is False
+        is_marked = _is_marked(a.get("status"))
+        if filter_kind == "wrong" and not is_wrong:
+            continue
+        if filter_kind == "marked" and not is_marked:
+            continue
+        items.append({
+            "number": idx,
+            "id": q["id"],
+            "question_text": q.get("question_text"),
+            "option_a": q.get("option_a"), "option_b": q.get("option_b"),
+            "option_c": q.get("option_c"), "option_d": q.get("option_d"),
+            "image_url": q.get("image_url"),
+            "correct_option": q.get("correct_option"),
+            "explanation": q.get("explanation"),
+            "selected_option": a.get("selected_option"),
+            "is_correct": a.get("is_correct"),
+            "is_marked": is_marked,
+            "time_taken_sec": a.get("time_taken_sec") or 0,
+            "mistake_note": a.get("mistake_note") or "",
+        })
+    return items
+
+
+def get_practice_analyse_counts(attempt_id):
+    """
+    Counts for the Analyse / Reattempt chooser cards, from ONE read of the
+    saved answers:
+      wrong           answered and incorrect
+      marked          marked for review
+      wrong_or_marked union (a question that is both is counted once) -- this is
+                      exactly what "Reattempt Wrong + Marked" will replay
+      full            every question in the quiz
+    """
+    attempt = get_practice_attempt_by_id(attempt_id)
+    if not attempt:
+        return {"wrong": 0, "marked": 0, "wrong_or_marked": 0, "full": 0}
+    questions = get_practice_quiz_questions(
+        attempt["chapter_id"], attempt["mode"], attempt["category"],
+        attempt["folder_name"], attempt["set_name"], columns="id",
+    )
+    answers = get_practice_answers_map(attempt_id)
+    wrong = marked = either = 0
+    for q in questions:
+        a = answers.get(q["id"], {})
+        w = a.get("is_correct") is False
+        m = _is_marked(a.get("status"))
+        wrong += w
+        marked += m
+        either += (w or m)
+    return {"wrong": wrong, "marked": marked, "wrong_or_marked": either, "full": len(questions)}
+
+
+# =====================================================================
+# MOCK TEST SERIES: ANALYSE + MISTAKE NOTES + REATTEMPT
+#
+# Same behaviour as the chapter-wise practice helpers above, on top of
+# the existing test_attempts / attempt_answers tables (see
+# sql/migration_practice_attempts.sql for the added mistake_note,
+# was_replayed and attempt_kind columns).
+# =====================================================================
+
+def get_mock_review_items(attempt_id, test_id, filter_kind="full"):
+    """
+    Mock-test questions + the student's saved answers, for the Analyse pages.
+    filter_kind: 'full' | 'wrong' | 'marked'. Ordered by question_order, each
+    item carries subject_name so the page can group by subject.
+    Only meant for SUBMITTED attempts (it includes correct_option/explanation).
+    """
+    try:
+        res = (
+            supabase_admin.table("mock_test_questions")
+            .select(
+                "question_order, "
+                "mock_questions(id, question_text, option_a, option_b, option_c, option_d, "
+                "image_url, correct_option, explanation, subjects(name))"
+            )
+            .eq("test_id", test_id)
+            .order("question_order")
+            .execute()
+        )
+        answers = {}
+        ans_res = (
+            supabase_admin.table("attempt_answers")
+            .select("mock_question_id, selected_option, is_correct, time_taken_sec, status, mistake_note, was_replayed")
+            .eq("attempt_id", attempt_id)
+            .execute()
+        )
+        for row in (ans_res.data or []):
+            if row.get("mock_question_id"):
+                answers[row["mock_question_id"]] = row
+
+        items = []
+        number = 0
+        for row in (res.data or []):
+            q = row.get("mock_questions")
+            if not q:
+                continue
+            number += 1
+            a = answers.get(q["id"], {})
+            is_wrong = a.get("is_correct") is False
+            is_marked = _is_marked(a.get("status"))
+            if filter_kind == "wrong" and not is_wrong:
+                continue
+            if filter_kind == "marked" and not is_marked:
+                continue
+            items.append({
+                "number": number,
+                "id": q["id"],
+                "subject_name": (q.get("subjects") or {}).get("name") or "General",
+                "question_text": q.get("question_text"),
+                "option_a": q.get("option_a"), "option_b": q.get("option_b"),
+                "option_c": q.get("option_c"), "option_d": q.get("option_d"),
+                "image_url": q.get("image_url"),
+                "correct_option": q.get("correct_option"),
+                "explanation": q.get("explanation"),
+                "selected_option": a.get("selected_option"),
+                "is_correct": a.get("is_correct"),
+                "is_marked": is_marked,
+                "time_taken_sec": a.get("time_taken_sec") or 0,
+                "mistake_note": a.get("mistake_note") or "",
+            })
+        return items
+    except Exception as e:
+        logger.error(f"Error building mock review items for attempt {attempt_id}: {e}")
+        return []
+
+
+def get_mock_analyse_counts(attempt_id, test_id):
+    """Counts for the mock Analyse / Reattempt chooser (same shape as practice)."""
+    items = get_mock_review_items(attempt_id, test_id, "full")
+    wrong = sum(1 for i in items if i["is_correct"] is False)
+    marked = sum(1 for i in items if i["is_marked"])
+    either = sum(1 for i in items if i["is_correct"] is False or i["is_marked"])
+    return {"wrong": wrong, "marked": marked, "wrong_or_marked": either, "full": len(items)}
+
+
+def save_mock_mistake_note(attempt_id, mock_question_id, note):
+    """Stores / clears the 'what mistake did I make' note for one mock question."""
+    note = (note or "").strip()[:MISTAKE_NOTE_MAX_LEN]
+    try:
+        existing = (
+            supabase_admin.table("attempt_answers")
+            .select("id")
+            .eq("attempt_id", attempt_id)
+            .eq("mock_question_id", mock_question_id)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            supabase_admin.table("attempt_answers").update({"mistake_note": note or None}).eq("id", existing[0]["id"]).execute()
+        else:
+            supabase_admin.table("attempt_answers").insert({
+                "attempt_id": attempt_id,
+                "mock_question_id": mock_question_id,
+                "mistake_note": note or None,
+                "status": "not_visited",
+            }).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error saving mock mistake note for attempt {attempt_id}, question {mock_question_id}: {e}")
+        return False
+
+
+def start_mock_reattempt(test_id, user_id, kind="full"):
+    """
+    Creates the user's new latest attempt for this mock test.
+
+    Returns (attempt_id, replay_question_ids) or (None, error_code).
+
+    kind='full' behaves exactly like the old create_test_attempt (previous attempt
+    replaced, every answer and note cleared). For 'wrong_only' /
+    'marked_and_wrong_only' only those questions are replayed; every other
+    question's previous answer, correctness, status, time and mistake note is
+    carried into the new attempt (was_replayed = false) so the whole test's
+    latest state stays visible and only replayed questions change.
+    """
+    if not user_id:
+        return None, "not_logged_in"
+    if kind not in PRACTICE_ATTEMPT_KINDS:
+        return None, "bad_kind"
+
+    all_ids = list(get_mock_question_ids_for_test(test_id) or [])
+    if not all_ids:
+        return None, "no_questions"
+
+    try:
+        old_rows = (
+            supabase_admin.table("test_attempts").select("*")
+            .eq("test_id", test_id).eq("user_id", user_id).limit(1).execute().data
+        )
+    except Exception as e:
+        logger.error(f"Error reading previous attempt for test {test_id}: {e}")
+        return None, "db_error"
+    old = old_rows[0] if old_rows else None
+
+    old_answers = {}
+    if old:
+        try:
+            rows = (
+                supabase_admin.table("attempt_answers")
+                .select("mock_question_id, selected_option, is_correct, time_taken_sec, status, mistake_note")
+                .eq("attempt_id", old["id"]).execute().data or []
+            )
+            old_answers = {r["mock_question_id"]: r for r in rows if r.get("mock_question_id")}
+        except Exception as e:
+            logger.error(f"Error reading previous answers for attempt {old['id']}: {e}")
+            return None, "db_error"
+
+    if kind != "full" and (not old or not old.get("submitted_at")):
+        return None, "no_previous_attempt"
+
+    replay_ids = select_reattempt_question_ids(all_ids, old_answers, kind)
+    if not replay_ids:
+        return None, "nothing_to_reattempt"
+
+    new_id = None
+    try:
+        if old:
+            supabase_admin.table("test_attempts").delete().eq("id", old["id"]).execute()
+        res = supabase_admin.table("test_attempts").insert(
+            {"test_id": test_id, "user_id": user_id, "attempt_kind": kind}
+        ).execute()
+        if not res.data:
+            raise RuntimeError("insert returned no row")
+        new_id = res.data[0]["id"]
+
+        replay_set = set(replay_ids)
+        carry = []
+        for qid in all_ids:
+            if qid in replay_set:
+                continue
+            prev = old_answers.get(qid)
+            if not prev:
+                continue
+            carry.append({
+                "attempt_id": new_id,
+                "mock_question_id": qid,
+                "selected_option": prev.get("selected_option"),
+                "is_correct": prev.get("is_correct"),
+                "time_taken_sec": prev.get("time_taken_sec") or 0,
+                "status": prev.get("status"),
+                "mistake_note": prev.get("mistake_note"),
+                "was_replayed": False,
+            })
+        if carry:
+            supabase_admin.table("attempt_answers").insert(carry).execute()
+        return new_id, replay_ids
+    except Exception as e:
+        logger.error(f"Error starting mock reattempt for test {test_id}, user {user_id}: {e}")
+        if new_id:
+            try:
+                supabase_admin.table("test_attempts").delete().eq("id", new_id).execute()
+            except Exception:
+                pass
+        return None, "db_error"
