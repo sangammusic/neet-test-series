@@ -281,6 +281,47 @@ alter table attempt_answers
 alter table attempt_answers
     add constraint uq_attempt_answers_mock_conflict unique (attempt_id, mock_question_id);
 
+-- ---------- PRACTICE ATTEMPTS (chapter-wise quizzes) ----------
+-- Chapter-wise practice has no `tests` row, so it gets its own pair of tables
+-- mirroring test_attempts / attempt_answers. Full definition, indexes, RLS and the
+-- mock-test parity columns (attempt_answers.mistake_note / was_replayed,
+-- test_attempts.attempt_kind) live in sql/migration_practice_attempts.sql --
+-- run that migration; it is idempotent.
+create table if not exists practice_attempts (
+    id                uuid primary key default uuid_generate_v4(),
+    user_id           uuid not null references profiles(id) on delete cascade,
+    chapter_id        uuid not null references chapters(id) on delete cascade,
+    mode              text not null check (mode in ('mcq', 'pyq')),
+    category          text not null,
+    folder_name       text not null,
+    set_name          text not null,
+    attempt_kind      text not null default 'full'
+                      check (attempt_kind in ('full', 'wrong_only', 'marked_and_wrong_only')),
+    started_at        timestamptz not null default now(),
+    submitted_at      timestamptz,
+    score             numeric(6,2),
+    total_questions   int,
+    correct_count     int,
+    wrong_count       int,
+    skipped_count     int,
+    total_time_sec    int default 0,
+    constraint uq_practice_attempt_quiz
+        unique (user_id, chapter_id, mode, category, folder_name, set_name)
+);
+
+create table if not exists practice_attempt_answers (
+    id              uuid primary key default uuid_generate_v4(),
+    attempt_id      uuid not null references practice_attempts(id) on delete cascade,
+    question_id     uuid not null references questions(id) on delete cascade,
+    selected_option char(1) check (selected_option in ('A','B','C','D')),
+    is_correct      boolean,
+    time_taken_sec  int not null default 0,
+    status          text check (status in ('answered','marked','answered_marked','not_answered','not_visited')),
+    mistake_note    text,
+    was_replayed    boolean not null default true,
+    constraint uq_practice_answer unique (attempt_id, question_id)
+);
+
 -- ---------- TRANSACTIONS (manual UTR-based payment verification) ----------
 create table if not exists transactions (
     id              uuid primary key default uuid_generate_v4(),
@@ -332,3 +373,5 @@ alter table transactions enable row level security;
 alter table test_attempts enable row level security;
 alter table attempt_answers enable row level security;
 alter table test_access_grants enable row level security;
+alter table practice_attempts enable row level security;
+alter table practice_attempt_answers enable row level security;
