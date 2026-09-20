@@ -23,6 +23,7 @@ from app.admin import admin_bp
 from app.admin.decorators import admin_required
 from app.admin.mock_question_routes import _validate_mock_question
 from app.extensions import supabase_admin, cache
+from app.shared.latex_lint import lint_question_payload
 
 logger = logging.getLogger(__name__)
 
@@ -411,38 +412,9 @@ def tests_bulk_map_questions(test_id):
         else:
             valid_payloads.append(payload)
 
-    if valid_payloads:
-        existing_mapped = (
-            supabase_admin.table("mock_test_questions")
-            .select("mock_questions(question_text)")
-            .eq("test_id", test_id)
-            .execute()
-            .data
-        )
-        
-        existing_texts = set()
-        for row in existing_mapped:
-            q = row.get("mock_questions")
-            if q and q.get("question_text"):
-                existing_texts.add(q["question_text"].strip().lower())
-
-        incoming_texts = set()
-        for p in valid_payloads:
-            clean_text = p["question_text"].strip().lower()
-            
-            if clean_text in existing_texts:
-                error_msg = f"Duplicate Detected: The question starting with '{clean_text[:40]}...' already exists in this test!"
-                if is_ajax: return jsonify({"ok": False, "error": error_msg}), 400
-                flash(error_msg, "error")
-                return redirect(url_for("admin.test_series_list"))
-            
-            if clean_text in incoming_texts:
-                error_msg = f"Duplicate Detected: The question starting with '{clean_text[:40]}...' appears multiple times in your pasted JSON chunk!"
-                if is_ajax: return jsonify({"ok": False, "error": error_msg}), 400
-                flash(error_msg, "error")
-                return redirect(url_for("admin.test_series_list"))
-            
-            incoming_texts.add(clean_text)
+    # NOTE: the old text-only duplicate check aborted the WHOLE chunk on one generic-stem match
+    # ("Match the following:"), silently dropping up to 25 valid questions. Removed: every valid row is
+    # inserted, exactly like chapter-wise uploads now handle real duplicates (full fingerprint).
 
     total_marks_val = int(test.get("total_marks") or 0)
     if total_marks_val == 720 and not errors:
@@ -497,7 +469,8 @@ def tests_bulk_map_questions(test_id):
     if inserted_ids:
         _invalidate_test_questions_cache(test_id)
 
-    return jsonify({"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "inserted_ids": inserted_ids, "errors": errors})
+    latex_warnings = [{"row": i + 1, "fields": w} for i, p in enumerate(valid_payloads) for w in [lint_question_payload(p)] if w]
+    return jsonify({"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "inserted_ids": inserted_ids, "errors": errors, "latex_warnings": latex_warnings})
 
 
 @admin_bp.route("/tests/<test_id>/questions/undo-chunk", methods=["POST"])
@@ -586,12 +559,17 @@ def tests_edit_question(test_id, question_id):
 
     try:
         old_q = supabase_admin.table("mock_questions").select("image_url, has_image").eq("id", question_id).maybe_single().execute().data
-        if old_q and old_q.get("image_url") and not payload.get("has_image"):
-            _delete_image_from_storage(old_q["image_url"])
-            payload["image_url"] = None
+        if not old_q:
+            return jsonify({"ok": False, "error": "Question not found (it may have been deleted). Reload the page."}), 404
+        # Editing / switching Image OFF must NEVER delete the uploaded file (only "Remove Image" does).
+        if not (raw.get("image_url") or "").strip():
+            payload["image_url"] = old_q.get("image_url")
+        if payload.get("image_url"):
+            payload["has_image"] = bool(raw.get("has_image", True))
 
         supabase_admin.table("mock_questions").update(payload).eq("id", question_id).execute()
-        return jsonify({"ok": True, "has_image": payload.get("has_image")})
+        return jsonify({"ok": True, "has_image": payload.get("has_image"), "image_url": payload.get("image_url"),
+                        "latex_warnings": lint_question_payload(payload)})
     except Exception as exc:
         logger.error(f"JSON Edit error: {exc}")
         return jsonify({"ok": False, "error": "Failed to update JSON in database."}), 500
@@ -607,14 +585,8 @@ def toggle_question_image(question_id):
     has_image = bool(data["has_image"])
     
     try:
+        # OFF only flips the flag; the uploaded file is KEPT so toggling ON restores it.
         supabase_admin.table("mock_questions").update({"has_image": has_image}).eq("id", question_id).execute()
-        
-        if not has_image:
-            old_q = supabase_admin.table("mock_questions").select("image_url").eq("id", question_id).maybe_single().execute().data
-            if old_q and old_q.get("image_url"):
-                _delete_image_from_storage(old_q["image_url"])
-                supabase_admin.table("mock_questions").update({"image_url": None}).eq("id", question_id).execute()
-
         return jsonify({"ok": True})
     except Exception as exc:
         logger.error(f"Toggle image error: {exc}")
