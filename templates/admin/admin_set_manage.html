@@ -94,6 +94,48 @@
                 <p x-show="successMsg" class="text-green-700 font-bold bg-green-50 px-3 py-1 rounded shadow-sm border border-green-200" x-text="successMsg"></p>
             </div>
 
+            <!-- RUNNING TOTAL: makes any shortfall (pasted vs saved) visible at once -->
+            <div x-show="sessionPasted > 0" x-cloak class="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                <div class="bg-white border border-gray-200 rounded-xl py-3 shadow-sm">
+                    <p class="text-[11px] font-black uppercase tracking-widest text-gray-400">Pasted</p>
+                    <p class="text-2xl font-black text-ink" x-text="sessionPasted"></p>
+                </div>
+                <div class="bg-emerald-50 border border-emerald-200 rounded-xl py-3 shadow-sm">
+                    <p class="text-[11px] font-black uppercase tracking-widest text-emerald-600">Saved</p>
+                    <p class="text-2xl font-black text-emerald-700" x-text="sessionSaved"></p>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded-xl py-3 shadow-sm">
+                    <p class="text-[11px] font-black uppercase tracking-widest text-amber-600">Duplicate skipped</p>
+                    <p class="text-2xl font-black text-amber-700" x-text="sessionSkippedDup"></p>
+                </div>
+                <div class="bg-red-50 border border-red-200 rounded-xl py-3 shadow-sm">
+                    <p class="text-[11px] font-black uppercase tracking-widest text-red-600">Invalid</p>
+                    <p class="text-2xl font-black text-red-700" x-text="sessionFailedValidation"></p>
+                </div>
+            </div>
+
+            <!-- LAST CHUNK: exactly which rows were not saved, and why -->
+            <div x-show="lastProblems.length > 0" x-cloak class="mb-4 bg-white border-2 border-amber-200 rounded-xl overflow-hidden shadow-sm">
+                <div class="px-4 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-3">
+                    <p class="text-sm font-black text-amber-900">Not saved in last chunk (<span x-text="lastProblems.length"></span>)</p>
+                    <button type="button" x-show="lastProblemRows.length > 0" @click="copyProblemRows()"
+                            class="text-xs font-bold bg-white border border-amber-300 text-amber-800 px-3 py-1.5 rounded-lg hover:bg-amber-100">
+                        <span x-text="copyDone ? '✅ Copied' : 'Copy invalid rows as JSON'"></span>
+                    </button>
+                </div>
+                <ul class="max-h-56 overflow-y-auto divide-y divide-gray-100 text-sm">
+                    <template x-for="p in lastProblems" :key="p.kind + p.row">
+                        <li class="px-4 py-2 flex gap-3 items-start">
+                            <span class="shrink-0 text-xs font-black px-2 py-0.5 rounded" :class="p.kind === 'invalid' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'" x-text="p.kind === 'invalid' ? 'INVALID' : 'DUPLICATE'"></span>
+                            <span class="font-mono text-xs text-gray-700 break-words"><b>row <span x-text="p.row"></span></b> — <span x-text="p.reason"></span></span>
+                        </li>
+                    </template>
+                </ul>
+                <p x-show="lastProblemRows.length > 0" class="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 border-t border-gray-100">
+                    The invalid rows have been left in the box above — fix them and press Upload Chunk again. Duplicates are not re-queued.
+                </p>
+            </div>
+
             <div class="flex flex-col md:flex-row items-center justify-between gap-4 mt-8 pt-6 border-t-2 border-gray-200">
                 <p class="text-sm font-bold text-gray-500">
                     Session Uploads: <span x-text="sessionSaved" class="text-indigo-600 text-xl ml-2 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100"></span>
@@ -236,7 +278,7 @@
       <div class="px-8 py-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
           <div>
               <h3 class="font-display text-2xl font-black text-indigo-900 tracking-wide uppercase">Replace Question JSON</h3>
-              <p class="text-sm font-bold text-gray-500 mt-1">Updates the existing record directly without creating duplicates.</p>
+              <p class="text-sm font-bold text-gray-500 mt-1">Current data is pre-filled below — change only what you need, then save. Updates the existing record without creating duplicates.</p>
           </div>
           <button @click="closeModal()" class="text-gray-400 hover:text-white transition-colors bg-gray-200 hover:bg-red-500 rounded-full p-2 focus:outline-none">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -282,6 +324,11 @@
     return {
       jsonText: '', qCount: 0, showFormat: false, isSaving: false, errorMsg: '', successMsg: '',
       sessionSaved: 0,
+      // Running totals across every chunk pasted in this page session, so a
+      // shortfall (e.g. pasted 250, saved 235) is visible immediately.
+      sessionPasted: 0, sessionSkippedDup: 0, sessionFailedValidation: 0,
+      // Rows that did NOT get saved in the LAST chunk: [{row, kind, reason}]
+      lastProblems: [], lastProblemRows: [], copyDone: false,
       history: [], undoneHistory: [], 
       
       validateInput() {
@@ -326,7 +373,33 @@
               body: JSON.stringify(payload)
           });
           const data = await res.json();
-          
+
+          // ---- per-chunk accounting (works for full success, partial success, and total failure)
+          const pasted = (typeof data.pasted === 'number') ? data.pasted : parsedData.length;
+          const inserted = data.inserted || 0;
+          const dupCount = data.skipped_duplicates || 0;
+          const badCount = data.failed_validation || 0;
+          const problems = [];
+          const problemRows = [];
+          (data.validation_details || []).forEach(p => {
+              problems.push({ row: p.row, kind: 'invalid', reason: p.reason });
+              if (parsedData[p.row - 1] !== undefined) problemRows.push(parsedData[p.row - 1]);
+          });
+          (data.duplicate_details || []).forEach(p => {
+              problems.push({ row: p.row, kind: 'duplicate', reason: p.reason });
+              // duplicates are NOT re-queued: re-pasting them would just be skipped again
+          });
+          problems.sort((a, b) => a.row - b.row);
+
+          if (!isRedo) {
+              this.sessionPasted += pasted;
+              this.sessionSkippedDup += dupCount;
+              this.sessionFailedValidation += badCount;
+          }
+          this.lastProblems = problems;
+          this.lastProblemRows = problemRows;
+          this.copyDone = false;
+
           if (data.ok) {
             const insertedIds = data.inserted_ids || []; 
             if (insertedIds.length === 0) {
@@ -335,27 +408,52 @@
 
             this.history.push({
                 jsonPayload: parsedData,
-                insertedIds: insertedIds
+                insertedIds: insertedIds,
+                pasted: isRedo ? 0 : pasted,
+                skippedDup: isRedo ? 0 : dupCount,
+                failedValidation: isRedo ? 0 : badCount
             });
 
             if (!isRedo) {
                 this.undoneHistory = [];
-                this.jsonText = '[]';
-                this.qCount = 0;
+                if (problemRows.length > 0) {
+                    // Leave ONLY the fixable (invalid) rows in the box so the admin can
+                    // correct them and re-upload -- not the whole chunk again.
+                    this.jsonText = JSON.stringify(problemRows, null, 2);
+                    this.qCount = problemRows.length;
+                } else {
+                    this.jsonText = '[]';
+                    this.qCount = 0;
+                }
             }
 
-            this.sessionSaved += data.inserted;
-            this.successMsg = `✅ Uploaded ${data.inserted} questions! You can Undo, or refresh the page to view them below.`;
-            showSangamToast(this.successMsg);
+            this.sessionSaved += inserted;
+            let msg = `✅ ${inserted} of ${pasted} saved`;
+            if (dupCount) msg += ` · ${dupCount} duplicate skipped`;
+            if (badCount) msg += ` · ${badCount} invalid (fix below)`;
+            this.successMsg = msg + '. You can Undo, or refresh the page to view them below.';
+            showSangamToast(msg);
 
           } else { 
-            this.errorMsg = data.error || 'Server error occurred.'; 
+            // Nothing saved. Backend now always sends a readable `error` string.
+            this.errorMsg = data.error || 'Server error occurred.';
+            if (problemRows.length > 0 && !isRedo) {
+                this.jsonText = JSON.stringify(problemRows, null, 2);
+                this.qCount = problemRows.length;
+            }
           }
         } catch (err) { 
             this.errorMsg = 'Connection error. Check your network.'; 
         } finally { 
             this.isSaving = false; 
         }
+      },
+
+      async copyProblemRows() {
+          try {
+              await navigator.clipboard.writeText(JSON.stringify(this.lastProblemRows, null, 2));
+              this.copyDone = true; setTimeout(() => this.copyDone = false, 2000);
+          } catch (e) { this.errorMsg = 'Copy blocked by browser — select the JSON in the box and copy manually.'; }
       },
 
       async undoLast() {
@@ -381,6 +479,12 @@
               if (data.ok) {
                   this.undoneHistory.push(lastAction);
                   this.sessionSaved -= lastAction.insertedIds.length;
+                  // Keep Pasted/Skipped/Invalid consistent with Saved after an undo,
+                  // otherwise the totals would show a phantom "loss".
+                  this.sessionPasted -= (lastAction.pasted || 0);
+                  this.sessionSkippedDup -= (lastAction.skippedDup || 0);
+                  this.sessionFailedValidation -= (lastAction.failedValidation || 0);
+                  this.lastProblems = []; this.lastProblemRows = [];
                   this.successMsg = "⏪ Undo successful. Chunk wiped from DB and Storage.";
                   showSangamToast(this.successMsg);
               } else {
@@ -404,10 +508,23 @@
   }
 
   // APP 2: SINGLE QUESTION JSON EDIT MODAL
+  // Full current data of every question in this quiz, keyed by question id.
+  // Built server-side (_question_to_edit_json) so it already matches the
+  // exact shape _validate_bulk_question expects on save.
+  const SANGAM_EDIT_JSON = {{ edit_json_map | tojson }};
+
   function editModalApp() {
     return {
       isOpen: false, qId: null, editJsonText: '', isSaving: false, editError: '',
-      openModal(detail) { this.qId = detail.id; this.editJsonText = ''; this.editError = ''; this.isOpen = true; },
+      openModal(detail) {
+        this.qId = detail.id;
+        const current = SANGAM_EDIT_JSON[detail.id];
+        // Pre-fill with the question's current JSON so the admin edits only
+        // what changed instead of typing a whole object blind.
+        this.editJsonText = current ? JSON.stringify(current, null, 2) : '';
+        this.editError = current ? '' : 'Could not load current data for this question. Reload the page and try again.';
+        this.isOpen = true;
+      },
       closeModal() { this.isOpen = false; },
       async submitEdit() {
         this.editError = ''; let parsedData;
