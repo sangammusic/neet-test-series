@@ -318,16 +318,50 @@ def tests_manage(test_id):
         flash("Test not found.", "error")
         return redirect(url_for("admin.test_series_list"))
 
-    # SANGAM FIX: Added 'correct_option' to select payload so frontend dropdown pre-fills correctly
+    # SANGAM FIX: Added 'correct_option' to select payload so frontend dropdown pre-fills correctly.
+    # The full question body (options, explanation, difficulty, premium flag) is also fetched
+    # because the admin "Edit JSON" modal pre-fills its textarea from it -- previously the box
+    # opened blank and _validate_mock_question rejected whatever incomplete JSON was typed.
     mapped = (
         supabase_admin.table("mock_test_questions")
-        .select("mock_question_id, question_order, mock_questions(question_text, topic_name, is_pyq, pyq_year, has_image, image_url, correct_option, subjects(name))")
+        .select(
+            "mock_question_id, question_order, "
+            "mock_questions(question_text, option_a, option_b, option_c, option_d, explanation, "
+            "difficulty_id, is_premium, topic_name, is_pyq, pyq_year, has_image, image_url, "
+            "correct_option, subjects(name))"
+        )
         .eq("test_id", test_id)
         .order("question_order")
         .execute()
         .data
     )
-    return render_template("admin_test_manage.html", test=test, mapped=mapped)
+
+    # mock_question_id -> pre-filled JSON dict for the Edit JSON modal (rendered via |tojson)
+    edit_json_map = {}
+    for m in mapped:
+        mq = m.get("mock_questions") or {}
+        edit_json_map[m["mock_question_id"]] = {
+            "subject_name": (mq.get("subjects") or {}).get("name") or "",
+            "topic_name": mq.get("topic_name") or "",
+            "question_text": mq.get("question_text") or "",
+            "option_a": mq.get("option_a") or "",
+            "option_b": mq.get("option_b") or "",
+            "option_c": mq.get("option_c") or "",
+            "option_d": mq.get("option_d") or "",
+            "correct_option": (mq.get("correct_option") or "").strip(),
+            "difficulty_id": mq.get("difficulty_id"),
+            # is_pyq/pyq_year: _validate_mock_question drops pyq_year when is_pyq is falsy
+            "is_pyq": bool(mq.get("is_pyq")),
+            "pyq_year": mq.get("pyq_year"),
+            "explanation": mq.get("explanation") or "",
+            "has_image": bool(mq.get("has_image")),
+            # image_url must round-trip: the validator sets it to None when absent,
+            # which would wipe an already-uploaded diagram on save.
+            "image_url": mq.get("image_url") or "",
+            "is_premium": bool(mq.get("is_premium")),
+        }
+
+    return render_template("admin_test_manage.html", test=test, mapped=mapped, edit_json_map=edit_json_map)
 
 
 @admin_bp.route("/tests/<test_id>/questions/bulk-map", methods=["POST"])
