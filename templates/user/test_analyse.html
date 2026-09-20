@@ -29,14 +29,14 @@
   <div class="grid grid-cols-3 gap-3 mb-10">
     <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-center"><p class="text-2xl font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Correct</p></div>
     <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-center"><p class="text-2xl font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Wrong</p></div>
-    <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-center"><p class="text-2xl font-display font-bold text-gray-400">{{ attempt.skipped_count }}</p><p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Skipped</p></div>
+    <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-center"><p class="text-2xl font-display font-bold text-gray-400">{{ attempt.skipped_count }}</p><p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Not Attempted</p></div>
   </div>
 
   <!-- ANALYSE -->
   <h2 class="font-display text-xl font-semibold text-white mb-3">📊 Analyse</h2>
   <div class="space-y-3 mb-12">
     {% for view, label, sub, n in [
-        ('wrong',  'Analyse Wrong Questions',  'Only questions you answered incorrectly', counts.wrong),
+        ('wrong',  'Analyse Wrong Questions',  'Wrong + not-attempted questions of this attempt', counts.wrong),
         ('marked', 'Analyse Marked Questions', 'Only questions you marked for review',    counts.marked),
         ('full',   'Analyse Full Test',        'Every question with your answer and notes', counts.full) ] %}
     {% if n > 0 %}
@@ -56,13 +56,13 @@
 
   <!-- REATTEMPT -->
   <h2 id="reattempt" class="font-display text-xl font-semibold text-white mb-1 scroll-mt-6">🔁 Reattempt</h2>
-  <p class="text-xs text-gray-500 mb-3">Reattempts are timed like the real test. Replayed questions start fresh and their mistake notes are cleared. Questions you don't replay keep their last result and notes.</p>
+  <p class="text-xs text-gray-500 mb-3">Reattempts are timed like the real test. Reattempting never changes this attempt's Wrong Questions record. Replayed questions start fresh inside the reattempt. Questions you don't replay keep their last result and notes.</p>
   <div class="space-y-3">
     {% set wm = counts.wrong_or_marked %}
     {% for kind, label, sub, n, warn in [
-        ('wrong_only',            'Reattempt Wrong Only',     'Replay just the questions you got wrong',        counts.wrong, ''),
+        ('wrong_only',            'Reattempt Wrong Questions', 'Replay your wrong + not-attempted questions',        counts.wrong, ''),
         ('marked_and_wrong_only', 'Reattempt Wrong + Marked', 'Replay wrong questions and marked questions',    wm, ''),
-        ('full',                  'Reattempt Full Quiz',      'Start the whole test again',                     counts.full, 'This clears ALL your answers and mistake notes for this test. Continue?') ] %}
+        ('full',                  'Attempt Full Test',        'Start a NEW full attempt (your earlier attempts stay saved)', counts.full, 'Start a new full attempt? Your earlier attempts stay saved in your history, and the Wrong Questions list will be rebuilt from this new attempt.') ] %}
     {% if n > 0 %}
     <form method="POST" action="{{ start_url }}" class="m-0"
           {% if warn %}onsubmit="return confirm('{{ warn }}');"{% endif %}>
