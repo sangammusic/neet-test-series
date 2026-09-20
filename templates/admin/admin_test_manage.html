@@ -330,7 +330,7 @@
     <!-- Modal Body -->
     <div class="p-8 flex-1 overflow-y-auto bg-gray-900 flex flex-col">
         <label class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-3 flex justify-between">
-            <span>Paste complete JSON object</span>
+            <span>Current data pre-filled — edit &amp; save</span>
             <span class="text-yellow-500">Ensure 'subject_name' & 'topic_name' are correct!</span>
         </label>
         <textarea x-model="editJsonText" rows="18" placeholder='{
@@ -380,6 +380,10 @@
       }, 4000);
   }
 
+  // Full current data of every question in this test, keyed by mock_question_id.
+  // Built server-side (tests_manage) in the exact shape _validate_mock_question expects.
+  const SANGAM_EDIT_JSON = {{ edit_json_map | tojson }};
+
   // Live JSON Edit Modal Logic (Strict Replace - No Duplicates)
   function editModalApp() {
     return {
@@ -391,8 +395,10 @@
 
       openModal(detail) {
         this.qId = detail.id;
-        this.editJsonText = '';
-        this.editError = '';
+        const current = SANGAM_EDIT_JSON[detail.id];
+        // Pre-fill with the question's current JSON so the admin edits only what changed.
+        this.editJsonText = current ? JSON.stringify(current, null, 2) : '';
+        this.editError = current ? '' : 'Could not load current data for this question. Reload the page and try again.';
         this.isOpen = true;
       },
       closeModal() {
@@ -419,6 +425,10 @@
           const data = await res.json();
           
           if (data.ok) {
+            // Keep the prefill cache in sync -- otherwise re-opening this question
+            // without a reload would pre-fill the OLD data and a second save would
+            // silently revert the edit that was just made.
+            SANGAM_EDIT_JSON[this.qId] = Object.assign({}, SANGAM_EDIT_JSON[this.qId], parsedData);
             // SANGAM FIX: Smooth DOM Update instead of hard reload
             const row = document.querySelector(`[data-question-id="${this.qId}"]`);
             if (row) {
