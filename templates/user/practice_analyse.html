@@ -1,0 +1,85 @@
+{% extends "shared/base.html" %}
+{% block title %}Analyse — {{ set_name }}{% endblock %}
+{% block content %}
+{% set base = {'slug': stream.slug, 'chapter_id': chapter.id, 'mode': mode, 'category': category, 'folder': folder, 'set_name': set_name} %}
+{% set start_url = url_for('user.practice_start', **base) %}
+<section class="max-w-2xl mx-auto px-6 pt-12 pb-24 relative z-10 font-body">
+
+  <a href="{{ url_for('user.practice_overview', **base) }}" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-flex items-center gap-2 transition-colors">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+    Back to Quiz
+  </a>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category_name, message in messages %}
+    <div class="mb-5 text-sm font-semibold rounded-xl px-4 py-3 border {{ 'bg-red-500/10 border-red-500/30 text-red-300' if category_name == 'error' else 'bg-green-500/10 border-green-500/30 text-green-300' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="text-center mb-8">
+    <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full inline-block mb-4">Your Last Quiz</span>
+    <h1 class="font-display text-3xl font-bold text-white mb-1">{{ set_name }}</h1>
+    <p class="text-xs text-gray-500">{{ chapter.name }} · {{ folder }}</p>
+  </div>
+
+  <!-- Score card -->
+  <div class="bg-scholar-card border border-gold/20 rounded-2xl p-6 text-center mb-4 backdrop-blur-xl shadow-[0_0_40px_rgba(212,160,23,0.08)]">
+    <p class="text-xs font-semibold text-gold-light mb-1 uppercase tracking-wider">Score</p>
+    <p class="font-display text-4xl font-bold text-white">{{ attempt.score }}</p>
+  </div>
+  <div class="grid grid-cols-3 gap-3 mb-10">
+    <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-center"><p class="text-2xl font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Correct</p></div>
+    <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-center"><p class="text-2xl font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Wrong</p></div>
+    <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-center"><p class="text-2xl font-display font-bold text-gray-400">{{ attempt.skipped_count }}</p><p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Not Attempted</p></div>
+  </div>
+
+  <!-- ANALYSE -->
+  <h2 class="font-display text-xl font-semibold text-white mb-3">📊 Analyse</h2>
+  <div class="space-y-3 mb-12">
+    {% for view, label, sub, n in [
+        ('wrong',  'Analyse Wrong Questions',  'Wrong + not-attempted questions of this attempt', counts.wrong),
+        ('marked', 'Analyse Marked Questions', 'Only questions you marked for review',    counts.marked),
+        ('full',   'Analyse Full Test',        'Every question with your answer and notes', counts.full) ] %}
+    {% if n > 0 %}
+    <a href="{{ url_for('user.practice_analyse_view', view=view, **base) }}"
+       class="flex items-center justify-between gap-4 p-5 rounded-xl bg-[#161616]/90 border border-white/10 hover:border-gold/40 transition-all">
+      <div><p class="font-semibold text-white">{{ label }}</p><p class="text-xs text-gray-500 mt-0.5">{{ sub }}</p></div>
+      <span class="shrink-0 text-sm font-black text-gold bg-gold/10 border border-gold/30 rounded-full px-3 py-1">{{ n }}</span>
+    </a>
+    {% else %}
+    <div class="flex items-center justify-between gap-4 p-5 rounded-xl bg-[#161616]/50 border border-white/5 opacity-50 cursor-not-allowed">
+      <div><p class="font-semibold text-gray-400">{{ label }}</p><p class="text-xs text-gray-600 mt-0.5">Nothing here</p></div>
+      <span class="shrink-0 text-sm font-black text-gray-500 border border-white/10 rounded-full px-3 py-1">0</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- REATTEMPT -->
+  <h2 id="reattempt" class="font-display text-xl font-semibold text-white mb-1 scroll-mt-6">🔁 Reattempt</h2>
+  <p class="text-xs text-gray-500 mb-3">Reattempting never changes this attempt's Wrong Questions record. Replayed questions start fresh inside the reattempt. Questions you don't replay keep their last result and notes.</p>
+  <div class="space-y-3">
+    {% set wm = counts.wrong_or_marked %}
+    {% for kind, label, sub, n, warn in [
+        ('wrong_only',            'Reattempt Wrong Questions', 'Replay your wrong + not-attempted questions',        counts.wrong, ''),
+        ('marked_and_wrong_only', 'Reattempt Wrong + Marked', 'Replay wrong questions and marked questions',    wm, ''),
+        ('full',                  'Attempt Full Quiz',        'Start a NEW full attempt (your earlier attempts stay saved)', counts.full, 'Start a new full attempt? Your earlier attempts stay saved in your history, and the Wrong Questions list will be rebuilt from this new attempt.') ] %}
+    {% if n > 0 %}
+    <form method="POST" action="{{ start_url }}" class="m-0"
+          {% if warn %}onsubmit="return confirm('{{ warn }}');"{% endif %}>
+      <input type="hidden" name="kind" value="{{ kind }}">
+      <button type="submit" class="w-full flex items-center justify-between gap-4 p-5 rounded-xl bg-[#161616]/90 border border-white/10 hover:border-gold/40 transition-all text-left">
+        <div><p class="font-semibold text-white">{{ label }}</p><p class="text-xs text-gray-500 mt-0.5">{{ sub }}</p></div>
+        <span class="shrink-0 text-sm font-black text-gold bg-gold/10 border border-gold/30 rounded-full px-3 py-1">{{ n }}</span>
+      </button>
+    </form>
+    {% else %}
+    <div class="flex items-center justify-between gap-4 p-5 rounded-xl bg-[#161616]/50 border border-white/5 opacity-50 cursor-not-allowed">
+      <div><p class="font-semibold text-gray-400">{{ label }}</p><p class="text-xs text-gray-600 mt-0.5">Nothing to reattempt</p></div>
+      <span class="shrink-0 text-sm font-black text-gray-500 border border-white/10 rounded-full px-3 py-1">0</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
