@@ -48,7 +48,7 @@
           <span class="text-xs font-black text-white bg-white/10 rounded-full px-3 py-1">Q{{ it.number }}</span>
           {% if it.is_correct %}<span class="text-[11px] font-black uppercase tracking-wide text-green-400 bg-green-500/10 border border-green-500/30 rounded-full px-2.5 py-1">Correct</span>
           {% elif it.is_correct == false %}<span class="text-[11px] font-black uppercase tracking-wide text-red-400 bg-red-500/10 border border-red-500/30 rounded-full px-2.5 py-1">Wrong</span>
-          {% else %}<span class="text-[11px] font-black uppercase tracking-wide text-gray-400 bg-white/5 border border-white/10 rounded-full px-2.5 py-1">Skipped</span>{% endif %}
+          {% else %}<span class="text-[11px] font-black uppercase tracking-wide text-gray-400 bg-white/5 border border-white/10 rounded-full px-2.5 py-1">Not attempted</span>{% endif %}
           {% if it.is_marked %}<span class="text-[11px] font-black text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-full px-2.5 py-1">★ Marked</span>{% endif %}
         </div>
         <span class="text-xs text-gray-500 tabular-nums">⏱ {{ it.time_taken_sec // 60 }}m {{ it.time_taken_sec % 60 }}s</span>
