@@ -18,6 +18,8 @@ from app.shared.models import (
     save_practice_progress, save_practice_mistake_note, submit_practice_attempt,
     get_practice_review_items, get_practice_analyse_counts, select_reattempt_question_ids,
     get_mock_review_items, get_mock_analyse_counts, save_mock_mistake_note, start_mock_reattempt,
+    get_latest_full_mock_attempt, get_latest_mock_reattempt_session,
+    get_latest_practice_reattempt_session, _visible_image,
 )
 from app.shared.utils import is_logged_in, current_user_id
 
@@ -175,7 +177,7 @@ def practice_folders(slug, chapter_id, mode, category):
     return render_template("practice_folders.html", stream=stream, chapter=chapter, mode=mode, category=category, folders=folders)
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>")
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>")
 def practice_sets(slug, chapter_id, mode, category, folder):
     """Level 7: Show Quizzes inside the Folder"""
     if not is_logged_in():
@@ -250,7 +252,7 @@ def _replay_ids_for_attempt(attempt, all_ids):
     return [qid for qid in all_ids if qid not in carried]
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>")
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>/<name:set_name>")
 def practice_overview(slug, chapter_id, mode, category, folder, set_name):
     """Level 8: quiz landing page. Shows Initialize / Resume / Analyse+Reattempt by attempt state."""
     if not is_logged_in():
@@ -271,10 +273,14 @@ def practice_overview(slug, chapter_id, mode, category, folder, set_name):
     attempt = get_latest_practice_attempt(current_user_id(), chapter_id, mode, category, folder, set_name)
     if attempt is None:
         attempt_state = "none"
-    elif attempt.get("submitted_at"):
-        attempt_state = "submitted"
-    else:
+    elif not attempt.get("submitted_at"):
         attempt_state = "in_progress"
+    else:
+        pending = get_latest_practice_reattempt_session(attempt["id"])   # unfinished reattempt -> Resume
+        if pending and not pending.get("submitted_at"):
+            attempt_state, attempt = "in_progress", pending
+        else:
+            attempt_state = "submitted"
 
     return render_template(
         "practice_overview.html", stream=stream, chapter=chapter, mode=mode, category=category,
@@ -283,7 +289,7 @@ def practice_overview(slug, chapter_id, mode, category, folder, set_name):
     )
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>/start", methods=["POST"])
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>/<name:set_name>/start", methods=["POST"])
 def practice_start(slug, chapter_id, mode, category, folder, set_name):
     """Creates the new latest attempt (kind = full | wrong_only | marked_and_wrong_only) and opens the runner."""
     if not is_logged_in():
@@ -300,7 +306,7 @@ def practice_start(slug, chapter_id, mode, category, folder, set_name):
     return redirect(url_for("user.practice_run", slug=slug, chapter_id=chapter_id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt_id))
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>/run")
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>/<name:set_name>/run")
 def practice_run(slug, chapter_id, mode, category, folder, set_name):
     """Level 9: the runner. Requires a persisted attempt (?attempt_id=...); resumes saved progress."""
     if not is_logged_in():
@@ -315,6 +321,10 @@ def practice_run(slug, chapter_id, mode, category, folder, set_name):
         latest = get_latest_practice_attempt(current_user_id(), chapter_id, mode, category, folder, set_name)
         if latest and not latest.get("submitted_at"):
             return redirect(url_for("user.practice_run", slug=slug, chapter_id=chapter_id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=latest["id"]))
+        if latest:
+            pending = get_latest_practice_reattempt_session(latest["id"])
+            if pending and not pending.get("submitted_at"):
+                return redirect(url_for("user.practice_run", slug=slug, chapter_id=chapter_id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=pending["id"]))
         return redirect(overview)
 
     attempt = _own_practice_attempt_or_404(attempt_id, chapter_id, mode, category, folder, set_name)
@@ -329,6 +339,8 @@ def practice_run(slug, chapter_id, mode, category, folder, set_name):
     questions = [q for q in all_questions if q["id"] in replay_set]
     if not questions:
         return redirect(overview)
+    for q in questions:   # admin "Image Uploading OFF": file kept, but not shown to students
+        q["image_url"] = _visible_image(q)
 
     saved = get_practice_answers_map(attempt["id"])
     saved_for_runner = {
@@ -348,7 +360,7 @@ def practice_run(slug, chapter_id, mode, category, folder, set_name):
     )
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>/attempt/<attempt_id>/answer", methods=["POST"])
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>/<name:set_name>/attempt/<attempt_id>/answer", methods=["POST"])
 def practice_save_answer(slug, chapter_id, mode, category, folder, set_name, attempt_id):
     """Durable per-question save from the runner (answer / mark toggle / time)."""
     if not is_logged_in():
@@ -375,7 +387,7 @@ def practice_save_answer(slug, chapter_id, mode, category, folder, set_name, att
     return jsonify({"ok": bool(ok)})
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>/attempt/<attempt_id>/note", methods=["POST"])
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>/<name:set_name>/attempt/<attempt_id>/note", methods=["POST"])
 def practice_save_note(slug, chapter_id, mode, category, folder, set_name, attempt_id):
     """Saves the 'what mistake did I make' note for one question (works during the run and on Analyse)."""
     if not is_logged_in():
@@ -402,7 +414,7 @@ def practice_save_note(slug, chapter_id, mode, category, folder, set_name, attem
     return jsonify({"ok": bool(ok)})
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>/attempt/<attempt_id>/submit", methods=["POST"])
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>/<name:set_name>/attempt/<attempt_id>/submit", methods=["POST"])
 def practice_submit(slug, chapter_id, mode, category, folder, set_name, attempt_id):
     """Grades on the server, stores the summary, returns where to go next."""
     if not is_logged_in():
@@ -433,7 +445,7 @@ def practice_submit(slug, chapter_id, mode, category, folder, set_name, attempt_
     return jsonify({"ok": True, "redirect": analyse_url, "summary": summary})
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>/analyse")
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>/<name:set_name>/analyse")
 def practice_analyse(slug, chapter_id, mode, category, folder, set_name):
     """'Analyse your last quiz': chooser (wrong / marked / full) + reattempt options."""
     if not is_logged_in():
@@ -447,14 +459,18 @@ def practice_analyse(slug, chapter_id, mode, category, folder, set_name):
     if not attempt.get("submitted_at"):
         return redirect(url_for("user.practice_run", slug=slug, chapter_id=chapter_id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt["id"]))
 
-    counts = get_practice_analyse_counts(attempt["id"])
+    pending = get_latest_practice_reattempt_session(attempt["id"])
+    if pending and not pending.get("submitted_at"):
+        return redirect(url_for("user.practice_run", slug=slug, chapter_id=chapter_id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=pending["id"]))
+
+    counts = get_practice_analyse_counts(attempt["id"])   # always the FULL attempt's own frozen record
     return render_template(
         "practice_analyse.html", stream=stream, chapter=chapter, mode=mode, category=category, folder=folder,
-        set_name=set_name, attempt=attempt, counts=counts,
+        set_name=set_name, attempt=attempt, counts=counts, reattempt_session=pending,
     )
 
 
-@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<folder>/<set_name>/analyse/<view>")
+@user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>/<name:set_name>/analyse/<view>")
 def practice_analyse_view(slug, chapter_id, mode, category, folder, set_name, view):
     """Review list: view = wrong | marked | full. Each question has an editable mistake note."""
     if not is_logged_in():
@@ -553,10 +569,14 @@ def test_overview(slug, test_id):
     attempt = _latest_mock_attempt(test_id) if has_access else None
     if attempt is None:
         attempt_state = "none"
-    elif attempt.get("submitted_at"):
-        attempt_state = "submitted"
-    else:
+    elif not attempt.get("submitted_at"):
         attempt_state = "in_progress"
+    else:
+        pending = get_latest_mock_reattempt_session(attempt["id"])
+        if pending and not pending.get("submitted_at"):
+            attempt_state, attempt = "in_progress", pending
+        else:
+            attempt_state = "submitted"
 
     return render_template(
         "test_overview.html", stream=stream, test=test, syllabus=syllabus, has_access=has_access,
@@ -578,7 +598,7 @@ def test_start(slug, test_id):
 
     kind = (request.form.get("kind") or "full").strip()
     if kind == "full":
-        # Unchanged legacy path: replaces the previous attempt with a clean one.
+        # New independent full attempt; earlier submitted attempts stay in history.
         attempt_id = create_test_attempt(test_id, user_id=current_user_id())
         result = None
     else:
@@ -802,8 +822,12 @@ def test_analyse(slug, test_id):
     if not attempt.get("submitted_at"):
         return redirect(url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=attempt["id"]))
 
-    counts = get_mock_analyse_counts(attempt["id"], test_id)
-    return render_template("test_analyse.html", stream=stream, test=test, attempt=attempt, counts=counts)
+    pending = get_latest_mock_reattempt_session(attempt["id"])
+    if pending and not pending.get("submitted_at"):
+        return redirect(url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=pending["id"]))
+
+    counts = get_mock_analyse_counts(attempt["id"], test_id)   # the FULL attempt's own frozen record
+    return render_template("test_analyse.html", stream=stream, test=test, attempt=attempt, counts=counts, reattempt_session=pending)
 
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/analyse/<view>")
@@ -847,15 +871,8 @@ def test_save_note(slug, test_id, attempt_id):
 
 
 def _latest_mock_attempt(test_id):
-    """The user's single stored attempt for this test (or None)."""
-    try:
-        rows = (
-            supabase_admin.table("test_attempts").select("*")
-            .eq("test_id", test_id).eq("user_id", current_user_id()).limit(1).execute().data
-        )
-        return rows[0] if rows else None
-    except Exception:
-        return None
+    """User's latest FULL attempt for this test (never a reattempt session)."""
+    return get_latest_full_mock_attempt(test_id, current_user_id())
 
 
 # ---------- Profile & Account Settings ----------
