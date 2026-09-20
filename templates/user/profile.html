@@ -76,7 +76,8 @@
 
         <!-- Left: Test Info & Badges -->
         <div class="flex-1">
-          <h3 class="font-bold text-white text-lg mb-2">{{ a.tests.title if a.tests else 'Mock Test' }}</h3>
+          <h3 class="font-bold text-white text-lg mb-2">{{ a.tests.title if a.tests else 'Mock Test' }}
+            <span class="text-xs font-semibold text-gray-500 ml-2">Attempt {{ a.attempt_no }}{% if a.is_latest %} · Latest{% endif %}</span></h3>
 
           <div class="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-400">
             {% if a.submitted_at %}
@@ -84,7 +85,8 @@
               <span class="hidden sm:inline text-gray-600">•</span>
               <span class="bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">{{ a.correct_count }} Correct</span>
               <span class="bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">{{ a.wrong_count }} Wrong</span>
-              <span class="bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">{{ a.skipped_count }} Skipped</span>
+              <span class="bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">{{ a.skipped_count }} Not Attempted</span>
+              <span class="bg-red-500/10 border border-red-500/20 text-red-300 px-2.5 py-1 rounded-md" title="Wrong Questions = Wrong + Not Attempted">{{ (a.wrong_count or 0) + (a.skipped_count or 0) }} Wrong Questions</span>
             {% else %}
               <span class="text-gold-light bg-gold/10 border border-gold/20 px-2.5 py-1 rounded-md tracking-wide uppercase">In Progress</span>
               <span class="hidden sm:inline text-gray-600">•</span>
@@ -106,17 +108,25 @@
 
           <!-- Action Buttons -->
           <div class="flex gap-2.5 shrink-0">
-            {% set stream_slug = a.tests.get('streams', {}).get('slug', 'neet') if a.tests else 'neet' %}
+            {% set stream_slug = ((a.tests.get('streams') or {}).get('slug') or 'neet') if a.tests else 'neet' %}
 
             {% if a.submitted_at %}
-              <!-- Submitted Actions -->
+              <!-- Submitted Actions: every card is ONE permanent full attempt with its own frozen record -->
               <a href="{{ url_for('user.test_attempt_review', slug=stream_slug, test_id=a.test_id, attempt_id=a.id) }}"
                  class="px-5 py-2.5 bg-gold text-ink font-bold text-sm rounded-lg hover:bg-gold-light transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-gold/50">
-                 Analyze
+                 Review
               </a>
-              <form action="{{ url_for('user.test_start', slug=stream_slug, test_id=a.test_id) }}" method="POST" class="inline m-0 p-0">
+              {% if a.is_latest %}
+              <a href="{{ url_for('user.test_analyse', slug=stream_slug, test_id=a.test_id) }}"
+                 class="px-5 py-2.5 border border-gold/40 text-gold font-bold text-sm rounded-lg hover:bg-gold/10 transition-colors focus:outline-none">
+                 Analyse
+              </a>
+              {% endif %}
+              <form action="{{ url_for('user.test_start', slug=stream_slug, test_id=a.test_id) }}" method="POST" class="inline m-0 p-0"
+                    onsubmit="return confirm('Start a NEW full attempt? Your earlier attempts stay saved in your history.');">
+                <input type="hidden" name="kind" value="full">
                 <button type="submit" class="px-5 py-2.5 border border-white/15 text-white font-bold text-sm rounded-lg hover:border-white/30 hover:bg-white/5 transition-all focus:outline-none">
-                   Retake
+                   Attempt Full Test
                 </button>
               </form>
             {% else %}
