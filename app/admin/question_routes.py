@@ -20,6 +20,7 @@ from flask import render_template, request, redirect, url_for, flash, jsonify
 from app.admin import admin_bp
 from app.admin.decorators import admin_required
 from app.extensions import supabase_admin
+from app.shared.latex_lint import lint_question_payload
 
 logger = logging.getLogger(__name__)
 
@@ -164,27 +165,34 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_na
     return payload, None
 
 
-def _fetch_set_questions(chapter_id, is_pyq, category, folder_name, set_name):
-    """Shared fetch for the question list inside one quiz (set) strictly by category.
+def _fetch_all_rows(query, page=1000):
+    """PostgREST returns max 1000 rows/request. Any "load everything of this quiz" read (duplicate
+    check, admin list) must page with .range(), otherwise big quizzes are silently truncated."""
+    out, start = [], 0
+    while True:
+        chunk = query.range(start, start + page - 1).execute().data or []
+        out.extend(chunk)
+        if len(chunk) < page:
+            return out
+        start += page
 
-    The full question body (options, correct_option, explanation) is fetched
-    on purpose: the admin "Edit JSON" modal pre-fills its textarea from this
-    data. Without it the box opens empty and _validate_bulk_question rejects
-    any incomplete JSON the admin types from scratch.
-    """
-    try:
-        return supabase_admin.table("questions").select(
-            "id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, "
+
+def _fetch_set_questions(chapter_id, is_pyq, category, folder_name, set_name):
+    """Every question of one quiz (paged). Full body is fetched because the edit modal pre-fills from it."""
+    cols = ("id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, "
             "is_pyq, pyq_year, category, folder_name, set_name, is_premium, "
-            "difficulty_id, has_image, image_url, marks, negative_marks"
-        ).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).order("created_at", desc=True).execute().data
+            "difficulty_id, has_image, image_url, marks, negative_marks")
+
+    def build(c):   # stable total order (created_at, id) so paging never skips/repeats rows
+        return (supabase_admin.table("questions").select(c)
+                .eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category)
+                .eq("folder_name", folder_name).eq("set_name", set_name)
+                .order("created_at", desc=True).order("id"))
+    try:
+        return _fetch_all_rows(build(cols))
     except Exception as e:
         if "marks" in str(e) or "column" in str(e).lower():
-            return supabase_admin.table("questions").select(
-                "id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, "
-                "is_pyq, pyq_year, category, folder_name, set_name, is_premium, "
-                "difficulty_id, has_image, image_url"
-            ).eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).order("created_at", desc=True).execute().data
+            return _fetch_all_rows(build(cols.replace(", marks, negative_marks", "")))
         raise
 
 
@@ -247,7 +255,7 @@ def questions_list():
         chapters = supabase_admin.table("chapters").select("id, name").eq("subject_id", subject_id).eq("is_active", True).order("display_order").execute().data
 
     if chapter_id:
-        chapter = supabase_admin.table("chapters").select("id, name").eq("id", chapter_id).single().execute().data
+        chapter = supabase_admin.table("chapters").select("id, name").eq("id", chapter_id).maybe_single().execute().data
 
     if chapter_id and q_type and category:
         is_pyq = (q_type == "pyq")
@@ -311,7 +319,7 @@ def questions_set_manage():
         flash("Missing quiz context — please open a quiz from the folder list.", "error")
         return redirect(url_for("admin.questions_list", stream_id=stream_id, subject_id=subject_id, chapter_id=chapter_id))
 
-    chapter = supabase_admin.table("chapters").select("id, name").eq("id", chapter_id).single().execute().data
+    chapter = supabase_admin.table("chapters").select("id, name").eq("id", chapter_id).maybe_single().execute().data
     is_pyq = (q_type == "pyq")
     questions = _fetch_set_questions(chapter_id, is_pyq, category, folder_name, set_name)
     difficulty_levels = supabase_admin.table("difficulty_levels").select("id, name").order("display_order").execute().data
@@ -388,24 +396,35 @@ def questions_bulk_upload():
             valid_payloads.append(payload)
             valid_rownums.append(i)
 
+    # DUPLICATE CHECK -- root cause of "25 + 25 uploaded = 44 questions".
+    # The old check compared ONLY question_text. NEET banks reuse generic stems ("Which of the
+    # following is correct?") for many genuinely different questions that differ in OPTIONS/ANSWER,
+    # so real questions were silently dropped. A row is now a duplicate ONLY if question text +
+    # options A-D + correct option are ALL identical. Every skip is reported with row + reason.
+    def _fp(p):
+        norm = lambda t: " ".join(str(t or "").lower().split())
+        return (norm(p["question_text"]), norm(p["option_a"]), norm(p["option_b"]),
+                norm(p["option_c"]), norm(p["option_d"]), p["correct_option"])
+
     skipped_duplicates = []     # [{"row": 5, "reason": "..."}]
     to_insert = []
     if valid_payloads:
-        existing_questions = supabase_admin.table("questions").select("question_text").eq("chapter_id", chapter_id).eq("category", category).eq("folder_name", folder_name).eq("set_name", set_name).execute().data
-        existing_texts = {q["question_text"].strip().lower() for q in existing_questions if q.get("question_text")}
-
-        incoming_texts = set()
+        existing = _fetch_all_rows(
+            supabase_admin.table("questions")
+            .select("question_text, option_a, option_b, option_c, option_d, correct_option")
+            .eq("chapter_id", chapter_id).eq("category", category)
+            .eq("folder_name", folder_name).eq("set_name", set_name))
+        existing_fps = {_fp(q) for q in existing if q.get("question_text")}
+        incoming = set()
         for rownum, p in zip(valid_rownums, valid_payloads):
-            clean_text = p["question_text"].strip().lower()
-            preview = clean_text[:40] + ("..." if len(clean_text) > 40 else "")
-            if clean_text in existing_texts:
-                skipped_duplicates.append({"row": rownum, "reason": f"already exists in this quiz: '{preview}'"})
-                continue
-            if clean_text in incoming_texts:
-                skipped_duplicates.append({"row": rownum, "reason": f"repeated inside this pasted chunk: '{preview}'"})
-                continue
-            incoming_texts.add(clean_text)
-            to_insert.append(p)
+            fp = _fp(p)
+            preview = fp[0][:40] + ("..." if len(fp[0]) > 40 else "")
+            if fp in existing_fps:
+                skipped_duplicates.append({"row": rownum, "reason": f"identical question+options+answer already in this quiz: '{preview}'"})
+            elif fp in incoming:
+                skipped_duplicates.append({"row": rownum, "reason": f"identical question+options+answer repeated in this paste: '{preview}'"})
+            else:
+                incoming.add(fp); to_insert.append(p)
 
     inserted_ids, warning_msg = [], None
 
@@ -427,8 +446,15 @@ def questions_bulk_upload():
                 logger.error(f"DB Upload failed: {exc}")
                 return jsonify({"ok": False, "error": "DB Upload failed.", "pasted": len(parsed), "inserted": 0, "skipped_duplicates": len(skipped_duplicates), "failed_validation": len(failed_validation), "duplicate_details": skipped_duplicates, "errors": [f"row {e['row']}: {e['reason']}" for e in failed_validation]}), 500
 
+    latex_warnings = []
+    for rownum, p in zip(valid_rownums, valid_payloads):
+        w = lint_question_payload(p)
+        if w:
+            latex_warnings.append({"row": rownum, "fields": w})
+
     resp = {
         "ok": bool(inserted_ids),
+        "latex_warnings": latex_warnings,
         "pasted": len(parsed),
         "inserted": len(inserted_ids),
         "inserted_ids": inserted_ids,
@@ -747,32 +773,80 @@ def api_delete_chapter():
 @admin_bp.route("/questions/<question_id>/edit", methods=["POST"])
 @admin_required
 def questions_edit(question_id):
-    raw = request.json
+    """
+    Replace one question's content. IMAGE RULES: an existing image is NEVER deleted as a side effect
+    of editing. Switching Image OFF only sets has_image=false and KEEPS the file + image_url (toggle
+    ON restores it). The file is deleted only by the explicit "Remove Image" action.
+    """
+    raw = request.get_json(silent=True)
+    if not isinstance(raw, dict):
+        return jsonify({"ok": False, "error": "No JSON payload received"}), 400
+    old_q = (supabase_admin.table("questions")
+             .select("chapter_id, folder_name, set_name, category, image_url, has_image, is_pyq")
+             .eq("id", question_id).maybe_single().execute().data)
+    if not old_q:
+        return jsonify({"ok": False, "error": "Question not found (it may have been deleted). Reload the page."}), 404
+
+    difficulty_ids = {d["id"] for d in supabase_admin.table("difficulty_levels").select("id").execute().data}
+    raw = dict(raw)
+    raw.setdefault("question_type", "pyq" if old_q.get("is_pyq") else "mcq")   # do not flip PYQ -> MCQ silently
+    payload, error = _validate_bulk_question(raw, difficulty_ids, old_q["chapter_id"], old_q["folder_name"], old_q["set_name"], old_q["category"])
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    if not (raw.get("image_url") or "").strip():
+        payload["image_url"] = old_q.get("image_url")            # keep stored image
+    if payload.get("image_url"):
+        payload["has_image"] = bool(raw.get("has_image", True))
+
     try:
-        old_q = supabase_admin.table("questions").select("chapter_id, folder_name, set_name, category, image_url, has_image").eq("id", question_id).single().execute().data
-        difficulty_ids = {d["id"] for d in supabase_admin.table("difficulty_levels").select("id").execute().data}
-
-        payload, error = _validate_bulk_question(raw, difficulty_ids, old_q["chapter_id"], old_q["folder_name"], old_q["set_name"], old_q["category"])
-        if error: return jsonify({"ok": False, "error": error}), 400
-
-        if old_q.get("image_url") and not payload.get("has_image"):
-            _delete_image_from_storage(old_q["image_url"])
-            payload["image_url"] = None
-
-        supabase_admin.table("questions").update(payload).eq("id", question_id).execute()
-        return jsonify({"ok": True, "has_image": payload.get("has_image")})
+        try:
+            supabase_admin.table("questions").update(payload).eq("id", question_id).execute()
+        except Exception as exc:
+            if "marks" not in str(exc):
+                raise
+            payload.pop("marks", None); payload.pop("negative_marks", None)
+            supabase_admin.table("questions").update(payload).eq("id", question_id).execute()
+        return jsonify({"ok": True, "has_image": payload.get("has_image"), "image_url": payload.get("image_url"),
+                        "latex_warnings": lint_question_payload(payload)})
     except Exception as exc:
-        if "marks" in str(exc):
-            payload.pop("marks", None)
-            payload.pop("negative_marks", None)
-            try:
-                supabase_admin.table("questions").update(payload).eq("id", question_id).execute()
-                return jsonify({"ok": True, "has_image": payload.get("has_image")})
-            except Exception as inner_exc:
-                logger.error(f"Fallback edit failed: {inner_exc}")
-                return jsonify({"ok": False, "error": "Failed to update question."}), 500
-        logger.error(f"Question edit failed: {exc}")
+        logger.error(f"Question edit failed for {question_id}: {exc}")
         return jsonify({"ok": False, "error": "Failed to update question."}), 500
+
+
+@admin_bp.route("/questions/chapter_questions/<question_id>/toggle-image", methods=["POST"])
+@admin_required
+def questions_toggle_image(question_id):
+    """Image Uploading ON/OFF. OFF only flips has_image; the uploaded file is kept."""
+    data = request.get_json(silent=True) or {}
+    if "has_image" not in data:
+        return jsonify({"ok": False, "error": "Missing has_image payload"}), 400
+    has_image = bool(data["has_image"])
+    try:
+        rows = supabase_admin.table("questions").update({"has_image": has_image}).eq("id", question_id).execute().data
+        if not rows:
+            return jsonify({"ok": False, "error": "Question not found."}), 404
+        return jsonify({"ok": True, "has_image": has_image, "image_url": rows[0].get("image_url")})
+    except Exception as exc:
+        logger.error(f"Toggle image error for {question_id}: {exc}")
+        return jsonify({"ok": False, "error": "Database error saving image state."}), 500
+
+
+@admin_bp.route("/questions/chapter_questions/<question_id>/change-answer", methods=["POST"])
+@admin_required
+def questions_change_answer(question_id):
+    """Quick 'Change Correct Option' for chapter-wise questions (parity with mock tests)."""
+    data = request.get_json(silent=True) or {}
+    opt = str(data.get("correct_option") or "").strip().upper()
+    if opt not in ("A", "B", "C", "D"):
+        return jsonify({"ok": False, "error": "Invalid option"}), 400
+    try:
+        rows = supabase_admin.table("questions").update({"correct_option": opt}).eq("id", question_id).execute().data
+        if not rows:
+            return jsonify({"ok": False, "error": "Question not found."}), 404
+        return jsonify({"ok": True, "correct_option": opt})
+    except Exception as exc:
+        logger.error(f"Change answer error for {question_id}: {exc}")
+        return jsonify({"ok": False, "error": "Database error updating answer."}), 500
 
 
 @admin_bp.route("/questions/<question_id>/delete", methods=["POST"])
@@ -782,7 +856,7 @@ def questions_delete(question_id):
     q_type, category = request.args.get("type"), request.args.get("category")
     folder_name, set_name = request.args.get("folder"), request.args.get("set")
     try:
-        q = supabase_admin.table("questions").select("image_url").eq("id", question_id).single().execute().data
+        q = supabase_admin.table("questions").select("image_url").eq("id", question_id).maybe_single().execute().data
         if q and q.get("image_url"):
             _delete_image_from_storage(q["image_url"])
 
