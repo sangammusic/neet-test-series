@@ -1177,6 +1177,45 @@ def get_practice_analyse_counts(attempt_id):
     return {"wrong": wrong, "marked": marked, "wrong_or_marked": either, "full": len(questions)}
 
 
+def get_practice_time_breakdown(attempt_id):
+    """
+    Per-question time spent for a practice attempt's Analyse page (mirrors
+    get_attempt_time_breakdown() for mock tests). Practice quizzes are
+    single-chapter, so there is no per-subject split -- just total +
+    per-question, in quiz order, each carrying a short question preview.
+    """
+    attempt = get_practice_attempt_by_id(attempt_id)
+    if not attempt:
+        return {"total_seconds": 0, "by_question": []}
+    questions = get_practice_quiz_questions(
+        attempt["chapter_id"], attempt["mode"], attempt["category"],
+        attempt["folder_name"], attempt["set_name"],
+    )
+    answers = get_practice_answers_map(attempt_id)
+
+    by_question = []
+    total_seconds = 0
+    for idx, q in enumerate(questions, start=1):
+        a = answers.get(q["id"]) or {}
+        time_taken = int(a.get("time_taken_sec") or 0)
+        total_seconds += time_taken
+        by_question.append({
+            "question_order": idx,
+            "question_text": q.get("question_text"),
+            "time_taken_sec": time_taken,
+            "selected_option": a.get("selected_option"),
+            "is_correct": a.get("is_correct"),
+        })
+    # Prefer the attempt's own stored wall-clock total when we have one (it
+    # reflects the whole session, including any dead/navigation time); fall
+    # back to the sum of per-question time for older attempts that predate
+    # total_time_sec, or if it was never saved for some reason.
+    stored_total = attempt.get("total_time_sec")
+    if stored_total:
+        total_seconds = int(stored_total)
+    return {"total_seconds": total_seconds, "by_question": by_question}
+
+
 # =====================================================================
 # MOCK TEST SERIES: ANALYSE + MISTAKE NOTES + REATTEMPT
 #
