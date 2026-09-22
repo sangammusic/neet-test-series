@@ -72,25 +72,33 @@ def _delete_image_from_storage(image_url):
 def test_series_list():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-        if not name:
-            flash("Folder name cannot be empty.", "error")
+        stream_id = request.form.get("stream_id")
+        # A folder must belong to exactly one stream from the moment it's
+        # created -- this is what previously let one folder silently hold
+        # tests from multiple streams, and let every stream's students see
+        # every folder (see sql/migration_test_series_stream.sql).
+        if not name or not stream_id:
+            flash("Please select a Stream and enter a folder name.", "error")
         else:
             try:
-                supabase_admin.table("mock_test_series").insert({"name": name}).execute()
+                supabase_admin.table("mock_test_series").insert(
+                    {"name": name, "stream_id": stream_id}
+                ).execute()
                 flash(f"Folder '{name}' created successfully.", "success")
             except Exception as exc:
                 logger.error(f"Test series creation failed: {exc}")
                 flash("Could not create folder. Please try again.", "error")
         return redirect(url_for("admin.test_series_list"))
 
+    streams = supabase_admin.table("streams").select("id, name").order("display_order").execute().data
     series = (
         supabase_admin.table("mock_test_series")
-        .select("*")
+        .select("*, streams(name)")
         .order("created_at", desc=True)
         .execute()
         .data
     )
-    return render_template("admin_test_folders.html", series=series)
+    return render_template("admin_test_folders.html", series=series, streams=streams)
 
 
 @admin_bp.route("/test-series/<series_id>/edit", methods=["POST"])
@@ -200,8 +208,13 @@ def series_tests(series_id):
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         marks_per_question_raw = request.form.get("marks_per_question")
-        stream_id = request.form.get("stream_id")
-        
+        # The folder's own stream is now the source of truth for every test
+        # created inside it (a folder belongs to exactly one stream -- see
+        # sql/migration_test_series_stream.sql). Only fall back to the form
+        # field for an older folder that predates that column and still has
+        # stream_id = NULL, so nothing already in production breaks.
+        stream_id = series_data.get("stream_id") or request.form.get("stream_id")
+
         category_name = request.form.get("category_name", "").strip()
 
         if not title or not marks_per_question_raw or not str(marks_per_question_raw).strip() or not category_name or not stream_id:
@@ -256,9 +269,16 @@ def series_tests(series_id):
             flash("Could not create test.", "error")
             return redirect(url_for("admin.series_tests", series_id=series_id))
 
+    # Streams dropdown is only still needed on the create-test form for the
+    # rare legacy folder that has no stream_id of its own yet (see above).
     streams = supabase_admin.table("streams").select("id, name").order("display_order").execute().data
-    
-    raw_categories = supabase_admin.table("test_categories").select("id, name, stream_id").order("display_order").execute().data
+
+    # Categories are scoped to the folder's stream once it has one, so the
+    # "Category" field only ever offers categories that make sense here.
+    cats_query = supabase_admin.table("test_categories").select("id, name, stream_id").order("display_order")
+    if series_data.get("stream_id"):
+        cats_query = cats_query.eq("stream_id", series_data["stream_id"])
+    raw_categories = cats_query.execute().data
     seen_cats = set()
     categories = []
     for c in raw_categories:
