@@ -16,7 +16,7 @@ from app.shared.models import (
     PRACTICE_ATTEMPT_KINDS, get_practice_quiz_questions, get_latest_practice_attempt,
     get_practice_attempt_by_id, get_practice_answers_map, start_practice_attempt,
     save_practice_progress, save_practice_mistake_note, submit_practice_attempt,
-    get_practice_review_items, get_practice_analyse_counts, select_reattempt_question_ids,
+    get_practice_review_items, get_practice_analyse_counts, get_practice_time_breakdown, select_reattempt_question_ids,
     get_mock_review_items, get_mock_analyse_counts, save_mock_mistake_note, start_mock_reattempt,
     get_latest_full_mock_attempt, get_latest_mock_reattempt_session,
     get_latest_practice_reattempt_session, _visible_image,
@@ -464,9 +464,11 @@ def practice_analyse(slug, chapter_id, mode, category, folder, set_name):
         return redirect(url_for("user.practice_run", slug=slug, chapter_id=chapter_id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=pending["id"]))
 
     counts = get_practice_analyse_counts(attempt["id"])   # always the FULL attempt's own frozen record
+    time_breakdown = get_practice_time_breakdown(attempt["id"])
     return render_template(
         "practice_analyse.html", stream=stream, chapter=chapter, mode=mode, category=category, folder=folder,
         set_name=set_name, attempt=attempt, counts=counts, reattempt_session=pending,
+        total_seconds=time_breakdown["total_seconds"], time_by_question=time_breakdown["by_question"],
     )
 
 
@@ -827,7 +829,11 @@ def test_analyse(slug, test_id):
         return redirect(url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=pending["id"]))
 
     counts = get_mock_analyse_counts(attempt["id"], test_id)   # the FULL attempt's own frozen record
-    return render_template("test_analyse.html", stream=stream, test=test, attempt=attempt, counts=counts, reattempt_session=pending)
+    time_breakdown = get_attempt_time_breakdown(attempt["id"], test_id)
+    return render_template(
+        "test_analyse.html", stream=stream, test=test, attempt=attempt, counts=counts, reattempt_session=pending,
+        time_by_subject=time_breakdown["by_subject"], time_by_question=time_breakdown["by_question"],
+    )
 
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/analyse/<view>")
