@@ -1,20 +1,22 @@
 """
-Bulk-paste upload for the Mock Test question pool (`mock_questions`).
+Shared validation for Mock Test question bulk-paste uploads.
 
 Each question object in the pasted JSON array must carry an explicit
 "subject_name" field (e.g. "Physics", "Chemistry", "Biology"). This
-route resolves that name to the correct subject_id for the stream
+module resolves that name to the correct subject_id for the stream
 being uploaded into. If subject_name doesn't match any real subject
 for that stream, the row is rejected with a validation error — there
 is no keyword guessing and no needs_review fallback.
+
+NOTE: the standalone "/admin/mock-questions" bulk-paste page (its own
+routes + admin_mock_questions.html) that used to live in this file has
+been removed — it was a legacy, unreachable-from-the-nav duplicate of
+the live Folder -> Test -> Upload flow in test_routes.py, and having
+two independent copies of this validation logic around is exactly the
+kind of drift risk that's worse than deleting the dead one. The
+validator below is still the live, shared code: test_routes.py's
+tests_bulk_map_questions() imports and calls it directly.
 """
-import json
-
-from flask import render_template, request, redirect, url_for, flash
-
-from app.admin import admin_bp
-from app.admin.decorators import admin_required
-from app.extensions import supabase_admin
 
 
 REQUIRED_BULK_FIELDS = (
@@ -99,151 +101,3 @@ def _validate_mock_question(raw, subject_name_to_id, difficulty_ids, stream_id):
     }
     return payload, None
 
-
-@admin_bp.route("/mock-questions")
-@admin_required
-def mock_questions_list():
-    streams = supabase_admin.table("streams").select("id, name").order("display_order").execute().data
-
-    stream_id = request.args.get("stream_id")
-    subject_id = request.args.get("subject_id")
-
-    subjects = []
-    questions = []
-
-    if stream_id:
-        subjects = (
-            supabase_admin.table("subjects")
-            .select("id, name")
-            .eq("stream_id", stream_id)
-            .eq("is_active", True)
-            .order("display_order")
-            .execute()
-            .data
-        )
-
-        query = (
-            supabase_admin.table("mock_questions")
-            .select("id, question_text, topic_name, subject_id, is_pyq, pyq_year, has_image, image_url, subjects(name)")
-            .eq("stream_id", stream_id)
-        )
-        if subject_id:
-            query = query.eq("subject_id", subject_id)
-
-        questions = query.order("created_at", desc=True).execute().data
-
-    difficulty_levels = supabase_admin.table("difficulty_levels").select("id, name").order("display_order").execute().data
-
-    return render_template(
-        "admin_mock_questions.html",
-        streams=streams, subjects=subjects, questions=questions, difficulty_levels=difficulty_levels,
-        selected_stream_id=stream_id, selected_subject_id=subject_id,
-    )
-
-
-@admin_bp.route("/mock-questions/bulk-upload", methods=["POST"])
-@admin_required
-def mock_questions_bulk_upload():
-    """
-    Parses a pasted JSON array of mock-test question objects and
-    inserts all valid ones into `mock_questions` in a single batch
-    insert() call.
-
-    Each row's subject_name is resolved to that subject's id for the
-    selected stream (see _validate_mock_question). Rows whose
-    subject_name doesn't match a real subject for this stream are
-    rejected outright and reported — nothing is silently guessed at.
-    """
-    stream_id = request.form.get("stream_id")
-    raw_json = request.form.get("bulk_json", "").strip()
-
-    redirect_target = lambda: redirect(url_for(  # noqa: E731
-        "admin.mock_questions_list", stream_id=stream_id
-    ))
-
-    if not stream_id:
-        flash("Select a Stream before bulk uploading mock questions.", "error")
-        return redirect(url_for("admin.mock_questions_list"))
-
-    if not raw_json:
-        flash("Paste a JSON array of questions before submitting.", "error")
-        return redirect_target()
-
-    try:
-        parsed = json.loads(raw_json)
-    except json.JSONDecodeError as exc:
-        flash(f"Invalid JSON — could not parse: {exc}", "error")
-        return redirect_target()
-
-    if not isinstance(parsed, list):
-        flash("Bulk upload expects a JSON array of question objects, e.g. [{...}, {...}].", "error")
-        return redirect_target()
-
-    if not parsed:
-        flash("The pasted JSON array is empty — nothing to upload.", "error")
-        return redirect_target()
-
-    # Pulled once, outside the loop: subject_name_to_id maps this
-    # stream's subject names (lowercased) to their subject_id — this
-    # is what enforces stream-locking, since a name only valid for a
-    # different stream simply won't be in this dict.
-    subjects_for_stream = (
-        supabase_admin.table("subjects")
-        .select("id, name")
-        .eq("stream_id", stream_id)
-        .execute()
-        .data
-    )
-    subject_name_to_id = {s["name"].strip().lower(): s["id"] for s in subjects_for_stream}
-
-    difficulty_ids = {
-        d["id"] for d in
-        supabase_admin.table("difficulty_levels").select("id").execute().data
-    }
-
-    valid_payloads = []
-    errors = []
-    for i, raw in enumerate(parsed, start=1):
-        payload, error = _validate_mock_question(raw, subject_name_to_id, difficulty_ids, stream_id)
-        if error:
-            errors.append(f"row {i}: {error}")
-        else:
-            valid_payloads.append(payload)
-
-    if valid_payloads:
-        try:
-            supabase_admin.table("mock_questions").insert(valid_payloads).execute()
-        except Exception as exc:
-            flash(f"Upload failed at the database level: {exc}", "error")
-            return redirect_target()
-
-    if valid_payloads and not errors:
-        flash(f"Bulk upload complete — {len(valid_payloads)} question(s) inserted.", "success")
-    elif valid_payloads and errors:
-        flash(
-            f"{len(valid_payloads)} question(s) inserted, but "
-            f"{len(errors)} row(s) were skipped — {'; '.join(errors[:5])}"
-            + (f" (+{len(errors) - 5} more)" if len(errors) > 5 else ""),
-            "error",
-        )
-    else:
-        flash(
-            f"No questions were inserted — all {len(errors)} row(s) failed validation. "
-            f"{'; '.join(errors[:5])}" + (f" (+{len(errors) - 5} more)" if len(errors) > 5 else ""),
-            "error",
-        )
-
-    return redirect_target()
-
-
-@admin_bp.route("/mock-questions/<question_id>/delete", methods=["POST"])
-@admin_required
-def mock_questions_delete(question_id):
-    stream_id = request.args.get("stream_id")
-    subject_id = request.args.get("subject_id")
-    try:
-        supabase_admin.table("mock_questions").delete().eq("id", question_id).execute()
-        flash("Mock question deleted.", "success")
-    except Exception as exc:
-        flash(f"Could not delete question: {exc}", "error")
-    return redirect(url_for("admin.mock_questions_list", stream_id=stream_id, subject_id=subject_id))
