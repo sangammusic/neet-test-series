@@ -506,10 +506,17 @@ def tests_feed(slug):
     stream = get_stream_by_slug(slug)
     if not stream:
         abort(404)
-    # Fetch all VIP Folders created by admin
+    # Only this stream's folders -- previously this had no stream_id filter
+    # at all, so every stream's students saw the exact same folder list (a
+    # JEE student could open a "NEET Full Syllabus" folder and land on an
+    # empty test list once inside). A legacy folder with stream_id still
+    # NULL (created before this column existed) is also shown to every
+    # stream for now, so nothing already-live silently disappears -- see
+    # sql/migration_test_series_stream.sql.
     series_list = (
         supabase_public.table("mock_test_series")
         .select("*")
+        .or_(f"stream_id.eq.{stream['id']},stream_id.is.null")
         .order("created_at", desc=True)
         .execute()
         .data
