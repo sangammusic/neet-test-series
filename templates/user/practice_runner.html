@@ -559,7 +559,12 @@ function practiceRunner() {
         this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
         return;
       }
-      this.activeQuestionId = q ? q.id : null;
+      // FIX: agar is question ka answer already submit ho chuka hai (chahe
+      // isi session me ho ya reload ke baad resume kiya ho), to iska clock
+      // dobara mat chalao — sirf uska final recorded time dikhao. Sirf
+      // un-answered question ka live clock chalta hai.
+      const alreadyAnswered = q && this.answers[q.id] != null;
+      this.activeQuestionId = (q && !alreadyAnswered) ? q.id : null;
       this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
     },
 
@@ -806,6 +811,9 @@ function practiceRunner() {
       const q = this.currentQuestion;
       if (!q || this.selected[q.id] == null || this.isChecked(q.id) || this.isFinished) return;
       this.answers[q.id] = this.selected[q.id];
+      // FIX: submit hote hi is sawaal ka clock turant freeze karo — warna
+      // student explanation padhte waqt bhi time badhta rehta tha.
+      if (this.activeQuestionId === q.id) this.activeQuestionId = null;
       // Explanation already prerendered hai cache me — kuch typeset karne
       // ki zaroorat nahi, isliye yahan koi MathJax call nahi.
       this._syncQuestion(q.id);          // durable save (background)
