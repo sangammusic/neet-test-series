@@ -57,10 +57,26 @@
     
     <form id="create-test-form" method="POST" action="{{ url_for('admin.series_tests', series_id=series.id) }}" class="space-y-6" onsubmit="return handleFormSubmit(this);">
 
-      <!-- STEP 1 (mandatory, unmissable): Select a Stream first — a folder can hold
-           tests from multiple streams, so this MUST be picked before anything else,
-           exactly like the chapter-wise practice flow. Everything else stays locked
-           (disabled fieldset) until a stream is chosen. -->
+      {% if series.stream_id %}
+      <!-- This folder already belongs to a stream (set when it was created
+           -- see admin_test_folders.html), so every test inside it inherits
+           that same stream automatically. No picker needed, no chance of a
+           folder silently mixing tests from two different streams. -->
+      <div class="p-5 bg-indigo-50 border-2 border-indigo-200 rounded-xl flex items-center justify-between">
+        <div>
+          <label class="block text-sm font-black text-indigo-900 mb-1 uppercase tracking-wide">Stream</label>
+          <p class="text-xs text-indigo-700 font-semibold">This test will automatically belong to this folder's stream.</p>
+        </div>
+        <span class="text-sm font-black uppercase tracking-wide bg-indigo-600 text-white px-4 py-2 rounded-xl">
+          {{ streams | selectattr('id', 'equalto', series.stream_id) | map(attribute='name') | first or 'Unknown' }}
+        </span>
+      </div>
+      <fieldset id="rest-of-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {% else %}
+      <!-- STEP 1 (mandatory, unmissable): Select a Stream first — this is a
+           legacy folder created before folders carried their own stream, so
+           it doesn't know its stream yet. Everything else stays locked
+           (disabled fieldset) until one is chosen here, same as before. -->
       <div class="p-5 bg-indigo-50 border-2 border-indigo-200 rounded-xl">
         <label class="block text-sm font-black text-indigo-900 mb-2 uppercase tracking-wide">Step 1 — Select a Stream <span class="text-red-500">*</span></label>
         <select name="stream_id" id="stream-select" required title="Please select a stream" onchange="onStreamPicked(this)"
@@ -68,10 +84,11 @@
           <option value="" disabled selected>-- Select Stream --</option>
           {% for s in streams %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
         </select>
-        <p id="stream-hint" class="text-xs text-indigo-700 font-semibold mt-2">Every test belongs to exactly one stream. Pick it first — the rest of the form unlocks once you do.</p>
+        <p id="stream-hint" class="text-xs text-indigo-700 font-semibold mt-2">This older folder has no stream set yet. Pick one here — the rest of the form unlocks once you do.</p>
       </div>
 
       <fieldset id="rest-of-form" disabled class="grid grid-cols-1 md:grid-cols-2 gap-6 disabled:opacity-50 transition-opacity">
+      {% endif %}
 
         <!-- CATEGORY DROPDOWN REPLACED WITH TEXT INPUT -->
         <div class="md:col-span-2">
@@ -231,7 +248,10 @@
 
     function handleFormSubmit(form) {
         const streamSelect = document.getElementById('stream-select');
-        if (!streamSelect.value) {
+        // streamSelect only exists for a legacy folder with no stream of its
+        // own (see the {% if series.stream_id %} branch above) -- when the
+        // folder already has a stream, there's nothing to validate here.
+        if (streamSelect && !streamSelect.value) {
             alert('Please select a Stream first — every test must belong to a stream.');
             streamSelect.focus();
             return false;
