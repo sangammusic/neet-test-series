@@ -55,59 +55,68 @@
         <p class="text-sm text-gray-500 font-medium mt-1">All fields are mandatory. Double-click prevention is active.</p>
     </div>
     
-    <form id="create-test-form" method="POST" action="{{ url_for('admin.series_tests', series_id=series.id) }}" class="grid grid-cols-1 md:grid-cols-2 gap-6" onsubmit="return handleFormSubmit(this);">
-      
-      <div>
-        <label class="block text-sm font-bold text-ink mb-2">Stream <span class="text-red-500">*</span></label>
-        <select name="stream_id" required title="Please select a stream" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 text-ink">
+    <form id="create-test-form" method="POST" action="{{ url_for('admin.series_tests', series_id=series.id) }}" class="space-y-6" onsubmit="return handleFormSubmit(this);">
+
+      <!-- STEP 1 (mandatory, unmissable): Select a Stream first — a folder can hold
+           tests from multiple streams, so this MUST be picked before anything else,
+           exactly like the chapter-wise practice flow. Everything else stays locked
+           (disabled fieldset) until a stream is chosen. -->
+      <div class="p-5 bg-indigo-50 border-2 border-indigo-200 rounded-xl">
+        <label class="block text-sm font-black text-indigo-900 mb-2 uppercase tracking-wide">Step 1 — Select a Stream <span class="text-red-500">*</span></label>
+        <select name="stream_id" id="stream-select" required title="Please select a stream" onchange="onStreamPicked(this)"
+                class="w-full rounded-xl border-2 border-indigo-300 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-white text-ink font-bold">
           <option value="" disabled selected>-- Select Stream --</option>
           {% for s in streams %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
         </select>
+        <p id="stream-hint" class="text-xs text-indigo-700 font-semibold mt-2">Every test belongs to exactly one stream. Pick it first — the rest of the form unlocks once you do.</p>
       </div>
-      
-      <!-- CATEGORY DROPDOWN REPLACED WITH TEXT INPUT -->
-      <div>
-        <label class="block text-sm font-bold text-ink mb-2">Category <span class="text-red-500">*</span></label>
-        <input type="text" name="category_name" required title="Enter test category" placeholder="e.g. Minor, Major, Full Syllabus" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-medium">
-      </div>
-      
-      <div class="md:col-span-2">
-        <label class="block text-sm font-bold text-ink mb-2">Test Name <span class="text-red-500">*</span></label>
-        <input type="text" name="title" required title="Please enter the test name" placeholder="e.g. NEET Full Mock #1" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-medium">
-      </div>
-      
-      <div class="md:col-span-2">
-        <label class="block text-sm font-bold text-ink mb-2">Test Syllabus (Topics covered) <span class="text-red-500">*</span></label>
-        <textarea name="description" rows="2" required title="Please enter the syllabus details" placeholder="e.g. Full syllabus — Physics, Chemistry, Biology" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-medium"></textarea>
-      </div>
-      
-      <div>
-        <label class="block text-sm font-bold text-ink mb-2">Duration (minutes) <span class="text-red-500">*</span></label>
-        <input type="number" name="duration_minutes" value="180" required title="Enter test duration" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-bold">
-      </div>
-      
-      <div>
-        <label class="block text-sm font-bold text-ink mb-2">Marks per Correct Question <span class="text-red-500">*</span></label>
-        <input type="number" step="1" name="marks_per_question" value="4" required title="Enter marks awarded for a correct answer" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-bold">
-        <p class="text-xs text-indigo-600 font-bold mt-2">Total marks will auto-calculate on the upload page.</p>
-      </div>
-      
-      <div>
-        <label class="block text-sm font-bold text-ink mb-2">Negative Marking (per wrong answer)</label>
-        <input type="number" step="0.25" name="negative_marking" value="1" required class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-bold">
-      </div>
-      
-      <div>
-        <label class="block text-sm font-bold text-ink mb-2">Price (₹, if premium)</label>
-        <input type="number" step="1" name="price_inr" value="0" required class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-bold">
-      </div>
-      
-      <label class="md:col-span-2 flex items-center gap-3 text-sm font-bold text-indigo-900 mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-xl cursor-pointer hover:bg-indigo-100 transition-colors">
-        <input type="checkbox" name="is_premium" class="w-5 h-5 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"> 
-        Mark as Premium Test? (Students must pay to access)
-      </label>
-      
-      <button type="submit" id="submit-test-btn" class="md:col-span-2 bg-indigo-600 text-white font-bold text-lg py-4 mt-4 rounded-xl hover:bg-indigo-700 transition-all shadow-md flex items-center justify-center gap-2">
+
+      <fieldset id="rest-of-form" disabled class="grid grid-cols-1 md:grid-cols-2 gap-6 disabled:opacity-50 transition-opacity">
+
+        <!-- CATEGORY DROPDOWN REPLACED WITH TEXT INPUT -->
+        <div class="md:col-span-2">
+          <label class="block text-sm font-bold text-ink mb-2">Category <span class="text-red-500">*</span></label>
+          <input type="text" name="category_name" required title="Enter test category" placeholder="e.g. Minor, Major, Full Syllabus" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-medium">
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm font-bold text-ink mb-2">Test Name <span class="text-red-500">*</span></label>
+          <input type="text" name="title" required title="Please enter the test name" placeholder="e.g. NEET Full Mock #1" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-medium">
+        </div>
+        
+        <div class="md:col-span-2">
+          <label class="block text-sm font-bold text-ink mb-2">Test Syllabus (Topics covered) <span class="text-red-500">*</span></label>
+          <textarea name="description" rows="2" required title="Please enter the syllabus details" placeholder="e.g. Full syllabus — Physics, Chemistry, Biology" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-medium"></textarea>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-bold text-ink mb-2">Duration (minutes) <span class="text-red-500">*</span></label>
+          <input type="number" name="duration_minutes" value="180" required title="Enter test duration" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-bold">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-bold text-ink mb-2">Marks per Correct Question <span class="text-red-500">*</span></label>
+          <input type="number" step="1" name="marks_per_question" value="4" required title="Enter marks awarded for a correct answer" class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-bold">
+          <p class="text-xs text-indigo-600 font-bold mt-2">Total marks will auto-calculate on the upload page.</p>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-bold text-ink mb-2">Negative Marking (per wrong answer)</label>
+          <input type="number" step="0.25" name="negative_marking" value="1" required class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-bold">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-bold text-ink mb-2">Price (₹, if premium)</label>
+          <input type="number" step="1" name="price_inr" value="0" required class="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-indigo-600 focus:ring-0 outline-none bg-gray-50 font-bold">
+        </div>
+        
+        <label class="md:col-span-2 flex items-center gap-3 text-sm font-bold text-indigo-900 mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-xl cursor-pointer hover:bg-indigo-100 transition-colors">
+          <input type="checkbox" name="is_premium" class="w-5 h-5 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"> 
+          Mark as Premium Test? (Students must pay to access)
+        </label>
+      </fieldset>
+
+      <button type="submit" id="submit-test-btn" class="w-full bg-indigo-600 text-white font-bold text-lg py-4 mt-4 rounded-xl hover:bg-indigo-700 transition-all shadow-md flex items-center justify-center gap-2">
         <span>Create Test & Continue</span>
       </button>
     </form>
@@ -201,7 +210,32 @@
         formBox.classList.toggle('hidden');
     }
 
+    // Unlocks the rest of the "Add New Test" form only once a Stream is
+    // picked -- mirrors the chapter-wise flow, where Stream is a dedicated
+    // first step you cannot skip past.
+    function onStreamPicked(select) {
+        const rest = document.getElementById('rest-of-form');
+        const hint = document.getElementById('stream-hint');
+        const hasStream = !!select.value;
+        rest.disabled = !hasStream;
+        if (hint) hint.style.display = hasStream ? 'none' : '';
+    }
+
+    // Browser back/forward can restore a previously-selected <option> without
+    // firing 'change' -- sync the locked state on load so the form isn't
+    // stuck disabled (or wrongly enabled) after a back-navigation.
+    document.addEventListener('DOMContentLoaded', function () {
+        const streamSelect = document.getElementById('stream-select');
+        if (streamSelect) onStreamPicked(streamSelect);
+    });
+
     function handleFormSubmit(form) {
+        const streamSelect = document.getElementById('stream-select');
+        if (!streamSelect.value) {
+            alert('Please select a Stream first — every test must belong to a stream.');
+            streamSelect.focus();
+            return false;
+        }
         if (!form.checkValidity()) return false;
         const btn = document.getElementById('submit-test-btn');
         if (btn.disabled) return false;
