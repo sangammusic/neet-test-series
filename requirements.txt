@@ -1,0 +1,13 @@
+flask==3.0.3
+gunicorn==22.0.0
+supabase==2.7.4
+python-dotenv==1.0.1
+Pillow==10.4.0
+Flask-Caching==2.3.0
+gevent==24.11.1
+# --- added in Phase 0/1 ---
+# QR code for UPI payments (pure Python, zero dependencies)
+segno==1.6.1
+# HTTP client used to talk to the Telegram Bot API. It already comes with
+# supabase; listed here so the dependency is explicit (same range supabase allows).
+httpx>=0.24,<0.28
