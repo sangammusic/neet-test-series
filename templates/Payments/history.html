@@ -1,0 +1,46 @@
+{% extends "shared/base.html" %}
+{% block title %}My payments — SANGAM STUDY{% endblock %}
+
+{% block content %}
+{% set chips = {
+  'approved':  ('Approved',        'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'),
+  'submitted': ('Verifying',       'border-amber-400/30 bg-amber-400/10 text-amber-200'),
+  'created':   ('Not paid yet',    'border-white/15 bg-white/5 text-gray-300'),
+  'rejected':  ('Not verified',    'border-red-400/30 bg-red-400/10 text-red-300'),
+  'expired':   ('Expired',         'border-white/15 bg-white/5 text-gray-400'),
+  'cancelled': ('Cancelled',       'border-white/15 bg-white/5 text-gray-400')
+} %}
+<section class="relative z-10 mx-auto max-w-2xl px-5 sm:px-6 pt-12 pb-24">
+  <div class="mb-8 flex items-end justify-between gap-4">
+    <h1 class="font-display text-3xl font-bold text-white">My payments</h1>
+    <a href="{{ url_for('payments.plans') }}" class="text-sm font-semibold text-gold hover:underline">Plans</a>
+  </div>
+
+  {% if ps.active %}
+  <div class="mb-6 rounded-2xl border border-emerald-400/30 bg-emerald-400/[0.07] px-5 py-4 text-sm text-gray-200">
+    {{ 'You have admin access.' if ps.is_admin else 'Your ' ~ ps.plan_name ~ ' is active' ~ (' until ' ~ ps.expires_label ~ '.' if ps.expires_label else '.') }}
+  </div>
+  {% endif %}
+
+  {% for o in orders %}
+    {% set chip = chips.get(o.status, ('Unknown', 'border-white/15 bg-white/5 text-gray-300')) %}
+    <a href="{{ url_for('payments.checkout', order_id=o.id) }}"
+       class="mb-3 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-[#161616]/90 p-5 transition-colors hover:border-white/25">
+      <div class="min-w-0">
+        <p class="font-semibold text-white">{{ (o.plans or {}).get('name', 'Plan') }}</p>
+        <p class="mt-0.5 text-sm text-gray-500">{{ o.created_at | ist_datetime }}</p>
+      </div>
+      <div class="flex shrink-0 flex-col items-end gap-2">
+        <p class="font-display text-lg font-bold text-white tabular-nums">{{ o.payable_amount | inr(true) }}</p>
+        <span class="rounded-full border px-2.5 py-0.5 text-xs font-semibold {{ chip[1] }}">{{ chip[0] }}</span>
+      </div>
+    </a>
+  {% else %}
+    <div class="rounded-2xl border border-dashed border-white/20 p-10 text-center">
+      <p class="font-semibold text-white">No payments yet</p>
+      <p class="mt-1 text-sm text-gray-500">When you buy a plan, it will show up here.</p>
+      <a href="{{ url_for('payments.plans') }}" class="mt-5 inline-flex rounded-xl bg-gold px-6 py-3 font-bold text-ink hover:bg-gold-light transition-colors">See plans</a>
+    </div>
+  {% endfor %}
+</section>
+{% endblock %}
