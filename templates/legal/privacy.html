@@ -1,0 +1,31 @@
+{% extends "legal/_layout.html" %}
+{% set page_title = "Privacy policy" %}
+{% block body %}
+<p>This page explains what information SANGAM STUDY collects and why.</p>
+
+<h2>What we collect</h2>
+<ul>
+  <li><strong>Account details:</strong> your username, your name and your password. Your password is handled by our login provider (Supabase). We never see it or store it as plain text.</li>
+  <li><strong>Study data:</strong> the streams you choose, and your answers, scores and time taken in practice sets and mock tests, so we can show you your analysis.</li>
+  <li><strong>Payment details you send us:</strong> the amount, your UTR number and an optional screenshot.</li>
+  <li><strong>Basic technical data</strong> such as your IP address, which our hosting and security tools use to keep the site safe.</li>
+</ul>
+
+<h2>How we use it</h2>
+<p>To run the site, show your analysis, verify payments, prevent abuse and answer support requests. We do not sell your data. We do not show ads and we do not track you across other websites.</p>
+
+<h2>Payment screenshots</h2>
+<p>When you attach a screenshot, we shrink it, remove hidden details such as location, and forward it to our team's private Telegram chat so we can verify your payment. It is not saved in our database. Telegram keeps it under its own policies, so please crop out anything personal, like other transactions.</p>
+
+<h2>Who helps us run the site</h2>
+<p>Supabase (database and login), Render (hosting) and Telegram (payment checks and alerts). If bot protection is switched on, Cloudflare also checks visitors on the login and register pages. They handle data only to provide those services.</p>
+
+<h2>How long we keep it</h2>
+<p>Your account and study data stay until you delete your account (Settings, then Delete account). Payment records may be kept longer for accounting.</p>
+
+<h2>Your choices</h2>
+<p>You can change your username and password in Settings, clear your attempt history from your profile, or delete your account. To ask about your data, <a href="{{ support_url }}" target="_blank" rel="noopener">contact support</a>.</p>
+
+<h2>Children</h2>
+<p>If you are under 18, please use the site with a parent or guardian's knowledge. We collect only what is needed to run your account and practice, and we do not use it for advertising. A parent or guardian can contact us to ask about or delete a child's data.</p>
+{% endblock %}

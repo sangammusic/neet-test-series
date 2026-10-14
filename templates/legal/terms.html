@@ -1,0 +1,35 @@
+{% extends "legal/_layout.html" %}
+{% set page_title = "Terms of use" %}
+{% block body %}
+<p>By creating an account or using SANGAM STUDY, you agree to these terms. If you don't agree, please don't use the site.</p>
+
+<h2>Who this is for</h2>
+<p>SANGAM STUDY helps students practise for NEET and JEE with chapter-wise questions and mock tests. If you are under 18, please use it with a parent or guardian's knowledge.</p>
+
+<h2>Your account</h2>
+<ul>
+  <li>Keep your password private. You are responsible for everything that happens on your account.</li>
+  <li>One account per student. Sharing an account, or giving your login to friends, can get it suspended.</li>
+  <li>Give correct information when you register.</li>
+</ul>
+
+<h2>What you may and may not do</h2>
+<ul>
+  <li>Use the content for your own preparation.</li>
+  <li>Don't copy, scrape, resell or post our questions, answers or explanations anywhere else.</li>
+  <li>Don't try to break, overload or get around the security or payment system of the site.</li>
+</ul>
+
+<h2>Paid plans</h2>
+<p>Premium plans are one-time payments by UPI. Access starts when we verify your payment and lasts until the end date shown on the plan. Plans do not renew by themselves. Our <a href="{{ url_for('legal.refund_policy') }}">refund policy</a> explains when money is returned.</p>
+
+<h2>Accuracy</h2>
+<p>We work hard to keep questions and explanations correct, but mistakes can happen. Please tell us if you find one. Always check important facts against your official books and the notices of the exam authority. We cannot promise any particular score or rank.</p>
+
+<h2>Changes and suspension</h2>
+<p>We may update these terms or the site. We may suspend accounts that break these terms. If a paid account is suspended for breaking the terms, the plan may not be refunded.</p>
+
+<h2>Contact</h2>
+<p>Questions? <a href="{{ support_url }}" target="_blank" rel="noopener">Contact support</a>.</p>
+<p>These terms are governed by the laws of India.</p>
+{% endblock %}

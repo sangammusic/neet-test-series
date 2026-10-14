@@ -1,0 +1,24 @@
+{% extends "legal/_layout.html" %}
+{% set page_title = "Refund policy" %}
+{% block body %}
+<p>Please read this before you pay.</p>
+
+<h2>What you get</h2>
+<p>A premium plan unlocks digital content (mock tests and practice sets) as soon as we verify your payment. It stays active until the end date shown on the plan.</p>
+
+<h2>When we refund</h2>
+<ul>
+  <li>You paid twice for the same plan.</li>
+  <li>You paid, but we could not unlock your access and cannot fix it.</li>
+  <li>A problem on our side stopped you from using the plan, and we could not solve it within 7 days.</li>
+</ul>
+
+<h2>When we don't</h2>
+<p>We don't refund because you changed your mind, or because you didn't use the plan, once your access has been unlocked.</p>
+
+<h2>How to ask</h2>
+<p><a href="{{ support_url }}" target="_blank" rel="noopener">Contact support</a> within 7 days of your payment. Send your username, the UTR and the amount you paid. If we approve the refund, we send the money back to the UPI account it came from.</p>
+
+<h2>Payments we can't verify</h2>
+<p>If a payment can't be matched, you will see the reason on your payment page. If money was deducted, contact support with your UTR and we will sort it out.</p>
+{% endblock %}
