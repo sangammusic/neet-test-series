@@ -1,0 +1,44 @@
+{% extends "shared/base.html" %}
+{% block title %}Network check — Admin{% endblock %}
+
+{% block nav %}
+    {% include "admin/_admin_nav.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-6 py-10">
+  <h1 class="font-display text-3xl text-ink">Network check</h1>
+  <p class="text-sm text-ink/60 mt-1 mb-8">What the server sees about <em>your</em> connection right now. Open this page on your phone using mobile data (not Wi-Fi) for the best test.</p>
+
+  <div class="bg-white border border-ink/10 rounded-lg shadow-sm divide-y divide-ink/5 mb-8">
+    {% for label, value in seen.items() %}
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 px-5 py-3 text-sm">
+      <span class="text-ink/60">{{ label }}</span>
+      <span class="font-mono text-ink break-all">{{ value or '—' }}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="bg-white border border-ink/10 rounded-lg p-6 shadow-sm space-y-4 text-sm text-ink">
+    <h2 class="font-medium text-lg">How to read this</h2>
+    <p>
+      <span class="font-semibold">1. Your IP.</span> Search "what is my IP" on the same phone. It must match
+      <span class="font-mono">{{ resolved }}</span> above. If the same IP shows up for every phone you try
+      (an address that is not yours), the rate limits would treat all students as one person.
+      Fix: on Render, add the setting <span class="font-mono">CLIENT_IP_HEADER</span> with the header name that holds your real IP
+      (try <span class="font-mono">True-Client-IP</span> or <span class="font-mono">CF-Connecting-IP</span>) and check again.
+    </p>
+    <p>
+      <span class="font-semibold">2. https.</span>
+      {% if is_secure %}Good: the connection is seen as https, so login cookies are marked Secure.
+      {% else %}<span class="text-red-600 font-semibold">The connection is NOT seen as https.</span>
+      Logins may not stick. On Render this should say yes; if you are on your own computer it is normal.{% endif %}
+    </p>
+    <p>
+      <span class="font-semibold">3. Host.</span> Forms are accepted only from <span class="font-mono">{{ seen['Host header'] }}</span>.
+      If your site opens on two addresses (for example with and without www), put both in the
+      <span class="font-mono">ALLOWED_HOSTS</span> setting.
+    </p>
+  </div>
+</div>
+{% endblock %}

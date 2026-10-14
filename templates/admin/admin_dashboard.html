@@ -1,0 +1,371 @@
+{% extends "shared/base.html" %}
+{% block title %}Admin Dashboard — SANGAM STUDY{% endblock %}
+
+<!-- SANGAM FIX: Override default student nav with admin nav -->
+{% block nav %}
+    {% include "admin/_admin_nav.html" %}
+{% endblock %}
+
+{% block content %}
+
+<!-- PREMIUM DARK WRAPPER - Inspired by your UI Design -->
+<div class="bg-[#080b12] min-h-screen -mt-2 pb-24 font-body text-gray-200 relative overflow-hidden">
+  
+  <!-- Abstract Background Glows -->
+  <div class="absolute top-0 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+  <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+
+  <div class="max-w-6xl mx-auto px-6 py-12 relative z-10">
+    
+    <!-- ==========================================
+         HERO SECTION (From Your Wireframe)
+         ========================================== -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 relative border-b border-white/5 pb-12">
+      <div class="z-10">
+        <p class="text-gray-400 font-medium tracking-widest uppercase mb-2 text-sm">Welcome Back,</p>
+        <h1 class="text-5xl md:text-6xl font-display font-bold text-white mb-4 tracking-tight">
+          Admin <span class="text-indigo-500 inline-block origin-bottom-left hover:rotate-12 transition-transform duration-300">👋</span>
+        </h1>
+        <p class="text-gray-400 font-medium text-base max-w-md leading-relaxed border-l-2 border-indigo-500/50 pl-4">
+          Your NEET & JEE platform control center. Manage uploads, track system health, and wipe garbage data effortlessly.
+        </p>
+      </div>
+      
+      <!-- Decorative Text -->
+      <div class="hidden md:block transform rotate-2 opacity-60 mt-6 md:mt-0 bg-white/5 border border-white/10 p-6 rounded-2xl backdrop-blur-sm">
+        <p class="font-display italic text-2xl text-indigo-400 leading-tight">Better Prep.<br>Bigger Dreams.</p>
+        <div class="w-10 h-0.5 bg-indigo-500/50 mt-3"></div>
+      </div>
+    </div>
+
+    <!-- PAYMENTS: quick link (approve student payments, see revenue) -->
+    <a href="{{ url_for('admin.payments_panel') }}"
+       class="group mb-10 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-[#111622] px-6 py-5 transition-all hover:border-gold/40">
+      <div>
+        <p class="text-lg font-display font-bold text-white">Payments</p>
+        <p class="text-sm text-gray-400">Approve student payments, see revenue, connect the Telegram bot.</p>
+      </div>
+      <span class="shrink-0 text-sm font-bold text-gold">Open <span class="inline-block transition-transform group-hover:translate-x-1">&rarr;</span></span>
+    </a>
+
+    <!-- ==========================================
+         THE "BIG 3" ACTION CARDS
+         ========================================== -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-24">
+      
+      <!-- CARD 1: Mock Test Upload (Untouched Flow as requested) -->
+      <a href="{{ url_for('admin.test_series_list') }}" class="group relative bg-[#111622] border border-white/10 rounded-3xl p-8 hover:-translate-y-2 hover:border-gold/40 hover:shadow-[0_10px_40px_-10px_rgba(212,160,23,0.3)] transition-all duration-300 overflow-hidden flex flex-col h-full shadow-xl">
+        <div class="absolute top-0 right-0 w-40 h-40 bg-gold/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-gold/20 transition-colors duration-500"></div>
+        
+        <div class="w-16 h-16 bg-[#1a1f2e] border border-white/5 rounded-2xl flex items-center justify-center mb-6 relative z-10 group-hover:scale-110 group-hover:border-gold/30 transition-all duration-300">
+          <svg class="w-8 h-8 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+        </div>
+        
+        <h3 class="text-2xl font-display font-bold text-white mb-3 relative z-10">Mock Test Upload</h3>
+        <p class="text-gray-400 text-sm leading-relaxed mb-8 flex-grow relative z-10">Upload, manage and access strictly verified NTA-pattern mock tests in VIP series folders.</p>
+        
+        <div class="flex items-center gap-2 text-sm font-bold text-white bg-white/5 border border-white/10 w-fit px-6 py-3 rounded-xl group-hover:bg-gold group-hover:text-ink group-hover:border-gold transition-all duration-300 relative z-10">
+          Get Started <span class="group-hover:translate-x-1 transition-transform">&rarr;</span>
+        </div>
+      </a>
+
+      <!-- CARD 2: Chapterwise Upload (FIXED: Now points to the master Engine) -->
+      <a href="{{ url_for('admin.questions_list') }}" class="group relative bg-[#111622] border border-white/10 rounded-3xl p-8 hover:-translate-y-2 hover:border-indigo-500/40 hover:shadow-[0_10px_40px_-10px_rgba(99,102,241,0.3)] transition-all duration-300 overflow-hidden flex flex-col h-full shadow-xl">
+        <div class="absolute top-0 right-0 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-indigo-500/20 transition-colors duration-500"></div>
+        
+        <div class="w-16 h-16 bg-[#1a1f2e] border border-white/5 rounded-2xl flex items-center justify-center mb-6 relative z-10 group-hover:scale-110 group-hover:border-indigo-500/30 transition-all duration-300">
+          <svg class="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+        </div>
+        
+        <h3 class="text-2xl font-display font-bold text-white mb-3 relative z-10">Chapterwise Upload</h3>
+        <p class="text-gray-400 text-sm leading-relaxed mb-8 flex-grow relative z-10">Access the Master Engine to create DPPs, Topic-wise folders, custom books, and practice materials.</p>
+        
+        <div class="flex items-center gap-2 text-sm font-bold text-white bg-white/5 border border-white/10 w-fit px-6 py-3 rounded-xl group-hover:bg-indigo-500 group-hover:text-white group-hover:border-indigo-500 transition-all duration-300 relative z-10">
+          Get Started <span class="group-hover:translate-x-1 transition-transform">&rarr;</span>
+        </div>
+      </a>
+
+      <!-- CARD 3: System Stats (Emerald Accent) -->
+      <a href="#stats-section" class="group relative bg-[#111622] border border-white/10 rounded-3xl p-8 hover:-translate-y-2 hover:border-emerald-500/40 hover:shadow-[0_10px_40px_-10px_rgba(16,185,129,0.3)] transition-all duration-300 overflow-hidden flex flex-col h-full shadow-xl">
+        <div class="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-emerald-500/20 transition-colors duration-500"></div>
+        
+        <div class="w-16 h-16 bg-[#1a1f2e] border border-white/5 rounded-2xl flex items-center justify-center mb-6 relative z-10 group-hover:scale-110 group-hover:border-emerald-500/30 transition-all duration-300">
+          <svg class="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+        </div>
+        
+        <h3 class="text-2xl font-display font-bold text-white mb-3 relative z-10">System Stats</h3>
+        <p class="text-gray-400 text-sm leading-relaxed mb-8 flex-grow relative z-10">Track database health, manage storage buckets, and wipe junk data efficiently.</p>
+        
+        <div class="flex items-center gap-2 text-sm font-bold text-white bg-white/5 border border-white/10 w-fit px-6 py-3 rounded-xl group-hover:bg-emerald-500 group-hover:text-white group-hover:border-emerald-500 transition-all duration-300 relative z-10">
+          View Stats &darr;
+        </div>
+      </a>
+      
+    </div>
+
+    <!-- ==========================================
+         SYSTEM STATS & GARBAGE DISPOSAL SECTION
+         ========================================== -->
+    <div id="stats-section" class="scroll-mt-10">
+        
+        <div class="flex items-center gap-4 mb-10">
+            <h2 class="font-display text-3xl font-bold text-white tracking-wide">System Control Panel</h2>
+            <div class="h-[1px] flex-1 bg-gradient-to-r from-white/20 to-transparent ml-4"></div>
+        </div>
+        
+        <div class="grid md:grid-cols-2 gap-8">
+            
+            <!-- 1. DATABASE CLEANUP (The Nuclear Options) -->
+            <div class="bg-[#111622] border border-white/10 rounded-3xl p-8 shadow-xl flex flex-col relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-red-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div class="mb-8 border-b border-white/10 pb-5">
+                    <h2 class="font-display text-2xl font-bold text-white mb-2 flex items-center gap-3">
+                        <svg class="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        Garbage Disposal
+                    </h2>
+                    <p class="text-sm text-gray-400 font-medium">Permanently wipe junk attempts and orphaned data to optimize database speed.</p>
+                </div>
+
+                <div class="space-y-4 flex-1">
+                    <!-- Legacy Guest Attempts (one-time historical cleanup only —
+                         guest mode is permanently removed, so no new rows like
+                         this can be created going forward) -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-[#080b12] rounded-2xl border border-white/5 gap-4 hover:border-white/10 transition-colors">
+                        <div>
+                            <p class="font-bold text-white text-lg">Legacy Guest Attempts</p>
+                            <p class="text-xs text-gray-500 mt-1 font-medium">Guest mode has been removed. One-time wipe of any old guest attempts left over from before.</p>
+                        </div>
+                        <form method="POST" action="{{ url_for('admin.cleanup_legacy_guest_attempts') }}" onsubmit="return confirm('⚠️ DANGER: This will instantly wipe all leftover legacy guest attempts and their linked answers. Proceed?');" class="shrink-0 w-full sm:w-auto">
+                            <button type="submit" class="w-full text-sm font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white px-5 py-3 rounded-xl transition-all">
+                            Wipe Legacy Guests
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Incomplete Attempts -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-[#080b12] rounded-2xl border border-white/5 gap-4 hover:border-white/10 transition-colors">
+                        <div>
+                            <p class="font-bold text-white text-lg">{{ garbage_info.incomplete_attempts }} Abandoned Tests</p>
+                            <p class="text-xs text-gray-500 mt-1 font-medium">Tests that were started but never submitted.</p>
+                        </div>
+                        <form method="POST" action="{{ url_for('admin.cleanup_incomplete_attempts') }}" onsubmit="return confirm('⚠️ DANGER: This will instantly wipe all {{ garbage_info.incomplete_attempts }} abandoned tests. Proceed?');" class="shrink-0 w-full sm:w-auto">
+                            <button type="submit" class="w-full text-sm font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white px-5 py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed" {{ 'disabled' if garbage_info.incomplete_attempts == 0 }}>
+                            Wipe Abandoned
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Orphaned Mock Questions -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-[#080b12] rounded-2xl border border-white/5 gap-4 hover:border-white/10 transition-colors">
+                        <div>
+                            <p class="font-bold text-white text-lg">{{ orphan_info.orphaned_mock_questions }} Orphaned Questions</p>
+                            <p class="text-xs text-gray-500 mt-1 font-medium">Unlinked questions leftover from old deletions. Wipes bucket images too.</p>
+                        </div>
+                        <form method="POST" action="{{ url_for('admin.cleanup_orphaned_mock_questions') }}" onsubmit="return confirm('⚠️ DANGER: This will permanently wipe all {{ orphan_info.orphaned_mock_questions }} orphaned questions and their images from storage. Proceed?');" class="shrink-0 w-full sm:w-auto">
+                            <button type="submit" class="w-full text-sm font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white px-5 py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed" {{ 'disabled' if orphan_info.orphaned_mock_questions == 0 }}>
+                            Wipe Orphans
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. IMAGE STORAGE TRACKER -->
+            <div class="bg-[#111622] border border-white/10 rounded-3xl p-8 shadow-xl flex flex-col">
+                <div class="mb-8 border-b border-white/10 pb-5">
+                    <h2 class="font-display text-2xl font-bold text-white mb-2 flex items-center gap-3">
+                        <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                        Storage Bucket Tracker
+                    </h2>
+                    <p class="text-sm text-gray-400 font-medium">Live tracking of your compressed question diagrams (1GB Free Tier).</p>
+                </div>
+
+                {% if storage_info.uploaded_count is none %}
+                <div class="bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-sm text-red-400 my-auto text-center">
+                    <strong class="text-lg text-red-300 block mb-2 font-display">Storage bucket missing!</strong>
+                    Create a public bucket named <code class="bg-red-500/20 text-red-200 px-2 py-1 rounded font-mono">question-images</code> in your Supabase Dashboard to enable diagram uploads.
+                </div>
+                {% else %}
+                <div class="grid grid-cols-2 gap-5 mb-10">
+                    <div class="bg-[#080b12] p-6 rounded-2xl border border-white/5 text-center shadow-inner">
+                        <p class="text-5xl font-display font-bold text-white mb-2">{{ storage_info.uploaded_count }}</p>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest">Total Images</p>
+                    </div>
+                    <div class="bg-[#080b12] p-6 rounded-2xl border border-white/5 text-center shadow-inner">
+                        <p class="text-5xl font-display font-bold text-emerald-400 mb-2">~{{ storage_info.estimated_mb }}<span class="text-xl text-emerald-400/50 ml-1">MB</span></p>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest">Est. Space Used</p>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="mb-10">
+                    <div class="flex justify-between text-sm font-bold text-gray-400 mb-3">
+                        <span>{{ storage_info.estimated_mb }} MB Used</span>
+                        <span>1024 MB Limit (1GB)</span>
+                    </div>
+                    <div class="w-full bg-[#080b12] rounded-full h-4 overflow-hidden border border-white/5 shadow-inner">
+                        <div class="bg-gradient-to-r from-emerald-500 to-emerald-400 h-full rounded-full relative" style="width: {{ [(storage_info.estimated_mb / 1024 * 100), 100] | min }}%">
+                            <div class="absolute inset-0 bg-white/20 w-full animate-[pulse_2s_ease-in-out_infinite]"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-auto bg-[#080b12] border border-white/5 p-5 rounded-2xl flex items-center justify-between shadow-inner">
+                    <div>
+                        <p class="text-sm font-bold text-gray-300">Pending Manual Uploads</p>
+                        <p class="text-xs font-medium text-gray-500 mt-1">Questions marked "has_image" but empty.</p>
+                    </div>
+                    <p class="text-2xl font-black px-4 py-2 rounded-xl {{ 'bg-red-500/10 text-red-400 border border-red-500/20' if (storage_info.pending_questions + storage_info.pending_mock_questions) > 0 else 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' }}">
+                        {{ storage_info.pending_questions + storage_info.pending_mock_questions }}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+
+        </div>
+
+        <!-- 3. BROKEN DIAGRAM SCANNER
+             SANGAM FIX: Students were hitting "Diagram failed to load"
+             warnings mid-test with no way for the admin to know how many
+             questions were affected or why. This panel actually opens
+             every stored image_url + cross-checks the Storage bucket and
+             lists exactly which questions are broken, so they can be
+             cleared in one click instead of discovering them one at a
+             time while a student is mid-exam. -->
+        <div class="bg-[#111622] border border-white/10 rounded-3xl p-8 shadow-xl mt-8">
+            <div class="mb-6 border-b border-white/10 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="font-display text-2xl font-bold text-white mb-2 flex items-center gap-3">
+                        <svg class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                        Broken Diagram Scanner
+                    </h2>
+                    <p class="text-sm text-gray-400 font-medium">Checks every question's diagram URL against the live server and the storage bucket, so a "diagram failed to load" a student hits mid-test never has to be tracked down blind.</p>
+                </div>
+                <button id="scan-broken-images-btn" onclick="scanBrokenImages()"
+                    class="shrink-0 text-sm font-bold bg-gold/10 text-gold border border-gold/30 hover:bg-gold hover:text-ink px-6 py-3 rounded-xl transition-all whitespace-nowrap">
+                    Scan All Diagrams
+                </button>
+            </div>
+
+            <div id="broken-images-status" class="text-sm text-gray-500 font-medium"></div>
+            <div id="broken-images-results" class="mt-4 space-y-2 max-h-[420px] overflow-y-auto"></div>
+            <div id="broken-images-actions" class="hidden mt-5 pt-5 border-t border-white/10 flex items-center justify-between">
+                <label class="flex items-center gap-2 text-sm text-gray-400 font-medium">
+                    <input type="checkbox" id="broken-images-select-all" onchange="toggleAllBroken(this)" class="rounded border-white/20 bg-[#080b12]">
+                    Select all
+                </label>
+                <button onclick="clearSelectedBroken()"
+                    class="text-sm font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white px-5 py-2.5 rounded-xl transition-all">
+                    Clear Selected Diagrams
+                </button>
+            </div>
+        </div>
+
+        <script>
+        let _brokenImagesData = null;
+
+        async function scanBrokenImages() {
+            const btn = document.getElementById('scan-broken-images-btn');
+            const status = document.getElementById('broken-images-status');
+            const results = document.getElementById('broken-images-results');
+            const actions = document.getElementById('broken-images-actions');
+
+            btn.disabled = true;
+            btn.textContent = 'Scanning… (this checks every diagram URL live, may take a moment)';
+            status.textContent = '';
+            results.innerHTML = '';
+            actions.classList.add('hidden');
+
+            try {
+                const res = await fetch("{{ url_for('admin.diagnostics_broken_images') }}");
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error || 'scan failed');
+
+                _brokenImagesData = data;
+
+                if (data.total_broken === 0) {
+                    status.innerHTML = '<span class="text-emerald-400 font-bold">✓ All diagrams are healthy — 0 broken links found.</span>';
+                    btn.textContent = 'Scan All Diagrams';
+                    btn.disabled = false;
+                    return;
+                }
+
+                status.innerHTML = '<span class="text-red-400 font-bold">' + data.total_broken + ' broken diagram(s) found' +
+                    (data.bucket_listing_available ? '' : ' <span class="text-gray-500 font-normal">(bucket cross-check unavailable — HTTP status only)</span>') + '.</span>';
+
+                const rows = [];
+                for (const table of ['questions', 'mock_questions']) {
+                    for (const row of (data[table] || [])) {
+                        rows.push({ table, ...row });
+                    }
+                }
+
+                results.innerHTML = rows.map((r, i) => `
+                    <label class="flex items-start gap-3 p-3 bg-[#080b12] rounded-xl border border-white/5 cursor-pointer hover:border-red-500/30 transition-colors">
+                        <input type="checkbox" class="broken-img-check mt-1 rounded border-white/20 bg-[#080b12]" data-table="${r.table}" data-id="${r.id}" checked>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">${r.table === 'mock_questions' ? 'Mock Question' : 'Practice Question'}</p>
+                            <p class="text-sm text-gray-200 truncate">${(r.question_text || '(no text)').replace(/</g, '&lt;')}</p>
+                            <p class="text-xs text-gray-500 mt-1 font-mono truncate">${r.image_url}</p>
+                            <p class="text-xs mt-1 ${r.object_in_bucket === false ? 'text-red-400' : 'text-amber-400'}">
+                                HTTP: ${r.http_status}${r.object_in_bucket === false ? ' · object missing from bucket' : ''}
+                            </p>
+                        </div>
+                    </label>
+                `).join('');
+
+                actions.classList.remove('hidden');
+                btn.textContent = 'Scan All Diagrams';
+                btn.disabled = false;
+            } catch (e) {
+                status.innerHTML = '<span class="text-red-400 font-bold">Scan failed: ' + e.message + '</span>';
+                btn.textContent = 'Scan All Diagrams';
+                btn.disabled = false;
+            }
+        }
+
+        function toggleAllBroken(master) {
+            document.querySelectorAll('.broken-img-check').forEach(cb => { cb.checked = master.checked; });
+        }
+
+        async function clearSelectedBroken() {
+            const checked = [...document.querySelectorAll('.broken-img-check:checked')];
+            if (checked.length === 0) { alert('Nothing selected.'); return; }
+            if (!confirm('This will remove the diagram from ' + checked.length + ' question(s) — the question text/options stay, only the broken image is cleared. Proceed?')) return;
+
+            const payload = { questions: [], mock_questions: [] };
+            checked.forEach(cb => payload[cb.dataset.table].push({ id: cb.dataset.id }));
+
+            const res = await fetch("{{ url_for('admin.diagnostics_clear_broken_images') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                alert('Cleared: ' + data.cleared.questions + ' practice question(s), ' + data.cleared.mock_questions + ' mock question(s).');
+                scanBrokenImages();
+            } else {
+                alert('Clear failed: ' + (data.error || 'unknown error'));
+            }
+        }
+        </script>
+
+
+        <div class="mt-8 flex flex-wrap items-center justify-center gap-6 bg-[#111622] border border-white/5 rounded-2xl p-6 shadow-sm">
+            <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">Database Content:</span>
+            {% for label, key in [('Streams','streams'), ('Subjects','subjects'), ('Chapters','chapters'), ('Questions','questions'), ('Tests','tests')] %}
+            <div class="flex items-center gap-2">
+                <span class="text-lg font-black text-white">{{ counts[key] }}</span>
+                <span class="text-xs font-medium text-gray-400">{{ label }}</span>
+            </div>
+            {% if not loop.last %}<div class="w-1 h-1 rounded-full bg-white/10 hidden sm:block"></div>{% endif %}
+            {% endfor %}
+        </div>
+
+    </div>
+    
+  </div>
+</div>
+{% endblock %}
