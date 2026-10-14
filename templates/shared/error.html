@@ -1,0 +1,21 @@
+{% extends "shared/base.html" %}
+{% block title %}{{ title }} — SANGAM STUDY{% endblock %}
+{% block content %}
+{# /admin pages use the light theme (see base.html), everything else the dark one #}
+{% set dark = not request.path.startswith('/admin') %}
+<section class="max-w-xl mx-auto px-6 pt-24 pb-24 text-center relative z-10">
+  <p class="text-gold font-semibold text-sm mb-3">Error {{ code }}</p>
+  <h1 class="font-display text-3xl sm:text-4xl font-bold mb-4 {{ 'text-white' if dark else 'text-slate-900' }}">{{ title }}</h1>
+  <p class="leading-relaxed mb-10 {{ 'text-gray-400' if dark else 'text-slate-600' }}">{{ message }}</p>
+  <div class="flex flex-col sm:flex-row gap-3 justify-center">
+    <a href="javascript:history.back()"
+       class="inline-flex justify-center items-center px-6 py-3 rounded-xl border font-semibold transition-colors {{ 'border-white/15 text-gray-200 hover:bg-white/5' if dark else 'border-slate-300 text-slate-700 hover:bg-slate-100' }}">
+      Go back
+    </a>
+    <a href="{{ url_for('user.landing') }}"
+       class="inline-flex justify-center items-center px-6 py-3 rounded-xl bg-gold text-ink font-bold hover:bg-gold-light transition-colors">
+      Back to home
+    </a>
+  </div>
+</section>
+{% endblock %}
