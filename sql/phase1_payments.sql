@@ -444,3 +444,21 @@ notify pgrst, 'reload schema';
 -- 7. CHECK: you should see ONE row - your Season Pass plan.
 -- ---------------------------------------------------------
 select code, name, price_inr, valid_until, is_active from public.plans order by display_order;
+
+
+-- ---------------------------------------------------------
+-- 8. PRACTICE FOLDERS & QUIZZES CLEANUP (Idempotent)
+--    Fixes legacy questions where folder_name, set_name or category
+--    was NULL or had extra spaces so all quizzes appear cleanly.
+-- ---------------------------------------------------------
+update public.questions
+   set category = 'topic'
+ where category is null or btrim(category) = '';
+
+update public.questions
+   set set_name = btrim(coalesce(nullif(btrim(set_name), ''), nullif(btrim(topic_name), ''), 'Practice Set 1'))
+ where set_name is null or btrim(set_name) = '' or set_name <> btrim(set_name);
+
+update public.questions
+   set folder_name = btrim(coalesce(nullif(btrim(folder_name), ''), 'General / Uncategorized'))
+ where folder_name is null or btrim(folder_name) = '' or folder_name <> btrim(folder_name);
