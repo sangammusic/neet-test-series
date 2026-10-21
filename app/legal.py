@@ -1,3 +1,4 @@
+# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
 """
 Public legal pages: /terms  /privacy  /refund-policy
 
@@ -22,3 +23,4 @@ def privacy():
 @legal_bp.route("/refund-policy")
 def refund_policy():
     return render_template("legal/refund.html")
+  

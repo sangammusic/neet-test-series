@@ -1,29 +1,15 @@
+# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
 """
 payments.py -- student-facing payment pages + the Telegram approval webhook.
-
-Student journey
-  /pay                          see the plan, press "Get Season Pass"
-  POST /pay/start               reserves a unique amount  (SQL: create_order)
-  /pay/order/<id>               QR + UPI link + UTR/screenshot form (or the status of the order)
-  /pay/preview                  direct checkout preview (so Admin/owner can always test the QR page)
-  POST /pay/order/<id>/submit   saves the UTR, forwards it (+ screenshot) to YOUR Telegram
-  /pay/order/<id>/status.json   the page polls this and refreshes itself when you approve
-  /pay/history                  all of the student's payments
-
-Admin journey (Telegram)
-  Every submitted payment arrives in your Telegram chat as a card with
-  [Approve] / [Reject] buttons. Telegram calls POST /tg-webhook; we verify the
-  secret header, check the sender really is YOU, then run the SQL function.
-  (The same actions also exist in the web panel: /admin/payments.)
-
-All the heavy lifting lives in app/shared/payments_core.py.
 """
 import hmac
 import logging
 import re
+import threading
 from datetime import datetime, timezone
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from jinja2 import TemplateNotFound
 
 from app.shared import payments_core as pay
 from app.shared.access import (
@@ -35,7 +21,18 @@ from app.shared.utils import current_user_id, is_logged_in
 
 logger = logging.getLogger(__name__)
 
-payments_bp = Blueprint("payments", __name__)
+payments_bp = Blueprint("payments", __name__, template_folder="../templates/payments")
+
+
+def _render_pay_template(name, **ctx):
+    """
+    Renders `payments/<name>` first, falling back to `<name>` in case the user
+    uploaded payment templates into the root `templates/` folder on GitHub.
+    """
+    try:
+        return render_template(f"payments/{name}", **ctx)
+    except TemplateNotFound:
+        return render_template(name, **ctx)
 
 
 def _login_gate():
@@ -56,8 +53,8 @@ def plans():
         return gate
     user_id = current_user_id()
     db_plans = get_active_plans()
-    return render_template(
-        "payments/plans.html",
+    return _render_pay_template(
+        "plans.html",
         plans=db_plans if db_plans else [dict(DEFAULT_SEASON_PASS_PLAN)],
         db_plans_ready=bool(db_plans),
         ps=premium_status(),
@@ -131,8 +128,8 @@ def preview_checkout():
         "upiLink": upi_link,
         "isPreview": True,
     }
-    return render_template(
-        "payments/checkout.html",
+    return _render_pay_template(
+        "checkout.html",
         order=order, plan=plan, state="pay", cfg=cfg,
         upi_id=demo_upi, upi_link=upi_link, qr_svg=qr, static_qr=static_qr,
         ref="PREVIEW1", valid_until=valid_until, is_preview=True,
@@ -145,7 +142,7 @@ def _view_state(order, seconds_left):
     if status == "created" and seconds_left > 0:
         return "pay"
     if status in ("created", "expired"):
-        return "late"          # window ended; a late payer may still send the UTR
+        return "late"
     if status == "submitted":
         return "waiting"
     if status == "approved":
@@ -171,7 +168,7 @@ def checkout(order_id):
     if expires:
         seconds_left = max(0, int((expires - datetime.now(timezone.utc)).total_seconds()))
     state = _view_state(order, seconds_left)
-    plan = order.get("plans") or {}
+    plan = order.get("plans") if isinstance(order.get("plans"), dict) else {}
 
     upi_link = qr = static_qr = None
     if state == "pay":
@@ -195,8 +192,8 @@ def checkout(order_id):
         "statusUrl": url_for("payments.status_json", order_id=order["id"]),
         "upiLink": upi_link,
     }
-    return render_template(
-        "payments/checkout.html",
+    return _render_pay_template(
+        "checkout.html",
         order=order, plan=plan, state=state, cfg=cfg,
         upi_id=pay.upi_id(), upi_link=upi_link, qr_svg=qr, static_qr=static_qr,
         ref=pay.short_ref(order["id"]), valid_until=valid_until,
@@ -222,10 +219,13 @@ def history():
     gate = _login_gate()
     if gate:
         return gate
-    return render_template(
-        "payments/history.html",
-        orders=pay.list_orders_for_user(current_user_id()),
-        ps=premium_status(),
+    uid = current_user_id()
+    orders = pay.list_orders_for_user(uid) or []
+    ps = premium_status()
+    return _render_pay_template(
+        "history.html",
+        orders=orders,
+        ps=ps,
     )
 
 
@@ -247,7 +247,6 @@ def submit(order_id):
     if not order:
         return jsonify({"ok": False, "error": pay.SUBMIT_ERRORS["not_found"]}), 404
 
-    # Refuse oversized uploads BEFORE the body is parsed.
     if request.content_length is None or request.content_length > pay.MAX_UPLOAD_BYTES + 256 * 1024:
         return jsonify({"ok": False, "error": pay.SCREENSHOT_MESSAGES["too_large"]}), 413
 
@@ -275,17 +274,15 @@ def submit(order_id):
         return jsonify({"ok": False, "error": pay.SUBMIT_ERRORS.get(code, pay.SUBMIT_ERRORS["server"])}), http
 
     next_url = url_for("payments.checkout", order_id=order_id)
-    if result.get("already"):                      # double click: don't ping Telegram twice
+    if result.get("already"):
         return jsonify({"ok": True, "redirect": next_url})
 
-    # The database now says 'submitted'. Telegram is only the notification channel:
-    # if it fails, the payment still shows up in /admin/payments.
     fresh = pay.get_order(order_id)
     sent = pay.tg_send_order(fresh, photo_bytes) if fresh else None
     if sent:
         pay.save_telegram_refs(order_id, sent.get("message_id"), sent.get("file_id"))
     else:
-        logger.warning("Order %s submitted but Telegram notification failed or is not configured", order_id)
+        logger.warning("Order %s submitted; Telegram notification skipped or not configured", order_id)
     return jsonify({"ok": True, "redirect": next_url})
 
 
@@ -320,7 +317,7 @@ def tg_webhook():
         _process_update(update)
     except Exception:
         logger.exception("Could not process a Telegram update")
-    return "ok", 200          # always 200, otherwise Telegram keeps re-sending the same update
+    return "ok", 200
 
 
 def _process_update(update):
@@ -348,7 +345,6 @@ def _handle_callback(cq):
     callback_id = cq.get("id")
     from_id = (cq.get("from") or {}).get("id")
 
-    # Only YOU may press the buttons.
     if not pay.is_tg_admin(from_id):
         _answer(callback_id, "You are not allowed to do this.", alert=True)
         return
@@ -364,7 +360,6 @@ def _handle_callback(cq):
     message_id = message.get("message_id")
     is_photo = bool(message.get("photo"))
 
-    # Reject -> show the reasons keyboard; Back -> show Approve/Reject again.
     if action in ("r", "b"):
         markup = pay.reject_keyboard(order_id) if action == "r" else pay.approval_keyboard(order_id)
         pay.tg_call("editMessageReplyMarkup", json_body={
@@ -397,9 +392,9 @@ def _handle_callback(cq):
     if order:
         text = pay.format_admin_message(order, decision_text=decision)
         if chat_id is not None and message_id is not None:
-            pay.tg_edit_card(chat_id, message_id, text, is_photo)          # the card you just pressed
+            pay.tg_edit_card(chat_id, message_id, text, is_photo)
         if order.get("tg_message_id") and order.get("tg_message_id") != message_id:
-            pay.tg_update_order_card(order, decision)                       # the original card, if different
+            pay.tg_update_order_card(order, decision)
 
 
 def _handle_message(msg):

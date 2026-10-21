@@ -1,3 +1,4 @@
+# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
 import logging
 import os
 from datetime import timedelta
@@ -113,6 +114,13 @@ def create_app():
         if 300 <= code < 400:          # redirects can be raised as exceptions: pass through
             return exc
         return error_response(code)
+
+    @app.errorhandler(Exception)
+    def _unhandled_exception(exc):
+        if isinstance(exc, HTTPException):
+            return _http_error(exc)
+        logger.exception("Unhandled exception on %s %s: %s", request.method, request.path, exc)
+        return error_response(500)
 
     # Lightweight health-check for uptime monitors (UptimeRobot etc).
     # Deliberately touches NO database and does NO auth/session work --
