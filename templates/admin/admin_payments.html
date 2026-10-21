@@ -1,5 +1,5 @@
 {% extends "shared/base.html" %}
-{% block title %}Payments — Admin{% endblock %}
+{% block title %}Payments & Approvals — Admin{% endblock %}
 
 {% block nav %}
     {% include "admin/_admin_nav.html" %}
@@ -14,146 +14,151 @@
   'expired':   ('Expired',   'bg-slate-100 text-slate-500 border-slate-200'),
   'cancelled': ('Revoked',   'bg-slate-100 text-slate-500 border-slate-200')
 } %}
-<div class="max-w-6xl mx-auto px-6 py-10">
+<div class="max-w-6xl mx-auto px-5 py-8">
 
-  <div class="flex flex-wrap items-end justify-between gap-4 mb-8">
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-ink/10 pb-4">
     <div>
-      <h1 class="font-display text-3xl text-ink">Payments</h1>
-      <p class="text-sm text-ink/60 mt-1">Approve the payments students send you. Everything here also arrives in your Telegram chat.</p>
+      <h1 class="font-display text-2xl sm:text-3xl font-bold text-ink">Payment Approvals</h1>
+      <p class="text-xs sm:text-sm text-ink/60 mt-0.5">Verify student UTR payments or manage content from your Admin Control Center.</p>
     </div>
-    <a href="{{ url_for('admin.dashboard') }}" class="text-sm font-semibold text-ink/60 hover:text-ink">Back to dashboard</a>
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="{{ url_for('admin.dashboard') }}" class="inline-flex items-center gap-1.5 text-xs font-bold bg-ink text-white px-4 py-2.5 rounded-lg hover:bg-ink-light transition-colors shadow-sm">
+        🛠️ Admin Dashboard
+      </a>
+      <a href="{{ url_for('admin.questions_list') }}" class="inline-flex items-center gap-1.5 text-xs font-bold bg-white border border-ink/15 text-ink px-3.5 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+        ➕ Add Chapter Quiz
+      </a>
+      <a href="{{ url_for('admin.test_series_list') }}" class="inline-flex items-center gap-1.5 text-xs font-bold bg-white border border-ink/15 text-ink px-3.5 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+        📦 Mock Tests
+      </a>
+    </div>
   </div>
 
-  <!-- ===== numbers ===== -->
-  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-    <div class="bg-white border border-ink/10 rounded-lg p-5 shadow-sm">
-      <p class="text-sm text-ink/60">Today</p>
-      <p class="font-display text-3xl text-ink mt-1 tabular-nums">{{ summary.revenue_today | inr }}</p>
+  <!-- ===== Compact Revenue Metrics ===== -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
+    <div class="bg-white border border-ink/10 rounded-xl p-4 shadow-sm">
+      <p class="text-xs font-semibold text-ink/60">Today</p>
+      <p class="font-display text-2xl font-bold text-ink mt-1 tabular-nums">{{ summary.revenue_today | inr }}</p>
     </div>
-    <div class="bg-white border border-ink/10 rounded-lg p-5 shadow-sm">
-      <p class="text-sm text-ink/60">This month</p>
-      <p class="font-display text-3xl text-ink mt-1 tabular-nums">{{ summary.revenue_month | inr }}</p>
+    <div class="bg-white border border-ink/10 rounded-xl p-4 shadow-sm">
+      <p class="text-xs font-semibold text-ink/60">This Month</p>
+      <p class="font-display text-2xl font-bold text-ink mt-1 tabular-nums">{{ summary.revenue_month | inr }}</p>
     </div>
-    <div class="bg-white border border-ink/10 rounded-lg p-5 shadow-sm">
-      <p class="text-sm text-ink/60">All time <span class="text-ink/40">({{ summary.approved_count }} paid)</span></p>
-      <p class="font-display text-3xl text-ink mt-1 tabular-nums">{{ summary.revenue_total | inr }}</p>
+    <div class="bg-white border border-ink/10 rounded-xl p-4 shadow-sm">
+      <p class="text-xs font-semibold text-ink/60">All Time <span class="text-ink/40">({{ summary.approved_count }} paid)</span></p>
+      <p class="font-display text-2xl font-bold text-ink mt-1 tabular-nums">{{ summary.revenue_total | inr }}</p>
     </div>
     <a href="{{ url_for('admin.payments_panel', show='pending') }}"
-       class="bg-white border rounded-lg p-5 shadow-sm {{ 'border-amber-300 bg-amber-50' if summary.pending_count else 'border-ink/10' }}">
-      <p class="text-sm text-ink/60">Waiting for you</p>
-      <p class="font-display text-3xl text-ink mt-1 tabular-nums">{{ summary.pending_count }}</p>
+       class="bg-white border rounded-xl p-4 shadow-sm {{ 'border-amber-300 bg-amber-50' if summary.pending_count else 'border-ink/10' }}">
+      <p class="text-xs font-semibold text-ink/60">Waiting Approval</p>
+      <p class="font-display text-2xl font-bold text-ink mt-1 tabular-nums">{{ summary.pending_count }}</p>
     </a>
   </div>
 
-  <!-- ===== setup checks ===== -->
-  <div class="bg-white border border-ink/10 rounded-lg p-6 shadow-sm mb-8">
-    <h2 class="font-medium text-ink text-lg mb-4">Setup</h2>
-    <ul class="space-y-2 text-sm">
+  <!-- ===== Setup Checklist ===== -->
+  <div class="bg-white border border-ink/10 rounded-xl p-5 shadow-sm mb-6">
+    <h2 class="font-bold text-ink text-sm uppercase tracking-wider mb-3">Payment Gateway &amp; Telegram Setup</h2>
+    <ul class="space-y-1.5 text-xs sm:text-sm">
       <li class="flex items-center gap-2">
-        <span class="{{ 'text-emerald-600' if ready else 'text-red-600' }} font-bold">{{ '✓' if ready else '✗' }}</span>
-        <span class="text-ink">UPI ID {% if ready %}is set: <span class="font-semibold">{{ upi_id }}</span>{% else %}is missing or invalid. Set <code class="bg-slate-100 px-1 rounded">UPI_ID</code> on Render (example: <code class="bg-slate-100 px-1 rounded">name@fam</code>).{% endif %}</span>
+        <span class="{{ 'text-emerald-600' if ready else 'text-amber-600' }} font-bold">{{ '✓' if ready else '•' }}</span>
+        <span class="text-ink">UPI ID {% if ready %}is set: <span class="font-semibold">{{ upi_id }}</span>{% else %}not configured yet (Optional if all quizzes are currently Free; set <code class="bg-slate-100 px-1 rounded">UPI_ID=yourname@fam</code> on Render when enabling paid plans).{% endif %}</span>
       </li>
       <li class="flex items-center gap-2">
-        <span class="{{ 'text-emerald-600' if tg_token_set else 'text-red-600' }} font-bold">{{ '✓' if tg_token_set else '✗' }}</span>
-        <span class="text-ink">Telegram bot token {% if tg_token_set %}is set{% else %}is missing. Set <code class="bg-slate-100 px-1 rounded">TG_TOKEN</code>.{% endif %}</span>
+        <span class="{{ 'text-emerald-600' if tg_token_set else 'text-amber-600' }} font-bold">{{ '✓' if tg_token_set else '•' }}</span>
+        <span class="text-ink">Telegram Bot Token (<code class="bg-slate-100 px-1 rounded">TG_TOKEN</code>): {{ 'Configured' if tg_token_set else 'Not set yet' }}</span>
       </li>
       <li class="flex items-center gap-2">
-        <span class="{{ 'text-emerald-600' if tg_admin_set else 'text-red-600' }} font-bold">{{ '✓' if tg_admin_set else '✗' }}</span>
-        <span class="text-ink">Your Telegram chat id {% if tg_admin_set %}is set{% else %}is missing. Open your bot in Telegram, press Start, and it will tell you the number to put in <code class="bg-slate-100 px-1 rounded">TG_ADMIN_CHAT_ID</code>.{% endif %}</span>
+        <span class="{{ 'text-emerald-600' if tg_admin_set else 'text-amber-600' }} font-bold">{{ '✓' if tg_admin_set else '•' }}</span>
+        <span class="text-ink">Telegram Admin Chat ID (<code class="bg-slate-100 px-1 rounded">TG_ADMIN_CHAT_ID</code>): {{ 'Configured' if tg_admin_set else 'Not set yet' }}</span>
       </li>
       <li class="flex items-start gap-2">
         {% set hooked = webhook and webhook.get('url') %}
-        <span class="{{ 'text-emerald-600' if hooked else 'text-red-600' }} font-bold">{{ '✓' if hooked else '✗' }}</span>
+        <span class="{{ 'text-emerald-600' if hooked else 'text-amber-600' }} font-bold">{{ '✓' if hooked else '•' }}</span>
         <span class="text-ink">
-          {% if hooked %}Bot is connected to <span class="break-all font-semibold">{{ webhook.get('url') }}</span>.
-            {% if webhook.get('last_error_message') %}<br><span class="text-red-600">Last Telegram error: {{ webhook.get('last_error_message') }}</span>{% endif %}
-          {% else %}Bot is not connected to this website yet. Press "Connect Telegram bot" below (it will use <span class="break-all">{{ webhook_target }}</span>).{% endif %}
+          {% if hooked %}Webhook active at <span class="break-all font-semibold">{{ webhook.get('url') }}</span>.
+          {% else %}Webhook not connected yet ({{ webhook_target }}).{% endif %}
         </span>
       </li>
     </ul>
-    <div class="flex flex-wrap gap-3 mt-5">
+    <div class="flex flex-wrap gap-2.5 mt-4">
       <form method="POST" action="{{ url_for('admin.payments_tg_connect') }}" class="m-0">
-        <button type="submit" class="bg-ink text-paper font-bold px-5 py-2.5 rounded-md hover:bg-ink-light text-sm">Connect Telegram bot</button>
+        <button type="submit" class="bg-ink text-paper font-bold px-4 py-2 rounded-lg hover:bg-ink-light text-xs">Connect Telegram Bot</button>
       </form>
       <form method="POST" action="{{ url_for('admin.payments_tg_test') }}" class="m-0">
-        <button type="submit" class="border border-ink/20 text-ink font-semibold px-5 py-2.5 rounded-md hover:bg-slate-50 text-sm">Send test message</button>
+        <button type="submit" class="border border-ink/20 text-ink font-semibold px-4 py-2 rounded-lg hover:bg-slate-50 text-xs">Send Test Message</button>
       </form>
+      <a href="{{ url_for('payments.preview_checkout') }}" class="border border-ink/20 text-ink font-semibold px-4 py-2 rounded-lg hover:bg-slate-50 text-xs">Preview Student QR Screen &rarr;</a>
     </div>
   </div>
 
-  <!-- ===== filter ===== -->
+  <!-- ===== Filter Tabs ===== -->
   <div class="flex flex-wrap gap-2 mb-4">
-    {% for key, label in [('pending', 'Waiting'), ('approved', 'Approved'), ('problems', 'Rejected / expired'), ('all', 'Everything')] %}
+    {% for key, label in [('pending', 'Waiting'), ('approved', 'Approved'), ('problems', 'Rejected / Expired'), ('all', 'All Orders')] %}
     <a href="{{ url_for('admin.payments_panel', show=key) }}"
-       class="px-4 py-2 rounded-md text-sm font-semibold border {{ 'bg-ink text-paper border-ink' if show == key else 'border-ink/15 text-ink/70 hover:bg-slate-50' }}">{{ label }}</a>
+       class="px-3.5 py-1.5 rounded-lg text-xs font-bold border {{ 'bg-ink text-paper border-ink' if show == key else 'border-ink/15 text-ink/70 hover:bg-slate-50' }}">{{ label }}</a>
     {% endfor %}
   </div>
 
-  <!-- ===== list ===== -->
-  <div class="bg-white border border-ink/10 rounded-lg shadow-sm overflow-x-auto">
-    <table class="w-full min-w-[820px] text-sm">
+  <!-- ===== Orders Table ===== -->
+  <div class="bg-white border border-ink/10 rounded-xl shadow-sm overflow-x-auto">
+    <table class="w-full min-w-[780px] text-xs sm:text-sm">
       <thead>
         <tr class="text-left text-ink/60 border-b border-ink/10">
-          <th class="font-medium px-5 py-3">Student</th>
-          <th class="font-medium px-5 py-3">Amount and UTR</th>
-          <th class="font-medium px-5 py-3">When</th>
-          <th class="font-medium px-5 py-3">Status</th>
-          <th class="font-medium px-5 py-3">Action</th>
+          <th class="font-semibold px-4 py-3">Student</th>
+          <th class="font-semibold px-4 py-3">Amount &amp; UTR</th>
+          <th class="font-semibold px-4 py-3">Time</th>
+          <th class="font-semibold px-4 py-3">Status</th>
+          <th class="font-semibold px-4 py-3">Action</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-ink/5">
         {% for o in orders %}
         {% set chip = chips.get(o.status, ('Unknown', 'bg-slate-100 text-slate-600 border-slate-200')) %}
         <tr class="align-top">
-          <td class="px-5 py-4">
+          <td class="px-4 py-3.5">
             <p class="font-semibold text-ink">{{ (o.profiles or {}).get('full_name') or '—' }}</p>
-            <p class="text-ink/50">@{{ (o.profiles or {}).get('username') or 'deleted-user' }}</p>
-            <p class="text-xs text-ink/40 mt-1">{{ (o.plans or {}).get('name', 'Plan') }}</p>
+            <p class="text-ink/50 text-xs">@{{ (o.profiles or {}).get('username') or 'user' }}</p>
+            <p class="text-[11px] text-ink/40 mt-0.5">{{ (o.plans or {}).get('name', 'Season Pass') }}</p>
           </td>
-          <td class="px-5 py-4">
-            <p class="font-display text-lg text-ink tabular-nums">{{ o.payable_amount | inr(true) }}</p>
-            <p class="font-mono text-ink/70 tabular-nums">{{ o.utr or 'no UTR yet' }}</p>
+          <td class="px-4 py-3.5">
+            <p class="font-display text-base font-bold text-ink tabular-nums">{{ o.payable_amount | inr(true) }}</p>
+            <p class="font-mono text-xs text-ink/70 tabular-nums">{{ o.utr or 'no UTR yet' }}</p>
             {% if o.tg_file_id %}<a href="{{ url_for('admin.payments_screenshot', order_id=o.id) }}" target="_blank" rel="noopener" class="text-xs font-semibold text-indigo-600 hover:underline">View screenshot</a>{% endif %}
           </td>
-          <td class="px-5 py-4 text-ink/60">
+          <td class="px-4 py-3.5 text-ink/60 text-xs">
             {{ (o.submitted_at or o.created_at) | ist_datetime }}
-            {% if o.reviewed_at %}<p class="text-xs text-ink/40 mt-1">Decided {{ o.reviewed_at | ist_datetime }}</p>{% endif %}
+            {% if o.reviewed_at %}<p class="text-[11px] text-ink/40 mt-0.5">Reviewed {{ o.reviewed_at | ist_datetime }}</p>{% endif %}
           </td>
-          <td class="px-5 py-4">
-            <span class="inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold {{ chip[1] }}">{{ chip[0] }}</span>
-            {% if o.reject_reason %}<p class="text-xs text-ink/50 mt-2 max-w-[220px]">{{ o.reject_reason }}</p>{% endif %}
+          <td class="px-4 py-3.5">
+            <span class="inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold {{ chip[1] }}">{{ chip[0] }}</span>
+            {% if o.reject_reason %}<p class="text-xs text-ink/50 mt-1.5 max-w-[200px]">{{ o.reject_reason }}</p>{% endif %}
           </td>
-          <td class="px-5 py-4">
+          <td class="px-4 py-3.5">
             {% if o.status == 'submitted' %}
-              <div class="flex flex-col gap-2 min-w-[190px]">
+              <div class="flex flex-col gap-1.5 min-w-[180px]">
                 <form method="POST" action="{{ url_for('admin.payments_approve', order_id=o.id) }}" class="m-0"
                       onsubmit="return confirm('Approve {{ o.payable_amount | inr(true) }} and unlock access?');">
-                  <button type="submit" class="w-full bg-emerald-600 text-white font-bold px-4 py-2 rounded-md hover:bg-emerald-700">Approve</button>
+                  <button type="submit" class="w-full bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 rounded-md hover:bg-emerald-700">Approve</button>
                 </form>
-                <form method="POST" action="{{ url_for('admin.payments_reject', order_id=o.id) }}" class="m-0 flex gap-2">
-                  <select name="reason" class="flex-1 rounded-md border border-ink/15 px-2 py-2 text-sm" aria-label="Reason for rejecting">
+                <form method="POST" action="{{ url_for('admin.payments_reject', order_id=o.id) }}" class="m-0 flex gap-1.5">
+                  <select name="reason" class="flex-1 rounded-md border border-ink/15 px-2 py-1.5 text-xs" aria-label="Reason for rejecting">
                     <option value="1">UTR not found</option>
                     <option value="2">Wrong amount</option>
                     <option value="3">Not received</option>
                     <option value="4">Unclear proof</option>
                   </select>
-                  <button type="submit" class="border border-red-300 text-red-700 font-semibold px-3 py-2 rounded-md hover:bg-red-50">Reject</button>
+                  <button type="submit" class="border border-red-300 text-red-700 text-xs font-semibold px-2.5 py-1.5 rounded-md hover:bg-red-50">Reject</button>
                 </form>
-                {% if not o.tg_message_id %}
-                <form method="POST" action="{{ url_for('admin.payments_resend', order_id=o.id) }}" class="m-0">
-                  <button type="submit" class="w-full border border-ink/15 text-ink/70 font-semibold px-3 py-2 rounded-md hover:bg-slate-50 text-xs">Send to Telegram again</button>
-                </form>
-                {% endif %}
               </div>
             {% elif o.status == 'approved' %}
               <form method="POST" action="{{ url_for('admin.payments_revoke', order_id=o.id) }}" class="m-0"
-                    onsubmit="return confirm('Take this student\'s access away?');">
-                <button type="submit" class="border border-red-300 text-red-700 font-semibold px-4 py-2 rounded-md hover:bg-red-50">Revoke access</button>
+                    onsubmit="return confirm('Revoke this student\'s access?');">
+                <button type="submit" class="border border-red-300 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-md hover:bg-red-50">Revoke Access</button>
               </form>
             {% elif o.status == 'rejected' %}
               <form method="POST" action="{{ url_for('admin.payments_approve', order_id=o.id) }}" class="m-0"
                     onsubmit="return confirm('Approve this payment after all?');">
-                <button type="submit" class="border border-emerald-300 text-emerald-700 font-semibold px-4 py-2 rounded-md hover:bg-emerald-50">Approve anyway</button>
+                <button type="submit" class="border border-emerald-300 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-md hover:bg-emerald-50">Approve Anyway</button>
               </form>
             {% else %}
               <span class="text-ink/30">—</span>
@@ -161,14 +166,13 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="px-5 py-12 text-center text-ink/50">
-          {% if show == 'pending' %}Nothing is waiting for you. 🎉{% else %}No payments here yet.{% endif %}
+        <tr><td colspan="5" class="px-4 py-10 text-center text-ink/50 text-xs">
+          {% if show == 'pending' %}No pending payments waiting for verification.{% else %}No payment records in this view yet.{% endif %}
         </td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  <p class="text-xs text-ink/40 mt-3">Showing the newest 100. Times are India time.</p>
 </div>
 {% endblock %}
-<!-- SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21) -->
+<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
