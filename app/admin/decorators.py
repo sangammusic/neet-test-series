@@ -1,3 +1,4 @@
+# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
 """
 @admin_required wraps every route in app/admin/*. It checks the
 logged-in user's role_id in `profiles` -- NOT a session flag the

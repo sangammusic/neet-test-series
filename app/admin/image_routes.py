@@ -1,3 +1,4 @@
+# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
 """
 Per-question image upload & Deep Storage Cleanup (Pillar 4).
 

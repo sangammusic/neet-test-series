@@ -1,3 +1,4 @@
+# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
 """
 Admin: payments panel  (/admin/payments)
 
@@ -17,6 +18,7 @@ from urllib.parse import urlparse
 from flask import (
     Response, abort, flash, redirect, render_template, request, session, url_for,
 )
+from jinja2 import TemplateNotFound
 
 from app.admin import admin_bp
 from app.admin.decorators import admin_required
@@ -78,8 +80,9 @@ def payments_panel():
         show = "pending"
 
     webhook = pay.tg_webhook_info() if pay.tg_token() else None      # works even before TG_ADMIN_CHAT_ID is set
-    return render_template(
-        "admin_payments.html",
+    try:
+        return render_template(
+            "admin_payments.html",
         summary=pay.payments_summary(),
         orders=pay.list_orders_admin(statuses=statuses, limit=100),
         show=show,
@@ -90,7 +93,21 @@ def payments_panel():
         tg_admin_set=pay.tg_admin_id() is not None,
         webhook=webhook,
         webhook_target=(request.url_root.rstrip("/") + "/tg-webhook"),
-    )
+        )
+    except TemplateNotFound:
+        return render_template(
+            "admin/admin_payments.html",
+            summary=pay.payments_summary(),
+            orders=pay.list_orders_admin(statuses=statuses, limit=100),
+            show=show,
+            ready=pay.payments_ready(),
+            upi_id=pay.upi_id(),
+            tg_enabled=pay.tg_enabled(),
+            tg_token_set=bool(pay.tg_token()),
+            tg_admin_set=pay.tg_admin_id() is not None,
+            webhook=webhook,
+            webhook_target=(request.url_root.rstrip("/") + "/tg-webhook"),
+        )
 
 
 @admin_bp.route("/payments/<order_id>/approve", methods=["POST"])
