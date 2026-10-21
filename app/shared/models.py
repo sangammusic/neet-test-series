@@ -8,9 +8,122 @@ app/admin/*_routes.py instead, using supabase_admin directly — no
 need to funnel every admin write through this shared file.
 """
 import logging
+import re
 from app.extensions import supabase_public, supabase_admin, cache
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_PRACTICE_FOLDER = "General / Uncategorized"
+
+
+def natural_sort_key(text):
+    """Sorts 'Quiz 1, Quiz 2, ..., Quiz 10, Quiz 25' in human order instead of '1, 10, 11, 2'."""
+    parts = re.split(r"(\d+)", str(text or "").strip())
+    return [int(p) if p.isdigit() else p.lower() for p in parts]
+
+
+def _normalize_practice_row(row):
+    """
+    Normalizes legacy/null folder_name, set_name (falling back to topic_name),
+    and category on a question row so old questions never vanish or split.
+    """
+    cat = str(row.get("category") or "").strip().lower() or "topic"
+    fn = str(row.get("folder_name") or "").strip() or DEFAULT_PRACTICE_FOLDER
+    sn = str(row.get("set_name") or row.get("topic_name") or "").strip() or "Practice Set 1"
+    return cat, fn, sn
+
+
+def _fetch_all_chapter_question_rows(chapter_id, is_pyq, columns, page=1000):
+    """Pages through all question rows for (chapter_id, is_pyq) so >1000 MCQs are never truncated."""
+    out, start = [], 0
+    while True:
+        q = (
+            supabase_admin.table("questions")
+            .select(columns)
+            .eq("chapter_id", chapter_id)
+            .eq("is_pyq", bool(is_pyq))
+            .order("id")
+        )
+        chunk = q.range(start, start + page - 1).execute().data or []
+        out.extend(chunk)
+        if len(chunk) < page:
+            return out
+        start += page
+
+
+def get_practice_folders_for_chapter(chapter_id, mode, category):
+    """
+    Returns (folders_list, folder_stats_dict) for a chapter/mode/category.
+      * Paginates past the 1,000-row PostgREST limit.
+      * Includes legacy rows where folder_name, set_name, or category was NULL/untrimmed.
+      * folder_stats_dict maps folder_name -> {'quiz_count': int, 'question_count': int}.
+    """
+    is_pyq = (mode == "pyq")
+    target_cat = str(category or "topic").strip().lower()
+    try:
+        rows = _fetch_all_chapter_question_rows(
+            chapter_id, is_pyq, "folder_name, set_name, topic_name, category"
+        )
+    except Exception as e:
+        logger.error(f"Error fetching practice folders for chapter {chapter_id}: {e}")
+        return [], {}
+
+    by_folder = {}
+    for r in rows:
+        cat, fn, sn = _normalize_practice_row(r)
+        if cat != target_cat:
+            continue
+        info = by_folder.setdefault(fn, {"sets": set(), "question_count": 0})
+        info["sets"].add(sn)
+        info["question_count"] += 1
+
+    folders = sorted(by_folder.keys(), key=natural_sort_key)
+    stats = {
+        fn: {"quiz_count": len(info["sets"]), "question_count": info["question_count"]}
+        for fn, info in by_folder.items()
+    }
+    return folders, stats
+
+
+def get_practice_sets_for_folder(chapter_id, mode, category, folder_name):
+    """
+    Returns the list of quiz dicts [{'name', 'count', 'is_premium', 'marks', 'negative_marks'}]
+    inside a folder, sorted in natural order (Quiz 1, Quiz 2, ..., Quiz 25).
+    Paginates through all rows so folders with 20-25+ quizzes (>1000 MCQs) never truncate.
+    """
+    is_pyq = (mode == "pyq")
+    target_cat = str(category or "topic").strip().lower()
+    target_folder = str(folder_name or "").strip() or DEFAULT_PRACTICE_FOLDER
+
+    cols_with_marks = "folder_name, set_name, topic_name, category, is_premium, marks, negative_marks"
+    cols_basic = "folder_name, set_name, topic_name, category, is_premium"
+    try:
+        try:
+            rows = _fetch_all_chapter_question_rows(chapter_id, is_pyq, cols_with_marks)
+        except Exception:
+            rows = _fetch_all_chapter_question_rows(chapter_id, is_pyq, cols_basic)
+    except Exception as e:
+        logger.error(f"Error fetching practice sets for chapter {chapter_id}, folder {folder_name}: {e}")
+        return []
+
+    set_dict = {}
+    for r in rows:
+        cat, fn, sn = _normalize_practice_row(r)
+        if cat != target_cat or fn != target_folder:
+            continue
+        if sn not in set_dict:
+            set_dict[sn] = {
+                "name": sn,
+                "count": 0,
+                "is_premium": False,
+                "marks": r.get("marks") if r.get("marks") is not None else 4,
+                "negative_marks": r.get("negative_marks") if r.get("negative_marks") is not None else 1,
+            }
+        set_dict[sn]["count"] += 1
+        if r.get("is_premium"):
+            set_dict[sn]["is_premium"] = True
+
+    return sorted(set_dict.values(), key=lambda x: natural_sort_key(x["name"]))
 
 
 @cache.memoize(timeout=900)  # 15 min — see app/extensions.py for cache setup
@@ -250,12 +363,7 @@ def _visible_image(q):
     return url
 
 
-@cache.memoize(timeout=300)  # 5 min: this is the heaviest per-question JOIN
-# query in the whole app and every student attempting/reloading a test
-# hits it, so it's the single highest-value cache target for surviving
-# a mock-test rush. 5 min (not 15, like the smaller catalog lookups
-# above) because an admin editing a live test's questions should not
-# stay stale for too long.
+@cache.memoize(timeout=300)
 def get_mock_questions_for_test(test_id):
     """
     Fetches every mock_questions row mapped to this test via mock_test_questions.
@@ -413,12 +521,6 @@ def get_attempt_answers_map(attempt_id):
     """
     Reads back every attempt_answers row for this attempt. Used to hydrate
     Alpine state on page reload, and to pull exact time/options for Review Mode.
-
-    Also returns mistake_note / was_replayed (added by
-    sql/migration_practice_attempts.sql). If that migration has not been run yet
-    those columns do not exist and the select would fail -- which used to mean
-    EVERY mock test breaking. So fall back to the original columns instead:
-    existing mock tests keep working before, during and after the migration.
     """
     for cols in (_ANSWER_COLS_FULL, _ANSWER_COLS_BASE):
         try:
@@ -489,25 +591,10 @@ def get_mock_questions_for_test_review(test_id, attempt_id):
 def submit_test_attempt(attempt_id, test_id, progress_map=None, valid_ids=None, answers=None, time_by_question=None):
     """
     Scores and finalizes an attempt using the database as the absolute source of truth.
-
-    PERF NOTE: pass `progress_map` (the dict returned by
-    get_attempt_answers_map(attempt_id)) when the caller has already
-    fetched it -- e.g. right after bulk_save_attempt_progress(), which
-    is the normal submit flow. This function used to always re-fetch
-    attempt_answers itself even when the caller had just read the exact
-    same rows a moment earlier, costing one extra Supabase round-trip on
-    every single test submission. If progress_map isn't supplied (e.g.
-    called from elsewhere without a pre-fetched map), it's fetched here
-    as before so this stays a safe drop-in.
-
-    `answers` / `time_by_question` (legacy dict-per-field shape) are
-    still accepted for backward compatibility but are ignored once
-    progress_map is available, since progress_map already carries both.
     """
     import datetime
 
     try:
-        # SANGAM FIX: maybe_single() protects against crash on invalid test_id
         test = supabase_admin.table("tests").select("negative_marking, total_marks").eq("id", test_id).maybe_single().execute().data
         if not test:
             return None
@@ -617,7 +704,6 @@ def get_attempts_for_user(user_id):
             .execute()
         )
         rows = res.data or []
-        # number attempts per test (oldest = 1); the newest full attempt is the CURRENT record
         totals, seen = {}, {}
         for r in rows:
             totals[r["test_id"]] = totals.get(r["test_id"], 0) + 1
@@ -632,9 +718,6 @@ def get_attempts_for_user(user_id):
 
 
 def delete_all_attempts_for_user(user_id):
-    # Chapter-wise practice attempts are part of the same "history". Their answers go
-    # with them via ON DELETE CASCADE. Tolerate the table not existing yet (migration
-    # not run) so "Clear history" never breaks because of it.
     try:
         supabase_admin.table("practice_attempts").delete().eq("user_id", user_id).execute()
     except Exception as e:
@@ -717,17 +800,7 @@ def user_has_access_to_test(test, user_id):
 
 # =====================================================================
 # CHAPTER-WISE PRACTICE: PERSISTENT ATTEMPTS  (practice_attempts /
-# practice_attempt_answers).  Mirrors the mock-test attempt helpers
-# above, but keyed by the quiz's natural identity instead of a
-# `tests` row.  See sql/migration_practice_attempts.sql.
-#
-# Design rules:
-#   * The SERVER is the source of truth for grading. is_correct / score
-#     are always computed from questions.correct_option at submit time,
-#     never taken from the browser.
-#   * Only the latest attempt per (user, quiz) is kept -- same as mock
-#     tests -- but a new attempt is created BEFORE the old one is deleted,
-#     so a failure half-way never destroys the student's only copy.
+# practice_attempt_answers).
 # =====================================================================
 
 PRACTICE_ATTEMPT_KINDS = ("full", "wrong_only", "marked_and_wrong_only")
@@ -756,8 +829,28 @@ def get_practice_quiz_questions(chapter_id, mode, category, folder_name, set_nam
                      .order("id").range(start, start + page - 1).execute().data or [])
             out.extend(chunk)
             if len(chunk) < page:
-                return out
+                break
             start += page
+        if out:
+            return out
+
+        # Fallback for legacy rows where folder_name, set_name (stored in topic_name),
+        # or category was NULL or had trailing spaces.
+        extra_cols = columns if columns.strip() == "*" else f"{columns}, folder_name, set_name, topic_name, category"
+        all_rows = _fetch_all_chapter_question_rows(chapter_id, mode == "pyq", extra_cols)
+        target_cat = str(category or "topic").strip().lower()
+        target_fn = str(folder_name or "").strip() or DEFAULT_PRACTICE_FOLDER
+        target_sn = str(set_name or "").strip()
+        matched = []
+        wanted_keys = None if columns.strip() == "*" else [c.strip() for c in columns.split(",") if c.strip()]
+        for r in all_rows:
+            cat, fn, sn = _normalize_practice_row(r)
+            if cat == target_cat and fn == target_fn and sn == target_sn:
+                if wanted_keys is not None:
+                    matched.append({k: r.get(k) for k in wanted_keys})
+                else:
+                    matched.append(r)
+        return matched
     except Exception as e:
         logger.error(f"Error fetching practice quiz questions ({chapter_id}/{mode}/{category}/{folder_name}/{set_name}): {e}")
         return []
@@ -784,7 +877,15 @@ def practice_set_is_premium(chapter_id, mode, category, folder_name, set_name):
             _quiz_filter(q, chapter_id, mode, category, folder_name, set_name)
             .eq("is_premium", True).limit(1).execute().data or []
         )
-        return len(rows) > 0
+        if rows:
+            return True
+        # Check if exact match found any rows at all; if not, check normalized legacy rows
+        q_any = supabase_admin.table("questions").select("id")
+        any_exact = _quiz_filter(q_any, chapter_id, mode, category, folder_name, set_name).limit(1).execute().data or []
+        if any_exact:
+            return False
+        legacy_rows = get_practice_quiz_questions(chapter_id, mode, category, folder_name, set_name, columns="id, is_premium")
+        return any(r.get("is_premium") for r in legacy_rows)
     except Exception as e:
         logger.error(f"Error checking premium status of practice set ({chapter_id}/{set_name}): {e}")
         return True
@@ -865,12 +966,6 @@ def _is_wrong_or_unattempted(row):
 def select_reattempt_question_ids(all_question_ids, old_answers, kind):
     """
     Which question ids a reattempt of `kind` replays.
-
-      full                   -> every question of the quiz
-      wrong_only             -> questions the student got WRONG last time
-      marked_and_wrong_only  -> questions that were MARKED or WRONG last time
-
-    "Wrong" = answered incorrectly OR never attempted. Order follows `all_question_ids`.
     """
     if kind == "full":
         return list(all_question_ids)
@@ -889,11 +984,6 @@ def select_reattempt_question_ids(all_question_ids, old_answers, kind):
 def start_practice_attempt(user_id, chapter_id, mode, category, folder_name, set_name, kind="full"):
     """
     APPEND-ONLY history.
-    'full' -> brand-new independent full attempt; nothing submitted is ever deleted.
-    'wrong_only' / 'marked_and_wrong_only' -> REATTEMPT SESSION under the latest SUBMITTED full
-    attempt (parent_attempt_id). The replay set is chosen from the PARENT's frozen answers and the
-    session never writes to the parent, so the parent's Wrong Questions record never changes.
-    Returns (attempt_id, replay_question_ids) or (None, error_code).
     """
     if not user_id:
         return None, "not_logged_in"
@@ -1013,14 +1103,6 @@ def save_practice_mistake_note(attempt_id, question_id, note):
 def submit_practice_attempt(attempt_id, replay_question_ids, submitted_answers=None, total_time_sec=0):
     """
     Grades the replayed questions on the SERVER and finalizes the attempt.
-
-    `submitted_answers` = {question_id: {"selected_option", "status", "time_taken_sec"}}
-    is merged on top of what was already saved durably; only ids in
-    `replay_question_ids` are accepted (anything else is ignored).
-
-    Summary counts describe the WHOLE quiz's latest state (replayed
-    questions re-graded + carried-forward ones as they were), so score /
-    correct / wrong / skipped always add up to the full quiz.
     """
     import datetime
     try:
@@ -1079,7 +1161,6 @@ def submit_practice_attempt(attempt_id, replay_question_ids, submitted_answers=N
                     "was_replayed": True,
                 })
             else:
-                # carried-forward question: keep its stored correctness
                 is_correct = row.get("is_correct")
                 if selected and is_correct is None:
                     is_correct = (selected == q["correct_option"])
@@ -1116,12 +1197,6 @@ def submit_practice_attempt(attempt_id, replay_question_ids, submitted_answers=N
 def get_practice_review_items(attempt_id, filter_kind="full"):
     """
     Questions + the student's saved answers for the Analyse page.
-
-    filter_kind: 'full' | 'wrong' | 'marked'
-      wrong  -> answered & incorrect
-      marked -> status in (marked, answered_marked)
-    Returns a list of dicts in quiz order, each including correct_option and
-    explanation (safe: the attempt is already submitted).
     """
     attempt = get_practice_attempt_by_id(attempt_id)
     if not attempt:
@@ -1162,13 +1237,7 @@ def get_practice_review_items(attempt_id, filter_kind="full"):
 
 def get_practice_analyse_counts(attempt_id):
     """
-    Counts for the Analyse / Reattempt chooser cards, from ONE read of the
-    saved answers:
-      wrong           answered and incorrect
-      marked          marked for review
-      wrong_or_marked union (a question that is both is counted once) -- this is
-                      exactly what "Reattempt Wrong + Marked" will replay
-      full            every question in the quiz
+    Counts for the Analyse / Reattempt chooser cards.
     """
     attempt = get_practice_attempt_by_id(attempt_id)
     if not attempt:
@@ -1191,10 +1260,7 @@ def get_practice_analyse_counts(attempt_id):
 
 def get_practice_time_breakdown(attempt_id):
     """
-    Per-question time spent for a practice attempt's Analyse page (mirrors
-    get_attempt_time_breakdown() for mock tests). Practice quizzes are
-    single-chapter, so there is no per-subject split -- just total +
-    per-question, in quiz order, each carrying a short question preview.
+    Per-question time spent for a practice attempt's Analyse page.
     """
     attempt = get_practice_attempt_by_id(attempt_id)
     if not attempt:
@@ -1218,10 +1284,6 @@ def get_practice_time_breakdown(attempt_id):
             "selected_option": a.get("selected_option"),
             "is_correct": a.get("is_correct"),
         })
-    # Prefer the attempt's own stored wall-clock total when we have one (it
-    # reflects the whole session, including any dead/navigation time); fall
-    # back to the sum of per-question time for older attempts that predate
-    # total_time_sec, or if it was never saved for some reason.
     stored_total = attempt.get("total_time_sec")
     if stored_total:
         total_seconds = int(stored_total)
@@ -1230,19 +1292,11 @@ def get_practice_time_breakdown(attempt_id):
 
 # =====================================================================
 # MOCK TEST SERIES: ANALYSE + MISTAKE NOTES + REATTEMPT
-#
-# Same behaviour as the chapter-wise practice helpers above, on top of
-# the existing test_attempts / attempt_answers tables (see
-# sql/migration_practice_attempts.sql for the added mistake_note,
-# was_replayed and attempt_kind columns).
 # =====================================================================
 
 def get_mock_review_items(attempt_id, test_id, filter_kind="full"):
     """
     Mock-test questions + the student's saved answers, for the Analyse pages.
-    filter_kind: 'full' | 'wrong' | 'marked'. Ordered by question_order, each
-    item carries subject_name so the page can group by subject.
-    Only meant for SUBMITTED attempts (it includes correct_option/explanation).
     """
     try:
         res = (
@@ -1371,9 +1425,6 @@ def get_latest_mock_reattempt_session(parent_attempt_id):
 def start_mock_reattempt(test_id, user_id, kind="full"):
     """
     APPEND-ONLY history (same rules as start_practice_attempt).
-    'full' -> new independent full attempt. 'wrong_only' / 'marked_and_wrong_only' -> reattempt
-    SESSION under the latest submitted full attempt; the parent row/answers are never modified.
-    Returns (attempt_id, replay_question_ids) or (None, error_code).
     """
     if not user_id:
         return None, "not_logged_in"

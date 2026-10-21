@@ -7,6 +7,7 @@ Both the student-facing blueprint (app/payments.py) and the admin panel
 Contents
   1. Config            UPI id / name, Telegram token / admin id
   2. Order database    thin wrappers over the SQL functions in sql/phase1_payments.sql
+                       (plus automatic Python table fallback if SQL functions aren't created yet)
   3. UPI link + QR     the QR is drawn on OUR server, with the exact amount inside it
   4. Screenshot        re-encoded to a small clean JPEG (EXIF/GPS stripped)
   5. Telegram          send approval card, edit it, fetch the screenshot, set the webhook
@@ -20,13 +21,15 @@ import io
 import json
 import logging
 import os
+import random
 import re
 import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import quote
 
 from app.extensions import supabase_admin
-from app.shared.access import forget_premium, format_inr, format_ist_datetime
+from app.shared.access import forget_premium, format_inr, format_ist_datetime, parse_ts
 
 try:  # both are listed in requirements.txt; if one is missing the feature degrades, the site still boots
     import httpx
@@ -61,8 +64,18 @@ def payments_ready():
 
 
 def static_qr_file():
-    """Optional fallback picture under /static, e.g. UPI_STATIC_QR_FILE=img/fampay_qr.png"""
-    return (os.environ.get("UPI_STATIC_QR_FILE") or "").strip().lstrip("/")
+    """
+    Optional fallback picture under /static, e.g. UPI_STATIC_QR_FILE=img/fampay_qr.png.
+    Also auto-detects static/img/fampay_qr.png (or .jpg / .jpeg / .webp) if placed in the folder.
+    """
+    explicit = (os.environ.get("UPI_STATIC_QR_FILE") or "").strip().lstrip("/")
+    if explicit:
+        return explicit
+    static_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "static"))
+    for candidate in ("img/fampay_qr.png", "img/fampay_qr.jpg", "img/fampay_qr.jpeg", "img/fampay_qr.webp", "img/qr.png"):
+        if os.path.isfile(os.path.join(static_root, candidate)):
+            return candidate
+    return ""
 
 
 def is_uuid(value):
@@ -99,6 +112,11 @@ _ORDER_COLS = (
 _ORDER_EMBED = _ORDER_COLS + ", plans(name, code, valid_until), profiles(username, full_name)"
 
 
+def _utc_iso(delta_minutes=0):
+    t = datetime.now(timezone.utc) + timedelta(minutes=delta_minutes)
+    return t.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
 def _rpc(name, params):
     """Calls a SQL function; always returns a dict ({'ok': False, 'error': 'server'} on any failure)."""
     try:
@@ -110,15 +128,84 @@ def _rpc(name, params):
         return {"ok": False, "error": "server"}
     except Exception as e:
         logger.error(f"RPC {name} failed: {e}")
-        return {"ok": False, "error": "server"}
+        return {"ok": False, "error": "server", "_exc": str(e)}
 
 
 def create_order(user_id, plan_code):
-    return _rpc("create_order", {"p_user_id": user_id, "p_plan_code": plan_code})
+    res = _rpc("create_order", {"p_user_id": user_id, "p_plan_code": plan_code})
+    if res.get("ok") or res.get("error") in ("plan_not_found", "already_active", "busy"):
+        return res
+    # Fallback if the SQL function create_order hasn't been created yet but tables exist
+    if not res.get("_exc") or "simulated" in res.get("_exc", ""):
+        return {"ok": False, "error": "server"}
+    try:
+        plans = (
+            supabase_admin.table("plans")
+            .select("*")
+            .eq("code", plan_code)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+        if not plans:
+            return {"ok": False, "error": "plan_not_found"}
+        plan = plans[0]
+        now = _utc_iso()
+        supabase_admin.table("orders").update({"status": "expired"}).eq("status", "created").lt("expires_at", now).execute()
+
+        existing = (
+            supabase_admin.table("orders")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("plan_id", plan["id"])
+            .in_("status", ["created", "submitted"])
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+        if existing:
+            return {"ok": True, "reused": True, "order_id": existing[0]["id"]}
+
+        open_orders = (
+            supabase_admin.table("orders")
+            .select("payable_amount")
+            .in_("status", ["created", "submitted"])
+            .execute()
+            .data or []
+        )
+        taken = {round(float(o["payable_amount"]), 2) for o in open_orders if o.get("payable_amount") is not None}
+        base = float(plan["price_inr"])
+        free = [k for k in range(1, 100) if round(base + k / 100.0, 2) not in taken]
+        if not free:
+            return {"ok": False, "error": "busy"}
+        payable = round(base + random.choice(free) / 100.0, 2)
+        ins = (
+            supabase_admin.table("orders")
+            .insert({
+                "user_id": user_id,
+                "plan_id": plan["id"],
+                "base_amount": base,
+                "payable_amount": payable,
+                "status": "created",
+                "expires_at": _utc_iso(45),
+            })
+            .execute()
+            .data or []
+        )
+        if ins:
+            return {"ok": True, "reused": False, "order_id": ins[0]["id"]}
+    except Exception as e:
+        logger.error(f"Fallback create_order failed: {e}")
+    return {"ok": False, "error": "server"}
 
 
 def submit_order(order_id, user_id, utr):
-    return _rpc("submit_order", {"p_order_id": order_id, "p_user_id": user_id, "p_utr": utr})
+    res = _rpc("submit_order", {"p_order_id": order_id, "p_user_id": user_id, "p_utr": utr})
+    if res.get("ok") or res.get("error") != "server":
+        return res
+    return {"ok": False, "error": "server"}
 
 
 def approve_order(order_id, reviewer):

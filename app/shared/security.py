@@ -130,6 +130,9 @@ _SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 
 def _allowed_hosts():
     hosts = {request.host.lower()}
+    fwd = (request.headers.get("X-Forwarded-Host") or "").split(",")[0].strip().lower()
+    if fwd:
+        hosts.add(fwd)
     # Optional: extra hosts that may legitimately post to us, e.g.
     # ALLOWED_HOSTS=sangamstudy.in,www.sangamstudy.in
     for h in (os.environ.get("ALLOWED_HOSTS") or "").split(","):

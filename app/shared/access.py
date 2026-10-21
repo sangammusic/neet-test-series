@@ -31,6 +31,25 @@ _POSITIVE_TTL = 60                      # seconds a "yes" may be cached (per wor
 # India has no daylight saving, so a fixed offset is exact (no tz database needed).
 IST = timezone(timedelta(hours=5, minutes=30))
 
+# Built-in fallback plan so /pay always renders the Season Pass card even before
+# sql/phase1_payments.sql has been run in Supabase.
+DEFAULT_SEASON_PASS_PLAN = {
+    "id": "00000000-0000-4000-8000-000000000299",
+    "code": "season_pass_2027",
+    "name": "Season Pass",
+    "description": "Every premium mock test and practice set, until your NEET / JEE 2027 exam season ends.",
+    "price_inr": 299,
+    "valid_until": "2027-06-30T23:59:59+05:30",
+    "valid_days": None,
+    "stream_id": None,
+    "features": [
+        "All premium mock tests",
+        "All premium chapter-wise practice sets",
+        "Detailed explanations and analysis",
+        "One payment, no renewals",
+    ],
+}
+
 
 # ----------------------------------------------------------------------
 # Time / money formatting helpers (also registered as Jinja filters)
@@ -88,7 +107,7 @@ _PLANS_KEY = "plans:active"
 _PLANS_TTL = 120
 
 
-def get_active_plans():
+def get_active_plans(include_fallback=False):
     cached = cache.get(_PLANS_KEY)
     if cached:
         return cached
@@ -103,10 +122,11 @@ def get_active_plans():
         rows = res.data or []
     except Exception as e:
         logger.error(f"Error fetching active plans: {e}")
-        return []                       # not cached: the next page view simply tries again
+        return [dict(DEFAULT_SEASON_PASS_PLAN)] if include_fallback else []
     if rows:
         cache.set(_PLANS_KEY, rows, timeout=_PLANS_TTL)
-    return rows
+        return rows
+    return [dict(DEFAULT_SEASON_PASS_PLAN)] if include_fallback else []
 
 
 # ----------------------------------------------------------------------
@@ -181,8 +201,6 @@ def can_access_test(test, user_id):
       * premium test                   -> premium holders, OR a legacy per-test
                                           grant (test_access_grants)
     """
-    # A bad/deleted test_id means test is None -> treat as "no access" so the
-    # caller shows its normal 404 instead of crashing.
     if not test:
         return False
     if not test.get("is_premium"):
@@ -238,7 +256,7 @@ def premium_status():
                     expires_label=format_ist_date(expires) if expires else None,
                 )
     if not status["active"]:
-        plans = get_active_plans()
+        plans = get_active_plans(include_fallback=True)
         if plans:
             status["offer_name"] = plans[0].get("name")
             status["offer_price"] = plans[0].get("price_inr")
