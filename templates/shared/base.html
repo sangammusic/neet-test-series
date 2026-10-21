@@ -1,9 +1,41 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}SANGAM STUDY{% endblock %}</title>
+    <title>{% block title %}STUDY SANGAM HUB{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+
+    <!-- Instant Theme Restorer (Dark Mode / White Mode without FOUC) -->
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem('sangam_theme') || 'dark';
+                if (savedTheme !== 'light' && savedTheme !== 'dark') savedTheme = 'dark';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+            window.setSangamTheme = function (mode) {
+                var target = (mode === 'light') ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', target);
+                try { localStorage.setItem('sangam_theme', target); } catch (e) {}
+                document.querySelectorAll('[data-theme-btn]').forEach(function (btn) {
+                    var isMatch = btn.getAttribute('data-theme-btn') === target;
+                    btn.classList.toggle('active', isMatch);
+                    btn.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+                });
+            };
+            window.toggleSangamTheme = function () {
+                var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+                window.setSangamTheme(cur === 'dark' ? 'light' : 'dark');
+            };
+            document.addEventListener('DOMContentLoaded', function () {
+                var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+                window.setSangamTheme(cur);
+            });
+        })();
+    </script>
 
     <!-- Fonts: Lora (headings) + Inter (body) + Noto Sans Devanagari (Hindi support) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,9 +52,9 @@
                         paper: '#FAF7F0',
                         gold: { DEFAULT: '#D4A017', light: '#E8C158' },
                         scholar: {
-                            bg: '#0a0a0a',
-                            card: 'rgba(22, 22, 22, 0.78)',
-                            border: 'rgba(255, 255, 255, 0.10)'
+                            bg: '#0e0c0a',
+                            card: 'rgba(24, 20, 17, 0.82)',
+                            border: 'rgba(235, 208, 172, 0.16)'
                         }
                     },
                     fontFamily: {
@@ -47,63 +79,73 @@
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-    <!-- SANGAM HISTORY & NAVIGATION ENGINE (Eliminates Mobile Back-Button Quiz Loops) -->
+    <!-- SANGAM PARALLEL HISTORY, NAVIGATION & PREFETCH ENGINE
+         Ensures Website Back Button and Mobile Hardware Back Button ALWAYS work in parallel,
+         eliminates Admin->Workspace back loops, and deletes finished quiz pages from history. -->
     <script>
         (function () {
             'use strict';
 
-            function samePath(urlA, urlB) {
-                try {
-                    var a = new URL(urlA, window.location.origin);
-                    var b = new URL(urlB, window.location.origin);
-                    return a.origin === b.origin && a.pathname.replace(/\/+$/, '') === b.pathname.replace(/\/+$/, '');
-                } catch (e) {
-                    return false;
-                }
-            }
+            var _activeBackTarget = null;
+            var _trapArmed = false;
 
-            function isTransientQuizPath(urlStr) {
-                try {
-                    var u = new URL(urlStr, window.location.origin);
-                    return /\/(run|attempt|analyse|review|start|result)(\/|$)/.test(u.pathname);
-                } catch (e) {
-                    return true;
-                }
-            }
-
-            /* Navigate one step up the hierarchy without ever re-opening a finished/exited quiz */
+            /* Navigate deterministically to the hierarchical parent URL via location.replace
+               so intermediate/admin/finished-quiz pages are never resurrected from history */
             window.sangamBack = function (fallbackUrl) {
-                if (!fallbackUrl) {
-                    window.location.replace('/');
-                    return false;
-                }
-                try {
-                    if (
-                        document.referrer &&
-                        samePath(document.referrer, fallbackUrl) &&
-                        !isTransientQuizPath(document.referrer) &&
-                        window.history.length > 1
-                    ) {
-                        window.history.back();
-                        return false;
-                    }
-                } catch (e) {}
-                window.location.replace(fallbackUrl);
+                var target = fallbackUrl || _activeBackTarget || '/';
+                window.location.replace(target);
                 return false;
             };
 
-            /* Trap mobile hardware/gesture Back button on transient quiz/analyse pages
-               so pressing Back always lands cleanly on the target parent menu */
-            window.sangamInstallBackTrap = function (targetUrl) {
+            function _armHistoryTrap(targetUrl) {
                 if (!targetUrl || !window.history || !window.history.pushState) return;
+                _activeBackTarget = targetUrl;
                 try {
-                    var stateObj = { sangamTrap: true, target: targetUrl };
-                    window.history.pushState(stateObj, '', window.location.href);
-                    window.addEventListener('popstate', function () {
-                        window.location.replace(targetUrl);
-                    });
+                    var currentState = window.history.state;
+                    if (!currentState || !currentState.sangamTrap || currentState.target !== targetUrl) {
+                        window.history.replaceState({ sangamBase: true, target: targetUrl }, '', window.location.href);
+                        window.history.pushState({ sangamTrap: true, target: targetUrl }, '', window.location.href);
+                    }
                 } catch (e) {}
+            }
+
+            /* Bind mobile hardware/gesture Back button to the exact same destination as the website Back button */
+            window.sangamInstallBackTrap = function (targetUrl) {
+                if (!targetUrl) return;
+                _armHistoryTrap(targetUrl);
+                if (!_trapArmed) {
+                    _trapArmed = true;
+                    window.addEventListener('popstate', function () {
+                        if (_activeBackTarget) {
+                            window.location.replace(_activeBackTarget);
+                        }
+                    });
+                    /* Re-arm trap on first touch/click so mobile Chrome's History Manipulation
+                       Intervention always honors the popstate redirect on hardware Back */
+                    var rearmOnGesture = function () {
+                        if (_activeBackTarget && (!window.history.state || !window.history.state.sangamTrap)) {
+                            try {
+                                window.history.pushState({ sangamTrap: true, target: _activeBackTarget }, '', window.location.href);
+                            } catch (e) {}
+                        }
+                    };
+                    document.addEventListener('touchstart', rearmOnGesture, { once: true, passive: true });
+                    document.addEventListener('click', rearmOnGesture, { once: true, passive: true });
+                }
             };
+
+            /* Auto-bind parallel back trap on any page that declares a [data-back-url] button */
+            document.addEventListener('DOMContentLoaded', function () {
+                if (!_activeBackTarget) {
+                    var firstBack = document.querySelector('[data-back-url]');
+                    if (firstBack) {
+                        var url = firstBack.getAttribute('data-back-url') || firstBack.getAttribute('href');
+                        if (url) {
+                            window.sangamInstallBackTrap(url);
+                        }
+                    }
+                }
+            });
 
             document.addEventListener('click', function (e) {
                 var backLink = e.target.closest ? e.target.closest('[data-back-url]') : null;
@@ -123,6 +165,31 @@
                     }
                 }
             });
+
+            /* Fast link prefetching on hover/touchstart so Mock Test Series & folders open instantly */
+            var _prefetched = {};
+            function _prefetchUrl(el) {
+                if (!el || !el.href) return;
+                try {
+                    var u = new URL(el.href, window.location.origin);
+                    if (u.origin !== window.location.origin) return;
+                    if (/\/(logout|start|run|attempt|delete|clear|submit)/.test(u.pathname)) return;
+                    if (_prefetched[u.href]) return;
+                    _prefetched[u.href] = true;
+                    var link = document.createElement('link');
+                    link.rel = 'prefetch';
+                    link.href = u.href;
+                    document.head.appendChild(link);
+                } catch (e) {}
+            }
+            document.addEventListener('mouseover', function (e) {
+                var a = e.target.closest ? e.target.closest('a[href]') : null;
+                if (a) _prefetchUrl(a);
+            }, { passive: true });
+            document.addEventListener('touchstart', function (e) {
+                var a = e.target.closest ? e.target.closest('a[href]') : null;
+                if (a) _prefetchUrl(a);
+            }, { passive: true });
 
             /* Intercept [data-replace-form] submissions via XHR so starting a quiz/test
                REPLACES the overview page in browser history instead of pushing onto it */
@@ -201,19 +268,18 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 
-<!-- DYNAMIC BODY: Light theme for Admin, Dark Minimalist Theme for Students -->
-<body class="{% if request.path.startswith('/admin') %}bg-gray-50 text-slate-900{% else %}text-gray-200 antialiased relative min-h-screen flex flex-col{% endif %} font-body">
+<body class="{% if request.path.startswith('/admin') %}admin-body bg-gray-50 text-slate-900{% else %}text-gray-100 antialiased relative min-h-screen flex flex-col{% endif %} font-body">
 
     {% if not request.path.startswith('/admin') %}
-    <!-- REALISTIC STUDY DESK PHOTOGRAPH BACKGROUND (No cartoon SVG drawings) -->
+    <!-- BRIGHT REALISTIC COFFEE-CUP STUDY DESK PHOTOGRAPH BACKGROUND (Adapts to Dark Mode & White Mode) -->
     <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none select-none" aria-hidden="true">
-        <div class="absolute inset-0 bg-[#080a0f]"></div>
-        <!-- High-resolution realistic photograph of a study desk with open notebook, coffee cup, and pen -->
-        <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1456324504439-367cee3b3c32?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-40"></div>
-        <!-- Subtle warm ambient lighting + vignette so the real desk photo is visible while keeping text crisp -->
-        <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-amber-500/10 blur-[120px]"></div>
-        <div class="absolute -bottom-28 right-1/4 w-96 h-96 rounded-full bg-gold/10 blur-[130px]"></div>
-        <div class="absolute inset-0 bg-gradient-to-b from-[#080a0f]/65 via-[#080a0f]/60 to-[#080a0f]/85"></div>
+        <div class="absolute inset-0 sangam-bg-base"></div>
+        <!-- High-resolution realistic photograph of a study desk with open notebook, white coffee cup, and pen -->
+        <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1456324504439-367cee3b3c32?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center sangam-bg-photo"></div>
+        <!-- Warm coffee-crema & golden ambient lighting -->
+        <div class="absolute -top-20 -left-20 w-96 h-96 rounded-full bg-amber-400/20 blur-[110px]"></div>
+        <div class="absolute -bottom-24 right-1/4 w-96 h-96 rounded-full bg-gold/20 blur-[120px]"></div>
+        <div class="absolute inset-0 sangam-bg-veil"></div>
     </div>
     {% endif %}
 
@@ -222,11 +288,11 @@
     <main class="flex-grow">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="max-w-2xl mx-auto mt-6 px-4 relative z-10">
+                <div class="max-w-2xl mx-auto mt-4 px-4 relative z-10">
                     {% for category, message in messages %}
-                        <div class="rounded-md px-4 py-3 mb-2 text-sm font-medium shadow-sm backdrop-blur-md
-                            {{ 'bg-red-500/10 text-red-400 border border-red-500/20' if category == 'error'
-                               else 'bg-green-500/10 text-green-400 border border-green-500/20' }}">
+                        <div class="rounded-xl px-4 py-2.5 mb-2 text-xs sm:text-sm font-semibold shadow-sm backdrop-blur-md
+                            {{ 'bg-red-500/15 text-red-400 border border-red-500/30' if category == 'error'
+                               else 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' }}">
                             {{ message }}
                         </div>
                     {% endfor %}
@@ -244,4 +310,4 @@
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
+<!-- STUDY SANGAM HUB v3.0 — Responsive PW-Style & Dual-Theme Build -->
