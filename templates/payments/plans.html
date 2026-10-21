@@ -1,154 +1,61 @@
 {% extends "shared/base.html" %}
-{% block title %}Season Pass — SANGAM STUDY{% endblock %}
+{% block title %}Test Series Passes — STUDY SANGAM HUB{% endblock %}
 
 {% block content %}
-<section class="relative z-10 mx-auto max-w-2xl px-5 pt-8 pb-20">
+<section class="relative z-10 mx-auto max-w-2xl px-4 pt-6 pb-20">
 
-  <div class="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3.5">
     <div>
-      <a href="{{ url_for('user.landing') }}" data-back-url="{{ url_for('user.landing') }}" class="text-xs font-bold text-gray-400 hover:text-gold mb-2 inline-flex items-center gap-1.5 transition-colors">
-        &larr; Back to Workspace
+      <a href="{{ url_for('user.my_dashboard') }}" data-back-url="{{ url_for('user.my_dashboard') }}" class="btn-cute-soft mb-2">
+        &larr; Workspace
       </a>
-      <h1 class="font-display text-2xl sm:text-3xl font-bold text-white tracking-tight">Season Pass</h1>
-      <p class="mt-1 text-xs sm:text-sm text-gray-400">One-time access to every premium mock test and practice set until the exam season ends.</p>
+      <h1 class="font-display text-xl sm:text-2xl font-bold text-white tracking-tight">Paid Test Series</h1>
+      <p class="mt-0.5 text-xs text-gray-400">Unlock individual Paid Mock Test Series or check your purchased series.</p>
     </div>
-    <a href="{{ url_for('payments.history') }}" class="text-xs font-bold text-gray-300 hover:text-gold bg-white/5 border border-white/10 px-3.5 py-2 rounded-lg transition-colors">
-      🧾 My Payments
+    <a href="{{ url_for('payments.history') }}" class="btn-cute-soft">
+      🛍️ My Purchases
     </a>
   </div>
 
-  {# ---- Admin Control Bar / Active Status ---- #}
-  {% if ps.active %}
-    <div class="mb-6 rounded-xl border border-emerald-400/30 bg-[#12161f]/90 p-4 backdrop-blur-xl">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="font-display text-base font-bold text-white">
-            {{ '⚡ Admin Access Active' if ps.is_admin else ('✓ ' ~ (ps.plan_name or 'Season Pass') ~ ' Active') }}
-          </p>
-          <p class="text-xs text-gray-400 mt-0.5">
-            {% if ps.is_admin %}
-              All quizzes and mock tests are unlocked for you. Use the shortcuts below to manage content or preview checkout.
-            {% elif ps.expires_label %}
-              Valid until {{ ps.expires_label }}.
-            {% else %}
-              Every premium mock test and practice set is unlocked.
-            {% endif %}
-          </p>
-        </div>
-      </div>
-      <div class="mt-3.5 pt-3 border-t border-white/5 flex flex-wrap gap-2">
-        {% if ps.is_admin %}
-        <a href="{{ url_for('admin.dashboard') }}" class="inline-flex items-center gap-1.5 rounded-lg bg-gold px-3.5 py-2 text-xs font-bold text-ink hover:bg-gold-light transition-colors">
-          🛠️ Admin Dashboard
-        </a>
-        <a href="{{ url_for('admin.questions_list') }}" class="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-colors">
-          ➕ Add Quiz / Material
-        </a>
-        <a href="{{ url_for('admin.payments_panel') }}" class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition-colors">
-          ✅ Payment Approvals
-        </a>
-        <a href="{{ url_for('payments.preview_checkout') }}" class="inline-flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-3.5 py-2 text-xs font-bold text-gold hover:bg-gold/20 transition-colors">
-          🔍 Preview QR Page
-        </a>
-        {% else %}
-        <a href="{{ url_for('user.landing') }}" class="inline-flex items-center justify-center rounded-lg bg-gold px-4 py-2 text-xs font-bold text-ink hover:bg-gold-light transition-colors">Go to Workspace</a>
-        <a href="{{ url_for('payments.history') }}" class="inline-flex items-center justify-center rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold text-gray-200 hover:bg-white/5 transition-colors">My Payments</a>
-        {% endif %}
-      </div>
-    </div>
-  {% endif %}
-
-  {# ---- Unfinished Order ---- #}
-  {% if open_order and (not ps.active or ps.is_admin) %}
+  {% if open_order %}
     <a href="{{ url_for('payments.checkout', order_id=open_order.id) }}"
-       class="mb-6 flex items-center justify-between gap-4 rounded-xl border border-gold/40 bg-gold/[0.08] p-4 transition-colors hover:bg-gold/12">
+       class="mb-4 pw-tile flex items-center justify-between gap-3 p-4 border-gold/40">
       <div>
-        <p class="font-display text-sm font-bold text-white">{{ 'Payment verification in progress' if open_order.status == 'submitted' else 'Resume your pending payment' }}</p>
-        <p class="mt-0.5 text-xs text-gray-400">{{ open_order.payable_amount | inr(true) }}{% if open_order.status == 'created' %} reserved for you{% endif %}</p>
+        <p class="font-display text-xs sm:text-sm font-bold text-white">{{ 'Payment verification in progress' if open_order.status == 'submitted' else 'Resume your pending payment' }}</p>
+        <p class="mt-0.5 text-[11px] text-gray-400">{{ open_order.payable_amount | inr(true) }}</p>
       </div>
-      <span class="shrink-0 text-xs font-bold text-gold">{{ 'Check Status →' if open_order.status == 'submitted' else 'Continue →' }}</span>
+      <span class="btn-cute !py-1 !px-2.5 !text-[11px]">{{ 'Check Status →' if open_order.status == 'submitted' else 'Continue →' }}</span>
     </a>
   {% endif %}
 
-  {# ---- Compact Plan Card ---- #}
   {% for plan in plans %}
-  <article class="mb-6 rounded-xl border border-gold/30 bg-[#12141d]/95 p-5 sm:p-6 backdrop-blur-xl shadow-xl">
-    <div class="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+  <article class="mb-3.5 pw-tile p-4 sm:p-5">
+    <div class="flex items-start justify-between gap-3">
       <div>
-        <span class="text-[10px] font-extrabold uppercase tracking-widest text-gold bg-gold/10 border border-gold/30 px-2 py-0.5 rounded">All-Access Pass</span>
-        <h2 class="font-display text-xl font-bold text-white mt-1.5">{{ plan.name }}</h2>
-        {% if plan.description %}<p class="mt-1 text-xs leading-relaxed text-gray-400 max-w-md">{{ plan.description }}</p>{% endif %}
+        <span class="text-[9px] font-extrabold uppercase tracking-widest text-gold bg-gold/10 border border-gold/30 px-2 py-0.5 rounded">Test Series</span>
+        <h2 class="font-display text-base sm:text-lg font-bold text-white mt-1">{{ plan.name }}</h2>
+        {% if plan.description %}<p class="mt-0.5 text-xs text-gray-400">{{ plan.description }}</p>{% endif %}
       </div>
       <div class="text-right shrink-0">
-        <p class="font-display text-3xl font-bold text-white tabular-nums">{{ plan.price_inr | inr }}</p>
-        {% if plan.valid_until %}<p class="mt-0.5 text-[11px] text-gray-400">Until {{ plan.valid_until | ist_date }}</p>
-        {% elif plan.valid_days %}<p class="mt-0.5 text-[11px] text-gray-400">{{ plan.valid_days }} days</p>{% endif %}
+        <p class="font-display text-xl sm:text-2xl font-bold text-gold tabular-nums">{{ plan.price_inr | inr }}</p>
       </div>
     </div>
 
-    <ul class="mt-4 grid sm:grid-cols-2 gap-2.5 text-xs">
-      {% for item in plan.features or [] %}
-      <li class="flex items-center gap-2 text-gray-200">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-        <span>{{ item }}</span>
-      </li>
-      {% endfor %}
-    </ul>
-
-    {% if not ps.active or ps.is_admin %}
-      {% if ready and (db_plans_ready is not defined or db_plans_ready) %}
-      <form method="POST" action="{{ url_for('payments.start') }}" class="mt-5">
-        <input type="hidden" name="plan_code" value="{{ plan.code }}">
-        <button type="submit"
-                class="w-full rounded-xl bg-gold py-3 text-sm font-bold text-ink shadow-[0_4px_14px_0_rgba(212,160,23,0.2)] transition-all hover:bg-gold-light">
-          Get {{ plan.name }} for {{ plan.price_inr | inr }} &rarr;
-        </button>
-      </form>
-      {% else %}
-      <div class="mt-5">
-        <a href="{{ url_for('payments.preview_checkout') }}"
-           class="flex w-full items-center justify-center gap-2 rounded-xl bg-gold py-3 text-sm font-bold text-ink shadow-[0_4px_14px_0_rgba(212,160,23,0.2)] transition-all hover:bg-gold-light">
-          <span>Continue to Payment QR ({{ plan.price_inr | inr }})</span>
-          <span>&rarr;</span>
-        </a>
-        {% if ps.is_admin and not ready %}
-        <p class="mt-2 text-center text-[11px] text-amber-300/90">
-          Note: Set <code class="bg-black/40 px-1 py-0.5 rounded font-mono">UPI_ID</code> in Render Environment Variables when you are ready to accept live student payments.
-        </p>
-        {% endif %}
-      </div>
-      {% endif %}
-    {% endif %}
+    <form method="POST" action="{{ url_for('payments.start') }}" class="mt-3.5">
+      <input type="hidden" name="plan_code" value="{{ plan.code }}">
+      <button type="submit" class="btn-cute !w-full !py-2.5 !text-xs sm:!text-sm">
+        <span>Purchase {{ plan.name }} ({{ plan.price_inr | inr }})</span>
+        <span>&rarr;</span>
+      </button>
+    </form>
   </article>
-  {% endfor %}
-
-  {# ---- Compact FAQ ---- #}
-  <div class="mt-8">
-    <h2 class="mb-3 font-display text-base font-bold text-white">Frequently Asked Questions</h2>
-    <div class="divide-y divide-white/10 rounded-xl border border-white/10 bg-[#12141d]/80 text-xs">
-      <details class="group p-3.5">
-        <summary class="cursor-pointer list-none font-semibold text-white flex items-center justify-between">
-          <span>How do I pay?</span>
-          <span class="text-gold">+</span>
-        </summary>
-        <p class="mt-2 leading-relaxed text-gray-400">Scan the UPI QR code with PhonePe, Google Pay, Paytm, or FamPay, then submit your 12-digit UTR number.</p>
-      </details>
-      <details class="group p-3.5">
-        <summary class="cursor-pointer list-none font-semibold text-white flex items-center justify-between">
-          <span>What if all quizzes are currently free?</span>
-          <span class="text-gold">+</span>
-        </summary>
-        <p class="mt-2 leading-relaxed text-gray-400">Free quizzes and mock tests can be attempted directly without any payment. The Season Pass is only required for sets marked Premium.</p>
-      </details>
-      <details class="group p-3.5">
-        <summary class="cursor-pointer list-none font-semibold text-white flex items-center justify-between">
-          <span>Need help with a payment?</span>
-          <span class="text-gold">+</span>
-        </summary>
-        <p class="mt-2 leading-relaxed text-gray-400">Click the support headset button in the bottom-right corner or <a href="{{ support_url }}" target="_blank" rel="noopener" class="font-semibold text-gold hover:underline">contact support</a> with your UTR.</p>
-      </details>
-    </div>
+  {% else %}
+  <div class="pw-tile p-6 text-center rounded-xl">
+    <p class="font-display text-base font-bold text-white">Explore Mock Test Series</p>
+    <p class="mt-1 text-xs text-gray-400">Open your Stream Workspace to browse all Free and Paid Mock Test Series.</p>
+    <a href="{{ url_for('user.my_dashboard') }}" class="mt-4 btn-cute">Go to Workspace &rarr;</a>
   </div>
+  {% endfor %}
 </section>
 {% endblock %}
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
+<!-- STUDY SANGAM HUB v3.0 -->
