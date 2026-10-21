@@ -1,3 +1,4 @@
+# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
 import re
 from flask import render_template, request, redirect, url_for, session, jsonify, abort, flash
 
@@ -313,8 +314,13 @@ def practice_start(slug, chapter_id, mode, category, folder, set_name):
     attempt_id, result = start_practice_attempt(current_user_id(), chapter_id, mode, category, folder, set_name, kind)
     if not attempt_id:
         flash(_REATTEMPT_ERRORS.get(result, "Could not start the attempt."), "error")
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"ok": False, "redirect": overview})
         return redirect(overview)
-    return redirect(url_for("user.practice_run", slug=slug, chapter_id=chapter_id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt_id))
+    run_url = url_for("user.practice_run", slug=slug, chapter_id=chapter_id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt_id)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"ok": True, "redirect": run_url})
+    return redirect(run_url)
 
 
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>/<name:set_name>/run")
@@ -635,10 +641,17 @@ def test_start(slug, test_id):
     if not attempt_id:
         if result:
             flash(_REATTEMPT_ERRORS.get(result, "Could not start the attempt."), "error")
-            return redirect(url_for("user.test_analyse", slug=slug, test_id=test_id))
-        return redirect(url_for("user.test_overview", slug=slug, test_id=test_id))
+            target = url_for("user.test_analyse", slug=slug, test_id=test_id)
+        else:
+            target = url_for("user.test_overview", slug=slug, test_id=test_id)
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"ok": False, "redirect": target})
+        return redirect(target)
 
-    return redirect(url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=attempt_id))
+    attempt_url = url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=attempt_id)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"ok": True, "redirect": attempt_url})
+    return redirect(attempt_url)
 
 
 @user_bp.route("/streams/<slug>/tests/<test_id>/attempt/<attempt_id>")
@@ -786,10 +799,14 @@ def test_result(slug, test_id, attempt_id):
 
     stream = get_stream_by_slug(slug)
     test = get_test_by_id(test_id)
+    if not stream or not test:
+        abort(404)
+    counts = get_mock_analyse_counts(attempt_id, test_id)
+    pending = get_latest_mock_reattempt_session(attempt_id)
     time_breakdown = get_attempt_time_breakdown(attempt_id, test_id)
     return render_template(
         "test_result.html",
-        stream=stream, test=test, attempt=attempt,
+        stream=stream, test=test, attempt=attempt, counts=counts, reattempt_session=pending,
         time_by_subject=time_breakdown["by_subject"],
         time_by_question=time_breakdown["by_question"],
     )
