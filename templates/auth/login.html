@@ -6,35 +6,69 @@
 {% endblock %}
 
 {% block content %}
-<div class="min-h-screen flex bg-[#0a0a0a]">
+<div class="min-h-screen flex bg-[#07090f]/90">
     
-    <!-- LEFT SIDE: The Real Vibe (Books, Lamp, Aesthetic) -->
+    <!-- LEFT SIDE: The Real Vibe (Colorful Book, Cup, Pencil & Motivational Quote) -->
     <!-- Hidden on small mobile screens, takes up 50% width on desktop -->
-    <div class="hidden lg:flex lg:w-1/2 relative items-center justify-center p-12 overflow-hidden border-r border-white/5">
+    <div class="hidden lg:flex lg:w-1/2 relative items-center justify-center p-12 overflow-hidden border-r border-white/10">
         
-        <!-- High-Res Real Background Image (Unsplash: Dark Library/Desk) -->
-        <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1532012197267-da84d127e765?q=80&w=1200&auto=format&fit=crop')] bg-cover bg-center opacity-30 mix-blend-luminosity"></div>
+        <!-- High-Res Real Background Image (Natural color, no greyscale mix-blend-luminosity) -->
+        <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1532012197267-da84d127e765?q=80&w=1200&auto=format&fit=crop')] bg-cover bg-center opacity-35"></div>
         
-        <!-- Gradient overlay so the white text pops perfectly -->
-        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-[#0a0a0a]/20"></div>
+        <!-- Warm ambient glow + gradient overlay so the white text & colorful illustration pop -->
+        <div class="absolute inset-0 bg-gradient-to-t from-[#07090f] via-[#07090f]/70 to-[#07090f]/30"></div>
+        <div class="absolute bottom-10 right-10 w-72 h-72 bg-gold/15 rounded-full blur-3xl pointer-events-none"></div>
         
         <!-- Motivational Quotes & Branding overlay -->
         <div class="relative z-10 w-full max-w-lg">
-            <a href="{{ url_for('user.landing') }}" class="font-display font-bold text-2xl tracking-tight text-white flex items-center gap-2 mb-16 opacity-80">
+            <a href="{{ url_for('user.landing') }}" class="font-display font-bold text-2xl tracking-tight text-white flex items-center gap-2 mb-12 opacity-90">
                 SANGAM <span class="text-gold">STUDY</span>
             </a>
 
-            <p class="text-gold font-bold text-xs tracking-widest uppercase mb-4 border border-gold/20 bg-gold/10 px-3 py-1 rounded-full inline-block">NEET & JEE</p>
-            <h2 class="font-display text-5xl font-bold text-white leading-[1.15] mb-6 shadow-sm">
+            <p class="text-gold font-bold text-xs tracking-widest uppercase mb-4 border border-gold/30 bg-gold/15 px-3 py-1 rounded-full inline-block">NEET &amp; JEE</p>
+            <h2 class="font-display text-5xl font-bold text-white leading-[1.15] mb-5 shadow-sm">
                 Practice Today,<br>Score Tomorrow
             </h2>
-            <p class="text-gray-400 text-lg font-medium mb-16 max-w-sm leading-relaxed">
+            <p class="text-gray-300 text-lg font-medium mb-10 max-w-sm leading-relaxed">
                 Your journey just got better. Access mock tests, chapter-wise practice, and PYQs — all in one place.
             </p>
+
+            <!-- Colorful Static Book, Coffee Cup & Pencil Desk Illustration -->
+            <div class="my-6 p-5 rounded-2xl border border-gold/25 bg-[#111622]/80 backdrop-blur-md shadow-2xl">
+                <svg class="w-full h-36" viewBox="0 0 380 140" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Study Book, Coffee Cup and Pencil">
+                    <!-- Open Book -->
+                    <path d="M24 112 C62 102, 98 106, 122 118 C146 106, 182 102, 220 112 L226 122 C184 112, 148 117, 122 130 C96 117, 60 112, 18 122 Z" fill="#D4A017" fill-opacity="0.45" stroke="#FBBF24" stroke-width="2"/>
+                    <path d="M28 42 C64 32, 98 38, 122 52 L122 118 C98 104, 64 98, 28 108 Z" fill="#FEF3C7" fill-opacity="0.22" stroke="#FDE68A" stroke-width="2"/>
+                    <path d="M216 42 C180 32, 146 38, 122 52 L122 118 C146 104, 180 98, 216 108 Z" fill="#FEF3C7" fill-opacity="0.22" stroke="#FDE68A" stroke-width="2"/>
+                    <line x1="122" y1="52" x2="122" y2="120" stroke="#F59E0B" stroke-width="2.5"/>
+                    <path d="M44 58 C68 52, 92 56, 108 64" stroke="#FBBF24" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M44 72 C68 66, 92 70, 108 78" stroke="#38BDF8" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M44 86 C68 80, 92 84, 108 92" stroke="#FDE68A" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M136 64 C152 56, 176 52, 200 58" stroke="#34D399" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M136 78 C152 70, 176 66, 200 72" stroke="#FDE68A" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M136 92 C152 84, 176 80, 200 86" stroke="#FBBF24" stroke-width="2" stroke-linecap="round"/>
+                    <!-- Golden Pencil -->
+                    <g transform="translate(238, 18) rotate(25)">
+                        <rect x="0" y="0" width="13" height="92" rx="2" fill="#F59E0B" stroke="#FEF08A" stroke-width="1.5"/>
+                        <path d="M0 0 C0 -6, 13 -6, 13 0 Z" fill="#FB7185" stroke="#FECDD3" stroke-width="1.2"/>
+                        <rect x="0" y="0" width="13" height="6" fill="#94A3B8"/>
+                        <polygon points="0,92 13,92 6.5,110" fill="#FDE68A" stroke="#F59E0B" stroke-width="1.2"/>
+                        <polygon points="4,103 9,103 6.5,110" fill="#38BDF8"/>
+                    </g>
+                    <!-- Steaming Coffee Cup -->
+                    <path d="M300 42 C294 30, 308 22, 300 10" stroke="#FDE68A" stroke-width="2.2" stroke-linecap="round"/>
+                    <path d="M318 38 C312 26, 326 18, 318 6" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round"/>
+                    <path d="M336 42 C330 30, 344 22, 336 10" stroke="#38BDF8" stroke-width="2.2" stroke-linecap="round"/>
+                    <path d="M352 62 C372 62, 372 94, 348 96" stroke="#FBBF24" stroke-width="4.5" stroke-linecap="round"/>
+                    <path d="M280 52 L354 52 L346 104 C343 115, 332 120, 317 120 C302 120, 291 115, 288 104 Z" fill="#D97706" fill-opacity="0.55" stroke="#FBBF24" stroke-width="2"/>
+                    <ellipse cx="317" cy="52" rx="37" ry="7.5" fill="#78350F" stroke="#FDE68A" stroke-width="2"/>
+                    <ellipse cx="317" cy="123" rx="50" ry="8" fill="#F59E0B" fill-opacity="0.35" stroke="#FBBF24" stroke-width="2"/>
+                </svg>
+            </div>
             
             <!-- Handwritten aesthetic accent -->
-            <div class="text-gold/60 font-display italic text-2xl -rotate-3 transform ml-8">
-                Better Questions,<br>Bigger Dreams
+            <div class="text-gold font-display italic text-2xl -rotate-2 transform ml-4">
+                Better Questions, Bigger Dreams
             </div>
         </div>
     </div>
@@ -82,7 +116,7 @@
                 </div>
                 
                 <div class="flex justify-end mt-2">
-                    <a href="#" class="text-xs text-gray-500 hover:text-gold transition-colors font-medium">Forgot password?</a>
+                    <a href="{{ support_url }}" target="_blank" rel="noopener" class="text-xs text-gray-400 hover:text-gold transition-colors font-medium">Forgot password? Contact support</a>
                 </div>
 
                 {% if turnstile_site_key %}
@@ -106,7 +140,7 @@
         </div>
         
         <!-- Bottom subtle branding -->
-        <div class="absolute bottom-6 flex items-center justify-center gap-2 text-gray-600 text-xs font-medium">
+        <div class="absolute bottom-6 flex items-center justify-center gap-2 text-gray-500 text-xs font-medium">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
             Built for aspirants, by aspirants.
         </div>
