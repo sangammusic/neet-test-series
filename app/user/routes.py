@@ -20,6 +20,7 @@ from app.shared.models import (
     get_latest_full_mock_attempt, get_latest_mock_reattempt_session,
     get_latest_practice_reattempt_session, _visible_image,
     practice_set_is_premium, PRACTICE_RUNNER_COLUMNS,
+    get_practice_folders_for_chapter, get_practice_sets_for_folder,
 )
 from app.shared.access import user_has_premium
 from app.shared.utils import is_logged_in, current_user_id
@@ -165,41 +166,27 @@ def practice_category(slug, chapter_id, mode):
 
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>")
 def practice_folders(slug, chapter_id, mode, category):
-    """Level 6: Show Folders for the specific category"""
+    """Level 6: Show Folders for the specific category (paginated + legacy-safe)"""
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
-    is_pyq = (mode == "pyq")
-    
-    rows = supabase_public.table("questions").select("folder_name").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).execute().data
-    folders = sorted(list(set([r["folder_name"] for r in rows if r.get("folder_name")])))
-    
-    return render_template("practice_folders.html", stream=stream, chapter=chapter, mode=mode, category=category, folders=folders)
+    folders, folder_stats = get_practice_folders_for_chapter(chapter_id, mode, category)
+    return render_template(
+        "practice_folders.html",
+        stream=stream, chapter=chapter, mode=mode, category=category,
+        folders=folders, folder_stats=folder_stats,
+    )
 
 
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>/<category>/<name:folder>")
 def practice_sets(slug, chapter_id, mode, category, folder):
-    """Level 7: Show Quizzes inside the Folder"""
+    """Level 7: Show Quizzes inside the Folder (paginated + natural-sorted)"""
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
-    is_pyq = (mode == "pyq")
-    
-    rows = supabase_public.table("questions").select("set_name, is_premium").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder).execute().data
-
-    set_dict = {}
-    for r in rows:
-        sn = r["set_name"]
-        if not sn: continue
-        if sn not in set_dict:
-            set_dict[sn] = {"name": sn, "count": 0, "is_premium": False}
-        set_dict[sn]["count"] += 1
-        if r.get("is_premium"):
-            set_dict[sn]["is_premium"] = True
-
-    sets = sorted(list(set_dict.values()), key=lambda x: x["name"])
+    sets = get_practice_sets_for_folder(chapter_id, mode, category, folder)
     return render_template("practice_sets.html", stream=stream, chapter=chapter, mode=mode, category=category, folder=folder, sets=sets)
 
 
@@ -280,9 +267,7 @@ def practice_overview(slug, chapter_id, mode, category, folder, set_name):
         return redirect(url_for("auth.login"))
 
     stream, chapter = _practice_ctx(slug, chapter_id, mode)
-    is_pyq = (mode == "pyq")
-
-    questions = supabase_public.table("questions").select("id, is_premium, marks").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder).eq("set_name", set_name).execute().data
+    questions = get_practice_quiz_questions(chapter_id, mode, category, folder, set_name, columns="id, is_premium, marks")
 
     if not questions:
         abort(404)
