@@ -1,67 +1,101 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ series.name }} — {{ stream.name }}{% endblock %}
 {% block content %}
-<section class="max-w-4xl mx-auto px-5 pt-8 pb-20 relative z-10">
+<section class="max-w-4xl mx-auto px-3.5 sm:px-5 pt-6 pb-16 relative z-10">
   
-  <div class="mb-7 border-b border-white/10 pb-4">
-    <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}" data-back-url="{{ url_for('user.tests_feed', slug=stream.slug) }}" class="text-xs font-bold text-gray-400 hover:text-gold mb-3 inline-flex items-center gap-1.5 transition-colors">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-      </svg>
-      Back to Test Series
-    </a>
-    
-    <div class="flex items-center gap-2 mb-1.5">
-      <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded">{{ stream.name }}</span>
+  <div class="mb-5 border-b border-white/10 pb-3.5 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}" data-back-url="{{ url_for('user.tests_feed', slug=stream.slug) }}" class="btn-cute-soft mb-2">
+        &larr; All Test Series
+      </a>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ stream.name }}</span>
+        {% if series.is_paid %}
+          {% if series.has_access %}
+            <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-400/35 px-2 py-0.5 rounded">✓ Purchased &amp; Unlocked</span>
+          {% else %}
+            <span class="text-[9px] font-black uppercase bg-gold/15 text-gold border border-gold/40 px-2 py-0.5 rounded">🔒 Paid Series · {{ series.price_inr | inr }}</span>
+          {% endif %}
+        {% else %}
+          <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-400/35 px-2 py-0.5 rounded">🟢 Free Series</span>
+        {% endif %}
+        <h1 class="font-display text-lg sm:text-2xl font-bold text-white">{{ series.name }}</h1>
+      </div>
     </div>
-    
-    <h1 class="font-display text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
-      <span class="bg-gold/10 text-gold p-2 rounded-lg border border-gold/25">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/>
-          </svg>
-      </span>
-      <span>{{ series.name }}</span>
-    </h1>
-    <p class="text-gray-400 font-medium text-xs sm:text-sm mt-1">Select a test below to view syllabus details and begin your attempt.</p>
+
+    {% if series.is_paid and not series.has_access %}
+      {% if series.pending_order_id and series.pending_status == 'submitted' %}
+        <a href="{{ url_for('payments.checkout', order_id=series.pending_order_id) }}" class="btn-cute">
+          ⏳ Payment Verification Pending &rarr;
+        </a>
+      {% else %}
+        <a href="{{ url_for('payments.buy_series', series_id=series.id) }}" class="btn-cute">
+          🔒 Purchase {{ series.name }} ({{ series.price_inr | inr }}) &rarr;
+        </a>
+      {% endif %}
+    {% endif %}
   </div>
 
-  <!-- Compact Test Cards -->
-  <div class="grid gap-3.5">
+  <!-- Paid Series Unlock Banner if Locked -->
+  {% if series.is_paid and not series.has_access %}
+  <div class="mb-5 pw-tile p-4 sm:p-5 border-gold/45 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div>
+      <p class="font-display text-sm sm:text-base font-bold text-white">🔒 Unlock All Tests in {{ series.name }}</p>
+      <p class="text-xs text-gray-300 mt-0.5">
+        This is a Paid Test Series ({{ series.price_inr | inr }}). Purchase once via UPI QR and get instant access after Admin approval on Telegram.
+      </p>
+    </div>
+    {% if series.pending_order_id and series.pending_status == 'submitted' %}
+      <a href="{{ url_for('payments.checkout', order_id=series.pending_order_id) }}" class="btn-cute shrink-0">
+        ⏳ Check Approval Status
+      </a>
+    {% else %}
+      <a href="{{ url_for('payments.buy_series', series_id=series.id) }}" class="btn-cute shrink-0">
+        Purchase Now · {{ series.price_inr | inr }} &rarr;
+      </a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Compact PW-Style Test Cards (2 cols on mobile/tablet/desktop) -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
     {% for t in tests %}
-    <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}"
-       class="flex items-center justify-between gap-4 p-4 sm:p-5 border border-white/10 rounded-xl hover:border-gold/45 transition-all bg-[#12141d]/90 backdrop-blur-xl group">
-      <div class="min-w-0">
-        <p class="font-display text-base sm:text-lg font-bold text-white group-hover:text-gold transition-colors truncate">{{ t.title }}</p>
+    <div class="pw-tile p-3.5 sm:p-4 flex items-center justify-between gap-3 group">
+      <div class="min-w-0 flex-1">
+        <p class="font-display text-sm sm:text-base font-bold text-white group-hover:text-gold transition-colors truncate">{{ t.title }}</p>
         {% if t.description %}
-        <p class="text-xs text-gray-400 mt-1 font-medium line-clamp-1">{{ t.description }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5 font-medium line-clamp-1">{{ t.description }}</p>
         {% endif %}
-        <div class="flex flex-wrap items-center gap-2 mt-2.5">
-          <span class="text-[11px] font-semibold text-gray-300 bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">
+        <div class="flex flex-wrap items-center gap-1.5 mt-2">
+          <span class="text-[10px] font-semibold text-gray-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
             ⏱ {{ t.duration_minutes }} min
           </span>
-          <span class="text-[11px] font-semibold text-gray-300 bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">
+          <span class="text-[10px] font-semibold text-gray-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
             🎯 {{ t.total_marks or '720' }} marks
           </span>
         </div>
       </div>
       
-      <div class="flex items-center gap-3 shrink-0">
-          {% if t.is_premium %}
-              <span class="text-[10px] bg-gold/15 text-gold border border-gold/35 font-extrabold tracking-wider uppercase rounded px-2.5 py-1">Premium</span>
-          {% else %}
-              <span class="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 font-extrabold tracking-wider uppercase rounded px-2.5 py-1">Free</span>
-          {% endif %}
-          <span class="text-gray-500 group-hover:text-gold font-bold text-sm">&rarr;</span>
+      <div class="shrink-0">
+        {% if series.is_paid and not series.has_access %}
+          <a href="{{ url_for('payments.buy_series', series_id=series.id) }}" class="btn-cute !py-1.5 !px-3 !text-[11px]">
+            <span>🔒 Unlock ({{ series.price_inr | inr }})</span>
+          </a>
+        {% else %}
+          <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}" data-replace-link class="btn-cute !py-1.5 !px-3 !text-[11px]">
+            <span>Attempt</span>
+            <span>&rsaquo;</span>
+          </a>
+        {% endif %}
       </div>
-    </a>
+    </div>
     {% else %}
-    <div class="text-center p-10 bg-[#12141d]/90 rounded-xl border border-dashed border-white/15 backdrop-blur-md">
-        <p class="text-white font-bold text-base mb-1">No Mock Tests Uploaded Yet</p>
+    <div class="col-span-full text-center p-8 pw-tile rounded-xl">
+        <p class="text-white font-bold text-sm mb-1">No Mock Tests Uploaded Yet</p>
         <p class="text-gray-400 text-xs font-medium">Tests for this series will appear here soon.</p>
     </div>
     {% endfor %}
   </div>
 </section>
 {% endblock %}
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
+<!-- STUDY SANGAM HUB v3.0 -->

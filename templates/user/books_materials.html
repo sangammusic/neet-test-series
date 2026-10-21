@@ -1,107 +1,47 @@
 {% extends "shared/base.html" %}
-{% block title %}Books & Premium Material — {{ stream.name }}{% endblock %}
+{% block title %}Books &amp; Premium Material — {{ stream.name }}{% endblock %}
 {% block content %}
-<section class="max-w-4xl mx-auto px-5 pt-8 pb-20 relative z-10" x-data="{ selectedItem: null }">
+<section class="max-w-xl mx-auto px-4 pt-8 pb-20 relative z-10">
 
-  <!-- Compact Top Header -->
-  <div class="mb-7 border-b border-white/10 pb-4 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <a href="{{ url_for('user.stream_dashboard', slug=stream.slug) }}"
-         data-back-url="{{ url_for('user.stream_dashboard', slug=stream.slug) }}"
-         class="text-xs font-bold text-gray-400 hover:text-gold mb-2 inline-flex items-center gap-1.5 transition-colors">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-        </svg>
-        Back to Workspace
-      </a>
-      <div class="flex items-center gap-2.5">
-        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded">{{ stream.name }}</span>
-        <h1 class="font-display text-2xl font-bold text-white tracking-tight">Books &amp; Premium Material</h1>
-      </div>
-    </div>
+  <!-- Compact Header with Parallel Back Button -->
+  <div class="mb-5 flex items-center justify-between gap-3">
+    <a href="{{ url_for('user.stream_dashboard', slug=stream.slug) }}"
+       data-back-url="{{ url_for('user.stream_dashboard', slug=stream.slug) }}"
+       class="btn-cute-soft">
+      &larr; Back to Workspace
+    </a>
+    <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded">
+      {{ stream.name }}
+    </span>
   </div>
 
-  <!-- 3 Compact Resource Shelves (Clicking any item opens the Telegram Channel Vault) -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <!-- Single Clean Telegram Channel Card for Premium Books & Material (3 redundant cards completely removed) -->
+  <div class="pw-tile p-6 sm:p-8 text-center rounded-2xl relative overflow-hidden">
+    <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-44 h-44 bg-[#229ED9]/15 rounded-full blur-3xl pointer-events-none"></div>
 
-    <!-- Shelf 1 -->
-    <button type="button" @click="selectedItem = 'NCERT & Standard Reference Books'"
-            class="text-left bg-[#12141d]/90 border border-white/10 hover:border-gold/45 rounded-xl p-5 backdrop-blur-xl transition-all group flex flex-col justify-between shadow-lg">
-      <div>
-        <div class="w-9 h-9 rounded-lg bg-gold/10 border border-gold/25 text-gold flex items-center justify-center mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-          </svg>
-        </div>
-        <h2 class="font-display text-base font-bold text-white mb-1 group-hover:text-gold transition-colors">Reference Books &amp; NCERT</h2>
-        <p class="text-xs text-gray-400 leading-relaxed mb-3">Highlighted NCERT PDFs, exemplar banks, and standard {{ stream.name }} reference books.</p>
-      </div>
-      <span class="text-xs font-bold text-gold inline-flex items-center gap-1">Access Books &rarr;</span>
-    </button>
-
-    <!-- Shelf 2 -->
-    <button type="button" @click="selectedItem = 'Short Notes & Formula Handbooks'"
-            class="text-left bg-[#12141d]/90 border border-white/10 hover:border-gold/45 rounded-xl p-5 backdrop-blur-xl transition-all group flex flex-col justify-between shadow-lg">
-      <div>
-        <div class="w-9 h-9 rounded-lg bg-emerald-400/10 border border-emerald-400/25 text-emerald-300 flex items-center justify-center mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        </div>
-        <h2 class="font-display text-base font-bold text-white mb-1 group-hover:text-emerald-300 transition-colors">Short Notes &amp; Mindmaps</h2>
-        <p class="text-xs text-gray-400 leading-relaxed mb-3">One-page revision sheets, reaction charts, and chapter-wise formula handbooks.</p>
-      </div>
-      <span class="text-xs font-bold text-emerald-300 inline-flex items-center gap-1">Access Notes &rarr;</span>
-    </button>
-
-    <!-- Shelf 3 -->
-    <button type="button" @click="selectedItem = 'Premium Modules & Ranker DPPs'"
-            class="text-left bg-[#12141d]/90 border border-white/10 hover:border-gold/45 rounded-xl p-5 backdrop-blur-xl transition-all group flex flex-col justify-between shadow-lg">
-      <div>
-        <div class="w-9 h-9 rounded-lg bg-amber-400/10 border border-amber-400/25 text-amber-300 flex items-center justify-center mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-          </svg>
-        </div>
-        <h2 class="font-display text-base font-bold text-white mb-1 group-hover:text-amber-300 transition-colors">Premium Study Modules</h2>
-        <p class="text-xs text-gray-400 leading-relaxed mb-3">High-yield coaching modules, daily practice papers (DPPs), and ranker booklets.</p>
-      </div>
-      <span class="text-xs font-bold text-amber-300 inline-flex items-center gap-1">Access Modules &rarr;</span>
-    </button>
-
-  </div>
-
-  <!-- Official Telegram Channel Card (Shown directly + highlighted when a shelf is clicked) -->
-  <div class="bg-[#12151f]/95 border rounded-xl p-5 sm:p-6 backdrop-blur-xl shadow-xl transition-all"
-       :class="selectedItem ? 'border-[#229ED9] ring-1 ring-[#229ED9]/40' : 'border-[#229ED9]/30'">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div class="flex items-start gap-3.5">
-        <div class="w-10 h-10 rounded-xl bg-[#229ED9]/15 border border-[#229ED9]/30 flex items-center justify-center text-[#229ED9] shrink-0 mt-0.5">
-          <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
-            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16c-.169 1.858-.896 6.728-.896 6.728-.041.24-.145.483-.361.62-.216.135-.481.129-.702.03l-3.128-1.516-1.51 1.454c-.155.153-.353.199-.548.126l.373-3.31 6.004-5.446c.263-.235-.058-.366-.4-.135l-7.435 4.687-3.2-1.02c-.696-.222-.71-.696.146-1.03l12.494-4.822c.58-.216 1.088.14.9 1.041z"/>
-          </svg>
-        </div>
-        <div>
-          <p x-show="selectedItem" x-cloak class="text-[11px] font-bold text-gold uppercase tracking-wider mb-1">
-            Selected: <span x-text="selectedItem"></span>
-          </p>
-          <h3 class="font-display text-lg font-bold text-white">Join Our Telegram Channel</h3>
-          <p class="text-xs text-gray-400 mt-1 leading-relaxed max-w-lg">
-            All {{ stream.name }} books, handwritten short notes, PDFs, and premium study materials are uploaded and updated daily on our official Telegram channel.
-          </p>
-        </div>
-      </div>
-
-      <a href="https://t.me/neetjeesangam" target="_blank" rel="noopener noreferrer"
-         class="shrink-0 inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-bold text-white bg-[#229ED9] hover:bg-[#1e8ec4] px-5 py-3 rounded-xl shadow-[0_4px_16px_rgba(34,158,217,0.3)] transition-all">
-        <span>Join Our Telegram Channel</span>
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-        </svg>
-      </a>
+    <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[#229ED9]/15 border border-[#229ED9]/35 flex items-center justify-center text-[#229ED9] shadow-md relative z-10">
+      <svg viewBox="0 0 24 24" fill="currentColor" class="w-7 h-7">
+        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16c-.169 1.858-.896 6.728-.896 6.728-.041.24-.145.483-.361.62-.216.135-.481.129-.702.03l-3.128-1.516-1.51 1.454c-.155.153-.353.199-.548.126l.373-3.31 6.004-5.446c.263-.235-.058-.366-.4-.135l-7.435 4.687-3.2-1.02c-.696-.222-.71-.696.146-1.03l12.494-4.822c.58-.216 1.088.14.9 1.041z"/>
+      </svg>
     </div>
+
+    <h1 class="font-display text-xl sm:text-2xl font-bold text-white mb-2 relative z-10">
+      Join Our Telegram Channel for Premium Books &amp; Material
+    </h1>
+
+    <p class="text-xs sm:text-sm text-gray-300 max-w-md mx-auto leading-relaxed mb-6 relative z-10">
+      All {{ stream.name }} reference books, highlighted NCERT PDFs, short notes, mindmaps, and study modules are uploaded directly on our official Telegram channel.
+    </p>
+
+    <a href="https://t.me/neetjeesangam" target="_blank" rel="noopener noreferrer"
+       class="btn-cute !px-6 !py-2.5 !text-xs sm:!text-sm relative z-10">
+      <span>Join Our Telegram Channel</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.3">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+      </svg>
+    </a>
   </div>
 
 </section>
 {% endblock %}
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
+<!-- STUDY SANGAM HUB v3.0 -->

@@ -1,172 +1,193 @@
 {% extends "shared/base.html" %}
-{% block title %}{{ stream.name }} Workspace — SANGAM STUDY{% endblock %}
+{% block title %}{{ stream.name }} Workspace — STUDY SANGAM HUB{% endblock %}
 {% block content %}
 {% set ps = premium_status() %}
-<section class="max-w-5xl mx-auto px-5 pt-8 pb-20 relative z-10">
+<section class="max-w-4xl mx-auto px-3 sm:px-5 pt-5 sm:pt-7 pb-16 relative z-10">
 
-  <!-- Compact Handcrafted Workspace Header (No stretched full-width banners) -->
-  <div class="flex flex-wrap items-center justify-between gap-3 mb-7 border-b border-white/10 pb-4">
-    <div class="flex items-center gap-2.5">
-        <span class="text-[11px] font-extrabold tracking-widest uppercase text-gold border border-gold/35 bg-gold/10 px-2.5 py-1 rounded-md">{{ stream.name }}</span>
-        <span class="text-white/20">|</span>
-        <h1 class="font-display text-xl sm:text-2xl font-bold text-white tracking-tight">Your Workspace</h1>
-    </div>
-
-    <!-- Right Controls: Admin Access Tab + Switch Stream -->
-    <div class="flex flex-wrap items-center gap-2.5">
-      {% if ps.is_admin %}
-      <!-- Direct 1-Click Admin Dashboard Pill -->
-      <a href="{{ url_for('admin.dashboard') }}"
-         class="inline-flex items-center gap-1.5 text-xs font-bold text-ink bg-gold hover:bg-gold-light px-3.5 py-2 rounded-lg transition-all shadow-[0_2px_12px_rgba(212,160,23,0.25)]">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-        </svg>
-        Admin Dashboard
+  <!-- Compact PW-Style Batch / Stream Header Bar -->
+  <div class="pw-tile px-3.5 sm:px-5 py-3 mb-4 flex flex-wrap items-center justify-between gap-2">
+    <div class="flex items-center gap-2 min-w-0">
+      <a href="{{ url_for('user.start_learning', welcome='1') }}"
+         data-back-url="{{ url_for('user.start_learning', welcome='1') }}"
+         title="Back to Welcome Screen"
+         class="btn-cute-soft !px-2 !py-1 !text-[11px]">
+        &larr;
       </a>
-
-      <!-- Compact Admin Access Tab Dropdown -->
-      <div x-data="{ adminTab: false }" class="relative z-40">
-        <button type="button" @click="adminTab = !adminTab" @click.outside="adminTab = false"
-                class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-400/30 px-3 py-2 rounded-lg transition-all focus:outline-none">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-          Admin Access
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 transition-transform duration-200" :class="adminTab ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-
-        <div x-show="adminTab" x-cloak x-transition.opacity.duration.150ms
-             class="absolute right-0 mt-2 w-64 bg-[#12151f] border border-white/15 rounded-xl shadow-2xl overflow-hidden origin-top-right backdrop-blur-xl p-1.5">
-          <div class="px-3 py-1.5 mb-1 border-b border-white/5">
-            <p class="text-[10px] font-black uppercase tracking-widest text-emerald-400">Quick Admin Actions</p>
-          </div>
-          <a href="{{ url_for('admin.dashboard') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-white hover:bg-white/5 transition-colors">
-            <span>🛠️ Full Admin Dashboard</span>
-            <span class="text-[10px] text-gray-400">&rarr;</span>
-          </a>
-          <a href="{{ url_for('admin.questions_list') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-200 hover:bg-white/5 hover:text-gold transition-colors">
-            <span>➕ Add Chapter Quiz / Material</span>
-            <span class="text-[10px] text-gray-400">MCQs</span>
-          </a>
-          <a href="{{ url_for('admin.test_series_list') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-200 hover:bg-white/5 hover:text-gold transition-colors">
-            <span>📦 Add / Manage Mock Tests</span>
-            <span class="text-[10px] text-gray-400">Series</span>
-          </a>
-          <a href="{{ url_for('admin.payments_panel') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-emerald-300 hover:bg-white/5 transition-colors">
-            <span>✅ Payment Approvals</span>
-            <span class="text-[10px] text-gray-400">Orders</span>
-          </a>
-          <a href="{{ url_for('payments.plans') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gold hover:bg-white/5 transition-colors">
-            <span>💎 Season Pass &amp; QR Page</span>
-            <span class="text-[10px] text-gray-400">Preview</span>
-          </a>
+      <img src="{{ url_for('static', filename='img/logo-mark.png') }}" alt="" class="w-6 h-6 rounded object-contain shrink-0">
+      <div class="min-w-0">
+        <p class="text-[9px] font-black uppercase tracking-widest text-gold leading-none">YOUR BATCH</p>
+        <div class="flex items-center gap-1.5 mt-0.5">
+          <h1 class="font-display text-sm sm:text-lg font-bold text-white tracking-tight truncate">
+            {{ stream.name }} 2026–27
+          </h1>
+          <span class="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-500/15 border border-emerald-400/30 px-1.5 py-0.5 rounded">Active</span>
         </div>
       </div>
-      {% elif ps.active %}
-      <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-400/25 px-3 py-1.5 rounded-lg">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-        {{ ps.plan_name or 'Season Pass' }} Active
-      </span>
-      {% elif ps.offer_name %}
-      <a href="{{ url_for('payments.plans') }}"
-         class="inline-flex items-center gap-1.5 text-xs font-bold text-gold bg-gold/10 hover:bg-gold/20 border border-gold/30 px-3 py-2 rounded-lg transition-colors">
-        💎 {{ ps.offer_name }} ({{ ps.offer_price | inr }})
+    </div>
+
+    <!-- Cute Compact Top Action Pills -->
+    <div class="flex items-center gap-1.5 shrink-0">
+      {% if ps.is_admin %}
+      <a href="{{ url_for('admin.dashboard') }}" data-replace-link class="btn-cute !py-1.5 !px-2.5 !text-[11px]">
+        <span>🛠️ Admin</span>
       </a>
       {% endif %}
-
-      <a href="{{ url_for('user.switch_stream') }}"
-         class="group inline-flex items-center gap-1.5 text-xs font-semibold text-gray-300 hover:text-white transition-colors bg-white/5 border border-white/10 hover:border-white/25 px-3.5 py-2 rounded-lg backdrop-blur-sm">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-gold group-hover:rotate-180 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-        </svg>
-        Switch Stream
+      <a href="{{ url_for('user.switch_stream') }}" class="btn-cute-soft !py-1.5 !px-2.5 !text-[11px]">
+        <span>🔄 Stream</span>
       </a>
     </div>
   </div>
 
-  <!-- 3 Compact, Handcrafted Study Modules (Proportional & Low-Profile) -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  <!-- =========================================================================
+       THE 3 MAIN TABS — STRICTLY 3-IN-A-ROW ON MOBILE, TABLET & DESKTOP
+       Physics Wallah (PW) Style Compact, Cute Tiles Matching Coffee Background
+       ========================================================================= -->
+  <div class="mb-2 flex items-center justify-between px-0.5">
+    <h2 class="font-display text-xs sm:text-sm font-bold text-white uppercase tracking-wider">Study Modules</h2>
+    <span class="text-[10px] font-semibold text-gray-400">{{ stream.name }} Hub</span>
+  </div>
 
-    <!-- Module 1: Chapter-wise Practice -->
-    <div class="bg-[#12141d]/90 border border-white/10 hover:border-gold/40 rounded-xl p-5 backdrop-blur-xl transition-all duration-200 group flex flex-col justify-between shadow-lg">
+  <div class="grid grid-cols-3 gap-2 sm:gap-3.5 mb-5">
+
+    <!-- TAB 1: Chapter-wise Practice -->
+    <a href="{{ url_for('user.practice_subjects', slug=stream.slug) }}"
+       class="pw-tile p-2.5 sm:p-4 flex flex-col justify-between group relative overflow-hidden">
       <div>
-        <div class="flex items-center justify-between mb-3.5">
-          <div class="w-9 h-9 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center text-gold group-hover:bg-gold/15 group-hover:border-gold/30 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <div class="flex items-center justify-between gap-1 mb-2">
+          <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-gold/15 border border-gold/35 flex items-center justify-center text-gold shrink-0 group-hover:scale-105 transition-transform">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-white/[0.04] border border-white/10 px-2 py-0.5 rounded">MCQs &amp; PYQs</span>
+          <span class="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-gold bg-gold/10 border border-gold/25 px-1.5 py-0.5 rounded hidden xs:inline-block">MCQs</span>
         </div>
-        <h2 class="font-display text-lg font-bold text-white mb-1.5 group-hover:text-gold transition-colors">Chapter-wise Practice</h2>
-        <p class="text-xs text-gray-400 leading-relaxed mb-4">Topic-wise mastery drills, complete chapter arenas, and authentic past-exam PYQ archives.</p>
+
+        <h3 class="font-display text-xs sm:text-base font-bold text-white leading-snug group-hover:text-gold transition-colors line-clamp-2">
+          Chapter Practice
+        </h3>
+        <p class="hidden sm:block text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">
+          Topic drills, chapter arenas &amp; past PYQs.
+        </p>
       </div>
 
-      <div class="pt-3 border-t border-white/5">
-        <a href="{{ url_for('user.practice_subjects', slug=stream.slug) }}"
-           class="flex items-center justify-between text-xs font-bold text-white bg-white/[0.06] hover:bg-gold hover:text-ink border border-white/10 hover:border-gold px-3.5 py-2.5 rounded-lg transition-all">
-          <span>Start Practice</span>
-          <span>&rarr;</span>
-        </a>
+      <div class="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between">
+        <span class="btn-cute !w-full !py-1 sm:!py-1.5 !px-2 !text-[10px] sm:!text-xs">
+          <span>Practice</span>
+          <span>&rsaquo;</span>
+        </span>
       </div>
-    </div>
+    </a>
 
-    <!-- Module 2: Mock Test Series -->
-    <div class="bg-[#12141d]/90 border border-gold/25 hover:border-gold/50 rounded-xl p-5 backdrop-blur-xl transition-all duration-200 group flex flex-col justify-between shadow-lg relative overflow-hidden">
-      <div class="absolute -top-10 -right-10 w-24 h-24 bg-gold/10 rounded-full blur-2xl pointer-events-none"></div>
-
-      <div class="relative z-10">
-        <div class="flex items-center justify-between mb-3.5">
-          <div class="w-9 h-9 bg-gold/10 border border-gold/25 rounded-lg flex items-center justify-center text-gold">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+    <!-- TAB 2: Mock Test Series -->
+    <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}"
+       class="pw-tile p-2.5 sm:p-4 flex flex-col justify-between group relative overflow-hidden">
+      <div>
+        <div class="flex items-center justify-between gap-1 mb-2">
+          <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-emerald-400/15 border border-emerald-400/35 flex items-center justify-center text-emerald-300 shrink-0 group-hover:scale-105 transition-transform">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <span class="text-[10px] font-bold uppercase tracking-wider text-gold bg-gold/10 border border-gold/25 px-2 py-0.5 rounded">NTA Pattern</span>
+          <span class="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-500/10 border border-emerald-400/25 px-1.5 py-0.5 rounded hidden xs:inline-block">NTA</span>
         </div>
-        <h2 class="font-display text-lg font-bold text-white mb-1.5 group-hover:text-gold transition-colors">Mock Test Series</h2>
-        <p class="text-xs text-gray-400 leading-relaxed mb-4">Full-length &amp; part-syllabus timed mock tests with accuracy, speed, and mistake-note analytics.</p>
+
+        <h3 class="font-display text-xs sm:text-base font-bold text-white leading-snug group-hover:text-gold transition-colors line-clamp-2">
+          Mock Test Series
+        </h3>
+        <p class="hidden sm:block text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">
+          Full &amp; part-syllabus timed test series.
+        </p>
       </div>
 
-      <div class="pt-3 border-t border-white/5 flex items-center gap-2 relative z-10">
-        <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}"
-           class="flex-1 text-center text-xs font-bold text-ink bg-gold hover:bg-gold-light px-3 py-2.5 rounded-lg transition-colors shadow-sm">
-          Take Tests
-        </a>
-        <a href="{{ url_for('user.profile') }}"
-           class="text-center text-xs font-semibold text-gray-300 hover:text-gold bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2.5 rounded-lg transition-colors">
-          My Attempts
-        </a>
+      <div class="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between">
+        <span class="btn-cute !w-full !py-1 sm:!py-1.5 !px-2 !text-[10px] sm:!text-xs">
+          <span>All Tests</span>
+          <span>&rsaquo;</span>
+        </span>
       </div>
-    </div>
+    </a>
 
-    <!-- Module 3: Books & Premium Material (Opens Library Page -> Join Our Telegram Channel) -->
-    <div class="bg-[#12141d]/90 border border-white/10 hover:border-amber-400/40 rounded-xl p-5 backdrop-blur-xl transition-all duration-200 group flex flex-col justify-between shadow-lg relative overflow-hidden">
-      <div class="absolute -bottom-10 -right-10 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
-
-      <div class="relative z-10">
-        <div class="flex items-center justify-between mb-3.5">
-          <div class="w-9 h-9 bg-amber-400/10 border border-amber-400/25 rounded-lg flex items-center justify-center text-amber-300 group-hover:scale-105 transition-transform">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+    <!-- TAB 3: Books & Premium Material -->
+    <a href="{{ url_for('user.books_materials', slug=stream.slug) }}"
+       class="pw-tile p-2.5 sm:p-4 flex flex-col justify-between group relative overflow-hidden">
+      <div>
+        <div class="flex items-center justify-between gap-1 mb-2">
+          <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-amber-400/15 border border-amber-400/35 flex items-center justify-center text-amber-300 shrink-0 group-hover:scale-105 transition-transform">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
           </div>
-          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-300 bg-amber-400/10 border border-amber-400/25 px-2 py-0.5 rounded">Digital Library</span>
+          <span class="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-amber-300 bg-amber-400/10 border border-amber-400/25 px-1.5 py-0.5 rounded hidden xs:inline-block">PDFs</span>
         </div>
-        <h2 class="font-display text-lg font-bold text-white mb-1.5 group-hover:text-amber-300 transition-colors">Books &amp; Premium Material</h2>
-        <p class="text-xs text-gray-400 leading-relaxed mb-4">Curated reference books, NCERT markups, rapid revision short notes, and formula sheets.</p>
+
+        <h3 class="font-display text-xs sm:text-base font-bold text-white leading-snug group-hover:text-gold transition-colors line-clamp-2">
+          Books &amp; Material
+        </h3>
+        <p class="hidden sm:block text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">
+          Telegram channel for premium books &amp; notes.
+        </p>
       </div>
 
-      <div class="pt-3 border-t border-white/5 relative z-10">
-        <a href="{{ url_for('user.books_materials', slug=stream.slug) }}"
-           class="flex items-center justify-between text-xs font-bold text-amber-200 bg-amber-400/10 hover:bg-gold hover:text-ink border border-amber-400/25 hover:border-gold px-3.5 py-2.5 rounded-lg transition-all">
-          <span>Open Library</span>
-          <span>&rarr;</span>
-        </a>
+      <div class="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between">
+        <span class="btn-cute !w-full !py-1 sm:!py-1.5 !px-2 !text-[10px] sm:!text-xs">
+          <span>Library</span>
+          <span>&rsaquo;</span>
+        </span>
       </div>
-    </div>
+    </a>
 
   </div>
+
+  <!-- =========================================================================
+       MY STUDY ZONE (Physics Wallah-Style Compact Quick Row — 3-in-a-row)
+       ========================================================================= -->
+  <div class="mb-2 flex items-center justify-between px-0.5">
+    <h2 class="font-display text-xs sm:text-sm font-bold text-white uppercase tracking-wider">My Study Zone</h2>
+  </div>
+
+  <div class="grid grid-cols-3 gap-2 sm:gap-3.5">
+    <a href="{{ url_for('user.profile') }}"
+       class="pw-tile p-2.5 sm:p-3.5 flex items-center justify-between gap-2 group">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gold text-xs shrink-0">📊</span>
+        <div class="min-w-0">
+          <p class="text-[11px] sm:text-xs font-bold text-white group-hover:text-gold transition-colors truncate">My Attempts</p>
+          <p class="text-[9px] sm:text-[10px] text-gray-400 truncate hidden sm:block">Scores &amp; History</p>
+        </div>
+      </div>
+      <span class="text-gold font-bold text-xs shrink-0">&rsaquo;</span>
+    </a>
+
+    <a href="{{ url_for('payments.history') }}"
+       class="pw-tile p-2.5 sm:p-3.5 flex items-center justify-between gap-2 group">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gold text-xs shrink-0">🛍️</span>
+        <div class="min-w-0">
+          <p class="text-[11px] sm:text-xs font-bold text-white group-hover:text-gold transition-colors truncate">My Purchases</p>
+          <p class="text-[9px] sm:text-[10px] text-gray-400 truncate hidden sm:block">Unlocked Series</p>
+        </div>
+      </div>
+      <span class="text-gold font-bold text-xs shrink-0">&rsaquo;</span>
+    </a>
+
+    <a href="{{ url_for('user.settings') }}"
+       class="pw-tile p-2.5 sm:p-3.5 flex items-center justify-between gap-2 group">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gold text-xs shrink-0">⚙️</span>
+        <div class="min-w-0">
+          <p class="text-[11px] sm:text-xs font-bold text-white group-hover:text-gold transition-colors truncate">Settings</p>
+          <p class="text-[9px] sm:text-[10px] text-gray-400 truncate hidden sm:block">Account &amp; Profile</p>
+        </div>
+      </div>
+      <span class="text-gold font-bold text-xs shrink-0">&rsaquo;</span>
+    </a>
+  </div>
+
 </section>
+<script>
+  if (window.sangamInstallBackTrap) {
+    window.sangamInstallBackTrap({{ url_for('user.start_learning', welcome='1') | tojson }});
+  }
+</script>
 {% endblock %}
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
+<!-- STUDY SANGAM HUB v3.0 -->

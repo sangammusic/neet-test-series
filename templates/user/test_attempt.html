@@ -96,9 +96,14 @@
       </template>
     </div>
 
+    <div class="theme-toggle-pill shrink-0" role="group" aria-label="Color theme">
+      <button type="button" data-theme-btn="dark" onclick="window.setSangamTheme('dark')" class="theme-toggle-btn active">🌙</button>
+      <button type="button" data-theme-btn="light" onclick="window.setSangamTheme('light')" class="theme-toggle-btn">☀️</button>
+    </div>
+
     <template x-if="!isReviewMode">
       <button @click="openSubmitConfirm()"
-        class="shrink-0 py-1.5 px-4 md:px-6 rounded-md text-xs md:text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-sm">
+        class="shrink-0 btn-cute !py-1.5 !px-3.5 !text-xs">
         Submit Test
       </button>
     </template>

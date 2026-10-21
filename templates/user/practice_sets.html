@@ -1,61 +1,48 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ folder }} — {{ chapter.name }}{% endblock %}
 {% block content %}
-<section class="max-w-4xl mx-auto px-5 pt-8 pb-20 relative z-10">
+<section class="max-w-4xl mx-auto px-3.5 sm:px-5 pt-6 pb-16 relative z-10">
 
-  <!-- Header & Breadcrumbs -->
-  <div class="mb-7 border-b border-white/10 pb-4">
-    <a href="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category) }}" data-back-url="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category) }}" class="text-xs font-bold text-gray-400 hover:text-gold mb-3 inline-flex items-center gap-1.5 transition-colors">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-      </svg>
-      Back to Folders
+  <div class="mb-5 border-b border-white/10 pb-3.5">
+    <a href="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category) }}" data-back-url="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category) }}" class="btn-cute-soft mb-2">
+      &larr; Folders
     </a>
     
-    <div class="flex flex-wrap items-center gap-2 mb-2">
-        <span class="text-[10px] font-black tracking-widest uppercase text-white border border-white/15 bg-white/5 px-2.5 py-0.5 rounded">{{ chapter.name }}</span>
-        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded">{{ 'PYQ Archive' if mode == 'pyq' else 'Concept MCQs' }}</span>
-        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded">{{ 'Topic Mastery' if category == 'topic' else 'Chapter Arena' }}</span>
+    <div class="flex flex-wrap items-center gap-1.5 mb-1">
+      <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ chapter.name }}</span>
+      <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ folder }}</span>
     </div>
-    
-    <h1 class="font-display text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-        <span class="bg-gold/10 border border-gold/25 text-gold p-2 rounded-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/>
-            </svg>
-        </span>
-        <span>{{ folder }}</span>
-    </h1>
+    <h1 class="font-display text-lg sm:text-2xl font-bold text-white tracking-tight">Select Practice Quiz</h1>
   </div>
 
-  <!-- Compact Practice Sets Grid -->
-  <div class="grid sm:grid-cols-2 gap-3.5">
+  <!-- Compact Practice Sets Grid (2 cols on mobile, 3 on tablet/desktop) -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3.5">
     {% for s in sets %}
     <a href="{{ url_for('user.practice_overview', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=s.name) }}"
-       class="flex items-center justify-between gap-3.5 p-4 border border-white/10 rounded-xl hover:border-gold/45 transition-all bg-[#12141d]/90 backdrop-blur-md group">
+       data-replace-link
+       class="pw-tile p-3 sm:p-4 flex flex-col justify-between gap-2.5 group">
       <div class="min-w-0">
-        <p class="font-display text-base sm:text-lg font-bold text-white group-hover:text-gold transition-colors truncate">{{ s.name }}</p>
-        <p class="text-xs font-medium text-gray-400 mt-1 flex items-center gap-1.5">
-            <span>{{ s.count }} Question{{ 's' if s.count != 1 else '' }}</span>
+        <p class="font-display text-xs sm:text-base font-bold text-white group-hover:text-gold transition-colors truncate">{{ s.name }}</p>
+        <p class="text-[10px] sm:text-xs font-medium text-gray-400 mt-0.5">
+          {{ s.count }} Question{{ 's' if s.count != 1 else '' }}
         </p>
       </div>
       
-      <div class="flex items-center gap-2.5 shrink-0">
-          {% if s.is_premium %}
-              <span class="text-[10px] bg-gold/15 text-gold border border-gold/35 font-extrabold tracking-wider uppercase rounded px-2 py-0.5">Premium</span>
-          {% else %}
-              <span class="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 font-extrabold tracking-wider uppercase rounded px-2 py-0.5">Free</span>
-          {% endif %}
-          <span class="text-gray-500 group-hover:text-gold transition-colors text-sm">&rarr;</span>
+      <div class="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
+        <span class="text-[9px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-extrabold uppercase rounded px-1.5 py-0.5">Practice</span>
+        <span class="btn-cute !py-1 !px-2.5 !text-[10px]">
+          <span>Start</span>
+          <span>&rsaquo;</span>
+        </span>
       </div>
     </a>
     {% else %}
-    <div class="col-span-full text-center p-10 bg-[#12141d]/90 rounded-xl border border-dashed border-white/15 backdrop-blur-md">
-        <p class="text-white font-bold text-base mb-1">No Practice Sets Here</p>
+    <div class="col-span-full text-center p-8 pw-tile rounded-xl">
+        <p class="text-white font-bold text-sm mb-1">No Practice Sets Here</p>
         <p class="text-gray-400 text-xs font-medium">Practice sets will appear here once added.</p>
     </div>
     {% endfor %}
   </div>
 </section>
 {% endblock %}
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
+<!-- STUDY SANGAM HUB v3.0 -->

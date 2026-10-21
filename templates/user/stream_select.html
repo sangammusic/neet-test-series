@@ -1,72 +1,70 @@
 {% extends "shared/base.html" %}
-{% block title %}Switch Stream — SANGAM STUDY{% endblock %}
+{% block title %}Select Stream — STUDY SANGAM HUB{% endblock %}
 
 {% block content %}
-<section class="max-w-3xl mx-auto px-5 pt-10 pb-20 relative z-10">
-    <div class="mb-7">
-        <span class="text-gold font-extrabold text-[10px] tracking-widest uppercase border border-gold/30 bg-gold/10 px-2.5 py-1 rounded-md inline-block mb-2.5">Academic Stream</span>
-        <h1 class="font-display text-2xl sm:text-3xl font-bold text-white tracking-tight">Choose Your Target Stream</h1>
-        <p class="text-xs sm:text-sm text-gray-400 font-medium mt-1">Select one examination stream to load its dedicated subjects, chapters, and mock test series.</p>
+<section class="max-w-2xl mx-auto px-4 pt-8 pb-16 relative z-10">
+    <div class="mb-5 flex items-center justify-between gap-2">
+        <div>
+            <span class="text-gold font-extrabold text-[10px] tracking-widest uppercase border border-gold/30 bg-gold/10 px-2 py-0.5 rounded inline-block mb-1.5">Academic Stream</span>
+            <h1 class="font-display text-xl sm:text-2xl font-bold text-white tracking-tight">Choose Your Target Stream</h1>
+        </div>
+        <a href="{{ url_for('user.start_learning', welcome='1') }}" data-back-url="{{ url_for('user.start_learning', welcome='1') }}" class="btn-cute-soft">
+            &larr; Welcome
+        </a>
     </div>
 
     {% if error %}
-        <div class="rounded-lg px-4 py-2.5 mb-6 text-xs font-semibold bg-red-500/10 text-red-300 border border-red-500/25 backdrop-blur-md">
+        <div class="rounded-xl px-4 py-2.5 mb-5 text-xs font-semibold bg-red-500/15 text-red-300 border border-red-500/30">
             {{ error }}
         </div>
     {% endif %}
 
     <form method="POST" action="{{ url_for('user.stream_select') }}">
-        <div class="grid sm:grid-cols-2 gap-4 mb-7">
+        <div class="grid grid-cols-2 gap-3 mb-5">
             {% for stream in streams %}
             {% set is_selected = (current_stream_id is defined and current_stream_id == stream.id) or (not current_stream_id and loop.first) %}
-            <label class="stream-card relative flex items-start gap-3.5 p-5 border border-white/10 rounded-xl cursor-pointer hover:border-gold/40 transition-all bg-[#12141d]/90 backdrop-blur-xl group overflow-hidden">
-                <!-- RADIO INPUT: Exclusively selects ONE stream (NEET or JEE), never both at once -->
+            <label class="stream-card pw-tile relative flex flex-col justify-between p-3.5 sm:p-5 cursor-pointer group overflow-hidden">
                 <input type="radio" name="stream_ids" value="{{ stream.id }}" class="peer sr-only" {% if is_selected %}checked{% endif %} required>
                 
-                <div class="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 peer-checked:bg-gold/15 peer-checked:border-gold/50 transition-colors">
-                    {% if stream.icon_url %}
-                        <img src="{{ stream.icon_url }}" alt="" class="w-5 h-5 opacity-80 peer-checked:opacity-100 filter brightness-200">
-                    {% else %}
-                        <span class="font-display font-bold text-base text-gold">{{ stream.name[0] }}</span>
-                    {% endif %}
-                </div>
-                
-                <div class="pr-6">
-                    <div class="flex items-center gap-2">
-                        <p class="font-display font-bold text-white text-base group-hover:text-gold transition-colors">{{ stream.name }}</p>
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
+                <div>
+                    <div class="flex items-center justify-between gap-2 mb-2.5">
+                        <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gold/15 border border-gold/35 flex items-center justify-center shrink-0">
+                            {% if stream.icon_url %}
+                                <img src="{{ stream.icon_url }}" alt="" class="w-5 h-5 object-contain">
+                            {% else %}
+                                <span class="font-display font-bold text-sm sm:text-base text-gold">{{ stream.name[0] }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="radio-dot w-4 h-4 rounded-full border-2 border-white/30 flex items-center justify-center transition-colors">
+                            <span class="w-1.5 h-1.5 rounded-full bg-ink hidden"></span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <p class="font-display font-bold text-white text-sm sm:text-base group-hover:text-gold transition-colors">{{ stream.name }}</p>
+                        <span class="text-[9px] font-bold uppercase tracking-wider text-gold bg-gold/10 border border-gold/25 px-1.5 py-0.5 rounded">
                             {{ 'PCB' if stream.slug == 'neet' else ('PCM' if stream.slug == 'jee' else 'UG') }}
                         </span>
                     </div>
                     {% if stream.description %}
-                        <p class="text-xs text-gray-400 mt-1 font-medium leading-relaxed">{{ stream.description }}</p>
+                        <p class="text-[11px] text-gray-400 mt-1 font-medium leading-snug line-clamp-2">{{ stream.description }}</p>
                     {% endif %}
-                </div>
-
-                <!-- Exclusive Radio Indicator Circle -->
-                <div class="radio-dot absolute top-5 right-5 w-4 h-4 rounded-full border-2 border-white/25 peer-checked:border-gold peer-checked:bg-gold flex items-center justify-center transition-colors">
-                    <span class="w-1.5 h-1.5 rounded-full bg-ink hidden peer-checked:block"></span>
                 </div>
             </label>
             {% endfor %}
         </div>
 
-        <div class="flex items-center gap-3">
-            <button type="submit" class="bg-gold text-ink px-7 py-2.5 rounded-lg text-xs sm:text-sm font-bold hover:bg-gold-light transition-all shadow-[0_4px_14px_0_rgba(212,160,23,0.25)] inline-flex items-center gap-2">
-                <span>Enter Workspace</span>
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-            </button>
-        </div>
+        <button type="submit" class="btn-cute !px-6 !py-2.5 !text-xs sm:!text-sm">
+            <span>Enter Workspace</span>
+            <span>&rarr;</span>
+        </button>
     </form>
 </section>
 
 <style>
     .stream-card:has(input:checked) {
-        border-color: rgba(212, 160, 23, 0.65);
-        background: rgba(212, 160, 23, 0.07);
-        box-shadow: 0 0 22px rgba(212, 160, 23, 0.08);
+        border-color: rgba(212, 160, 23, 0.75) !important;
+        box-shadow: 0 0 18px rgba(212, 160, 23, 0.16);
     }
     .stream-card:has(input:checked) .radio-dot {
         border-color: #D4A017;
@@ -77,4 +75,4 @@
     }
 </style>
 {% endblock %}
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
+<!-- STUDY SANGAM HUB v3.0 -->

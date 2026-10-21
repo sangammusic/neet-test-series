@@ -3,7 +3,6 @@
 {% block nav %}{% endblock %}
 
 {% block extra_head %}
-<!-- SANGAM CORE: x-ray + zombie-proof clock + offscreen prerender cache -->
 <script src="{{ url_for('static', filename='js/sangam-quiz-core.js') }}"></script>
 <style>
   .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -13,14 +12,6 @@
     display: none !important;
   }
 
-  /* ---------------------------------------------------------------
-     BLACK-FLASH FIX
-     Purana code content ko opacity:0.3 + blur kar deta tha — dark
-     theme par yahi "black screen flash" dikhta tha. Ab content kabhi
-     fade nahi hota. Naya question already-typeset inject hota hai,
-     isliye swap instant hai. Slow case me sirf ek patli gold line
-     upar chalti hai, content jagah par hi rehta hai.
-     --------------------------------------------------------------- */
   #practice-runner .q-card {
     position: relative;
     contain: layout paint;
@@ -39,25 +30,9 @@
   }
   @keyframes qsweep { to { transform: translateX(100%); } }
 
-  /* Math ko wrap hone do taki lambi equation layout na tode */
   #practice-runner mjx-container { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
   #practice-runner mjx-container[display="true"] { margin: 0.6em 0; }
 
-  /* ---------------------------------------------------------------
-     DIAGRAM FIX (white-square bug)
-     Purana rule `img, svg { background:#fff !important }` ek hi
-     jagah laga di gayi thi. Raster <img> (JPEG/PNG scan) ko white
-     backdrop chahiye — warna dark theme par transparent PNG ka
-     background site ke kaale background se mix ho jata hai. Lekin
-     inline <svg> (diagram markup jo seedha question_text ke andar
-     aata hai) apne aap me ek complete drawing hai jiska apna
-     background aur stroke colors already sahi hain. Usi rule ko svg
-     par bhi force karne se, agar SVG white strokes / transparent
-     fill use kar raha ho, poora diagram white-on-white hokar GAAYAB
-     ho jata tha — yahi "safed square" bug tha.
-     Ab: sirf <img> ko white backdrop milega. <svg> apne colors ke
-     saath, bina forced background ke render hoga.
-     --------------------------------------------------------------- */
   #practice-runner .question-text img,
   #practice-runner .option-text img,
   #practice-runner .explanation-text img {
@@ -85,336 +60,225 @@
 {% endblock %}
 
 {% block content %}
-<!-- SANGAM FIX #1: x-init="init()" HATA DIYA.
-     Alpine 3 khud init() method ko auto-call karta hai. x-init lagane se
-     init() DO BAAR chalta tha -> DO setInterval -> ek zombie timer bach
-     jata tha jise stopTimers() kabhi maar hi nahi pata tha. Yahi wajah
-     thi ki Finish ke baad bhi timer chalta rehta tha. -->
 <div id="practice-runner" x-data="practiceRunner()" class="min-h-screen w-full max-w-full overflow-x-hidden bg-[#0a0a0a] text-gray-100 flex flex-col font-body">
 
-  <!-- Top bar -->
-  <div class="bg-[#111111] border-b border-white/10 px-3 md:px-6 py-2.5 flex items-center justify-between gap-3 sticky top-0 z-20 shadow-sm">
+  <!-- Top bar with Dark/White Mode Toggle + Timer + Exit -->
+  <div class="bg-[#111111] border-b border-white/10 px-3 md:px-6 py-2 flex items-center justify-between gap-2 sticky top-0 z-20 shadow-sm">
     <div class="min-w-0">
-      <p class="text-xs text-gray-400 truncate">{{ chapter.name }} · {{ 'PYQ' if mode == 'pyq' else 'MCQ' }} · 📁 {{ folder }}</p>
-      <p class="text-sm font-semibold text-white truncate">{{ set_name }}</p>
+      <p class="text-[11px] text-gray-400 truncate">{{ chapter.name }} · {{ 'PYQ' if mode == 'pyq' else 'MCQ' }} · 📁 {{ folder }}</p>
+      <p class="text-xs sm:text-sm font-bold text-white truncate">{{ set_name }}</p>
     </div>
-    <div class="shrink-0 flex items-center gap-3">
-      <div class="text-right">
-        <p class="text-[10px] uppercase tracking-wide text-gray-500 leading-none mb-0.5">
-          <span x-show="!isFinished">Total time</span>
-          <span x-show="isFinished" x-cloak>Final time</span>
+    <div class="shrink-0 flex items-center gap-2">
+      <!-- Dark / White Mode Toggle inside Runner -->
+      <div class="theme-toggle-pill" role="group" aria-label="Color theme">
+        <button type="button" data-theme-btn="dark" onclick="window.setSangamTheme('dark')" class="theme-toggle-btn active">🌙</button>
+        <button type="button" data-theme-btn="light" onclick="window.setSangamTheme('light')" class="theme-toggle-btn">☀️</button>
+      </div>
+
+      <div class="text-right px-1.5">
+        <p class="text-[9px] uppercase tracking-wide text-gray-400 leading-none mb-0.5">
+          <span x-show="!isFinished">Time</span>
+          <span x-show="isFinished" x-cloak>Final</span>
         </p>
-        <p class="font-display text-sm md:text-base font-semibold tabular-nums leading-none"
-           :class="isFinished ? 'text-gray-400' : 'text-gold-light'"
+        <p class="font-display text-xs sm:text-sm font-bold tabular-nums leading-none"
+           :class="isFinished ? 'text-gray-400' : 'text-gold'"
            x-text="formattedTotalTime"></p>
       </div>
-      <!-- SANGAM FIX #4: Exit ab seedha isi folder ke quiz-list par le jayega,
-           na ki chapter ke top par. -->
+
       <a href="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
          data-back-url="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
-         class="py-1.5 px-4 rounded-md text-xs md:text-sm font-semibold bg-white/10 text-white hover:bg-white/20 transition-colors">
+         class="btn-cute-soft !py-1 !px-3 !text-xs">
         Exit
       </a>
     </div>
   </div>
 
   {% if attempt_kind != 'full' %}
-  <div class="bg-gold/10 border-b border-gold/20 px-4 py-2 text-center text-xs font-semibold text-gold-light">
+  <div class="bg-gold/10 border-b border-gold/20 px-4 py-1.5 text-center text-xs font-semibold text-gold">
     🔁 Reattempt — {{ 'wrong questions only' if attempt_kind == 'wrong_only' else 'wrong + marked questions' }} ({{ questions|length }} question{{ '' if questions|length == 1 else 's' }})
   </div>
   {% endif %}
 
   <!-- Question palette strip -->
-  <div class="bg-[#0f0f0f] border-b border-white/5 px-3 md:px-6 py-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar sticky top-[49px] z-10 shadow-sm w-full max-w-full">
+  <div class="bg-[#0f0f0f] border-b border-white/5 px-3 md:px-6 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar sticky top-[45px] z-10 shadow-sm w-full max-w-full">
     <template x-for="(q, idx) in questions" :key="'strip-' + q.id">
       <button @click="jumpTo(idx)"
-        class="w-8 h-8 shrink-0 rounded text-xs font-semibold flex items-center justify-center transition-all duration-300 ease-out hover:scale-105"
+        class="w-7 h-7 shrink-0 rounded text-xs font-bold flex items-center justify-center transition-all duration-200 hover:scale-105"
         :class="[paletteClass(idx), currentIndex === idx ? 'ring-2 ring-gold ring-offset-1 ring-offset-[#0f0f0f]' : '']"
         x-text="idx + 1"></button>
     </template>
   </div>
 
   <!-- Main question area -->
-  <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
+  <div class="flex-1 w-full max-w-3xl mx-auto p-3.5 sm:p-6">
     <div x-show="currentQuestion" x-cloak class="w-full">
-      <p class="text-sm font-semibold text-gray-300 mb-5 flex items-center justify-between">
+      <p class="text-xs sm:text-sm font-semibold text-gray-300 mb-3.5 flex items-center justify-between">
         <span>Question <span x-text="currentIndex + 1"></span> of <span x-text="questions.length"></span></span>
-        <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-white/5 border border-white/10 rounded-full px-3 py-1">
+        <span class="inline-flex items-center gap-1 text-xs font-semibold text-gray-300 bg-white/5 border border-white/10 rounded-full px-2.5 py-0.5">
           <span x-text="isFinished ? '⏹' : '⏱'"></span>
           <span class="tabular-nums" x-text="formattedQuestionTime"></span>
         </span>
       </p>
 
-      <div class="q-card bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg overflow-hidden"
+      <div class="q-card bg-[#161616] border border-white/10 rounded-xl p-4 sm:p-6 mb-4 shadow-lg overflow-hidden"
            x-ref="questionCard" :style="cardStyle">
-        <!-- Slow-render indicator: content dim nahi hota, sirf yeh line chalti hai -->
         <div class="q-swapbar" :class="swapping ? 'on' : ''"></div>
 
-        <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium"
+        <div class="question-text text-sm sm:text-base leading-relaxed mb-5 text-gray-100 font-medium"
              x-html="rendered.question_text"></div>
 
-        <div x-show="hasValidImage(currentQuestion)" class="my-6 mx-auto max-w-full flex flex-col items-center rounded-md p-3 shadow-sm" style="background-color: #ffffff !important;">
+        <div x-show="hasValidImage(currentQuestion)" class="my-4 mx-auto max-w-full flex flex-col items-center rounded-md p-2.5 shadow-sm" style="background-color: #ffffff !important;">
           <img :src="hasValidImage(currentQuestion) ? currentQuestion.image_url : ''"
-               class="max-h-[300px] w-auto max-w-full object-contain"
+               class="max-h-[280px] w-auto max-w-full object-contain"
                decoding="async" alt="Diagram" style="background-color: #ffffff !important;"
                @load="onImageLoad($event, currentQuestion)"
                @error="onImageError($event, currentQuestion)">
-          <!-- SANGAM DIAGNOSTIC: agar image load fail ho (broken URL, deleted
-               file, CORS block, etc.) to yeh khaali safed box ki jagah
-               spasht error dikhayega — silent white square ab kabhi nahi. -->
           <p x-show="imageErrorIds[currentQuestion?.id]" x-cloak
              class="text-xs font-semibold text-red-600 mt-2 text-center px-2">
-            ⚠ Diagram failed to load. <span class="underline">Report this question</span> — image link may be broken.
+            ⚠ Diagram failed to load.
           </p>
         </div>
 
-        <div class="space-y-3.5">
+        <div class="space-y-2.5">
           <template x-for="opt in ['A','B','C','D']" :key="opt">
             <button type="button" @click="pickOption(opt)"
-              class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-300 ease-out"
+              class="w-full flex items-start gap-3 p-3.5 sm:p-4 rounded-xl border text-left transition-all duration-200"
               :class="optionClass(opt)">
-              <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ease-out"
+              <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold"
                 :class="optionBadgeClass(opt)" x-text="opt"></span>
-              <span class="option-text text-sm md:text-base leading-relaxed mt-0.5"
+              <span class="option-text text-xs sm:text-sm leading-relaxed mt-0.5"
                     x-html="rendered['option_' + opt.toLowerCase()]"></span>
             </button>
           </template>
         </div>
 
-        <!-- Feedback only appears once the pick has been submitted -->
+        <!-- Feedback once submitted -->
         <div x-show="currentQuestion && isChecked(currentQuestion.id)"
-             x-transition:enter="transition ease-out duration-300"
-             x-transition:enter-start="opacity-0 -translate-y-1"
-             x-transition:enter-end="opacity-100 translate-y-0"
-             x-cloak class="mt-5 pt-5 border-t border-white/10">
-          <p class="text-sm font-semibold transition-colors duration-300" :class="answers[currentQuestion?.id] === currentQuestion?.correct_option ? 'text-green-400' : 'text-red-400'">
+             x-cloak class="mt-4 pt-4 border-t border-white/10">
+          <p class="text-xs sm:text-sm font-bold" :class="answers[currentQuestion?.id] === currentQuestion?.correct_option ? 'text-green-400' : 'text-red-400'">
             <span x-text="answers[currentQuestion?.id] === currentQuestion?.correct_option ? '✓ Correct!' : '✗ Incorrect.'"></span>
             <span x-show="answers[currentQuestion?.id] !== currentQuestion?.correct_option">
               Correct answer: <span x-text="currentQuestion?.correct_option"></span>
             </span>
           </p>
-          <p x-show="currentQuestion?.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
-            <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="rendered.explanation"></span>
+          <p x-show="currentQuestion?.explanation" x-cloak class="text-xs sm:text-sm text-gray-300 mt-2.5 leading-relaxed">
+            <span class="text-gold font-bold">Explanation: </span><span class="explanation-text" x-html="rendered.explanation"></span>
           </p>
 
-          <!-- WRONG ANSWER: ask the student to note the mistake right away -->
+          <!-- Mistake Note -->
           <div x-show="currentQuestion && needsNote(currentQuestion.id)" x-cloak
-               x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
-               class="mt-5 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
-            <label class="block text-xs font-black uppercase tracking-widest text-red-300 mb-2">✍️ Enter the mistake you have done</label>
+               class="mt-4 rounded-xl border border-red-500/30 bg-red-500/5 p-3.5">
+            <label class="block text-[10px] font-black uppercase tracking-widest text-red-300 mb-1.5">✍️ Enter the mistake you made</label>
             <textarea rows="2" maxlength="2000"
                       x-model="notes[currentQuestion?.id]"
                       @input="onNoteInput(currentQuestion.id)"
                       @blur="if (noteState[currentQuestion.id] === 'dirty') saveNote(currentQuestion.id)"
-                      placeholder="e.g. Misread the sign / forgot the formula / silly calculation error…"
-                      class="w-full bg-[#0f0f0f] text-gray-100 text-sm border border-white/10 rounded-lg p-3 outline-none focus:border-red-400 resize-y placeholder-gray-600"></textarea>
-            <div class="flex items-center justify-between mt-2 min-h-[26px]">
-              <span class="text-xs font-semibold"
-                    :class="noteState[currentQuestion?.id] === 'error' ? 'text-red-400' : (noteState[currentQuestion?.id] === 'saved' ? 'text-green-400' : 'text-gray-500')"
+                      placeholder="e.g. Misread the sign / forgot formula…"
+                      class="w-full bg-[#0f0f0f] text-gray-100 text-xs sm:text-sm border border-white/10 rounded-lg p-2.5 outline-none focus:border-red-400 resize-y"></textarea>
+            <div class="flex items-center justify-between mt-1.5 min-h-[22px]">
+              <span class="text-[11px] font-semibold"
+                    :class="noteState[currentQuestion?.id] === 'error' ? 'text-red-400' : (noteState[currentQuestion?.id] === 'saved' ? 'text-green-400' : 'text-gray-400')"
                     x-text="noteStatusText(currentQuestion?.id)"></span>
               <button type="button" @click="saveNote(currentQuestion.id)"
                       x-show="['dirty','error'].includes(noteState[currentQuestion?.id])" x-cloak
-                      class="text-xs font-bold bg-gold text-ink px-4 py-1.5 rounded-lg hover:bg-gold-light">Save note</button>
+                      class="btn-cute !py-1 !px-3 !text-[11px]">Save note</button>
             </div>
-            <p class="text-[11px] text-gray-500 mt-1">Optional. You can also add or edit it later from Analyse.</p>
           </div>
-        </div>
-
-        <!-- Review mode, question was left unanswered -->
-        <div x-show="currentQuestion && isFinished && !isChecked(currentQuestion.id)"
-             x-cloak class="mt-5 pt-5 border-t border-white/10">
-          <p class="text-sm font-semibold text-gray-400">
-            <span>— Not Attempted&nbsp;&nbsp;·&nbsp;&nbsp;</span>
-            <span>Correct answer: <span x-text="currentQuestion?.correct_option"></span></span>
-          </p>
-          <p x-show="currentQuestion?.explanation" x-cloak class="text-sm text-gray-400 mt-3 leading-relaxed">
-            <span class="text-gray-500 font-semibold">Explanation: </span><span class="explanation-text" x-html="rendered.explanation"></span>
-          </p>
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
+      <!-- Compact Action Buttons -->
+      <div class="grid grid-cols-2 gap-3">
         <button @click="goPrev()" :disabled="currentIndex === 0"
-          class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          class="btn-cute-soft !py-2.5 !text-xs sm:!text-sm disabled:opacity-30">
           ← Previous
         </button>
 
         <template x-if="currentQuestion && !isChecked(currentQuestion.id) && !isFinished">
           <button @click="submitAnswer()" :disabled="selected[currentQuestion.id] == null"
-            class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-md">
+            class="btn-cute !py-2.5 !text-xs sm:!text-sm disabled:opacity-30">
             Submit Answer
-          </button>
-        </template>
-
-        <template x-if="currentQuestion && !isChecked(currentQuestion.id) && isFinished && currentIndex < questions.length - 1">
-          <button @click="goNext()"
-            class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
-            Next →
-          </button>
-        </template>
-
-        <template x-if="currentQuestion && !isChecked(currentQuestion.id) && isFinished && currentIndex === questions.length - 1">
-          <button @click="showSummary = true"
-            class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
-            Back to Summary
           </button>
         </template>
 
         <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex < questions.length - 1">
           <button @click="goNext()"
-            class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
+            class="btn-cute !py-2.5 !text-xs sm:!text-sm">
             Next →
           </button>
         </template>
 
         <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && !isFinished">
           <button @click="showFinishConfirm = true"
-            class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
-            Finish
-          </button>
-        </template>
-
-        <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && isFinished">
-          <button @click="showSummary = true"
-            class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors shadow-md">
-            Back to Summary
+            class="btn-cute !py-2.5 !text-xs sm:!text-sm">
+            Finish Quiz ✓
           </button>
         </template>
       </div>
 
-      <button @click="toggleMark(currentQuestion?.id)" x-show="currentQuestion"
-        class="w-full mt-3 py-2.5 rounded-xl text-xs md:text-sm font-semibold border transition-colors"
-        :class="isMarked(currentQuestion?.id) ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 text-gray-400 hover:bg-white/5'">
-        <span x-text="isMarked(currentQuestion?.id) ? '★ Marked for Review' : '☆ Mark for Review'"></span>
-      </button>
+      <div class="mt-2.5 flex items-center justify-between gap-2">
+        <button @click="toggleMark(currentQuestion?.id)" x-show="currentQuestion"
+          class="flex-1 py-2 rounded-xl text-xs font-semibold border transition-colors"
+          :class="isMarked(currentQuestion?.id) ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 text-gray-400 hover:bg-white/5'">
+          <span x-text="isMarked(currentQuestion?.id) ? '★ Marked for Review' : '☆ Mark for Review'"></span>
+        </button>
+        <button @click="showFinishConfirm = true" x-show="!isFinished"
+          class="btn-cute-soft !py-2 !px-3.5 !text-xs">
+          Finish Quiz
+        </button>
+      </div>
     </div>
   </div>
 
   <!-- Finish confirmation modal -->
-  <div x-show="showFinishConfirm"
-       x-transition:enter="transition ease-out duration-200"
-       x-transition:enter-start="opacity-0"
-       x-transition:enter-end="opacity-100"
-       x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4" @click.self="showFinishConfirm = false">
-    <div class="bg-[#161616] border border-white/10 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
-      <h3 class="font-display text-xl font-bold text-white mb-3">Are you sure you want to finish?</h3>
-      <p class="text-sm text-gray-400 mb-6">Your total time will stop counting once you finish. You can still review every question afterwards.</p>
-      <p x-show="submitError" x-cloak class="text-sm font-semibold text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-4" x-text="submitError"></p>
-      <div class="grid grid-cols-2 gap-3">
-        <button @click="showFinishConfirm = false" :disabled="isSubmitting" class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-40 transition-colors">
+  <div x-show="showFinishConfirm" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4" @click.self="showFinishConfirm = false">
+    <div class="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl">
+      <h3 class="font-display text-lg font-bold text-white mb-2">Finish Quiz &amp; View Result?</h3>
+      <p class="text-xs text-gray-400 mb-5">Your score and question-by-question analysis will open immediately.</p>
+      <p x-show="submitError" x-cloak class="text-xs font-semibold text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-3" x-text="submitError"></p>
+      <div class="grid grid-cols-2 gap-2.5">
+        <button @click="showFinishConfirm = false" :disabled="isSubmitting" class="btn-cute-soft !py-2.5 !text-xs">
           Cancel
         </button>
-        <button @click="finishNow()" :disabled="isSubmitting"
-          class="py-3 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-60 transition-colors">
-          <span x-text="isSubmitting ? 'Submitting…' : (submitError ? 'Try again' : 'Yes, Finish')"></span>
+        <button @click="finishNow()" :disabled="isSubmitting" class="btn-cute !py-2.5 !text-xs">
+          <span x-text="isSubmitting ? 'Submitting…' : 'Yes, Finish'"></span>
         </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Summary modal -->
-  <div x-show="showSummary"
-       x-transition:enter="transition ease-out duration-200"
-       x-transition:enter-start="opacity-0"
-       x-transition:enter-end="opacity-100"
-       x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4">
-    <div x-show="showSummary"
-         x-transition:enter="transition ease-out duration-200 delay-75"
-         x-transition:enter-start="opacity-0 scale-95"
-         x-transition:enter-end="opacity-100 scale-100"
-         class="bg-[#161616] border border-white/10 rounded-2xl p-8 w-full max-w-md text-center shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
-      <h3 class="font-display text-2xl font-bold text-white mb-1">Practice Complete</h3>
-      <p class="text-xs text-gray-500 mb-5 uppercase tracking-wide" x-text="chapterLabel"></p>
-
-      <!-- Score -->
-      <div class="relative overflow-hidden bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 mb-5">
-        <div class="absolute top-0 right-0 w-24 h-24 bg-gold opacity-5 rounded-bl-full"></div>
-        <p class="text-xs font-semibold text-gold-light mb-1 uppercase tracking-wider relative z-10">Score</p>
-        <p class="font-display text-4xl font-bold text-white relative z-10"
-           x-text="sv ? (sv.score + ' marks') : (score + ' / ' + questions.length)"></p>
-        <p class="text-sm text-gray-400 mt-1 relative z-10"
-           x-text="sv ? ('Whole quiz: ' + sv.correct_count + ' correct · ' + sv.wrong_count + ' wrong · ' + sv.skipped_count + ' skipped') : accuracyLabel"></p>
-      </div>
-
-      <!-- Correct / Wrong / Skipped breakdown -->
-      <div class="grid grid-cols-3 gap-3 mb-5">
-        <div class="bg-white/5 border border-white/10 rounded-xl p-3">
-          <p class="text-2xl font-display font-bold text-green-400" x-text="score"></p>
-          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Correct (this run)</p>
-        </div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-3">
-          <p class="text-2xl font-display font-bold text-red-400" x-text="wrongCount"></p>
-          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Wrong (this run)</p>
-        </div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-3">
-          <p class="text-2xl font-display font-bold text-gray-400" x-text="skippedCount"></p>
-          <p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">Skipped (this run)</p>
-        </div>
-      </div>
-
-      <!-- Time -->
-      <div class="bg-white/5 border border-white/10 rounded-xl px-4 py-3 mb-6 flex items-center justify-between text-sm">
-        <span class="text-gray-400">Total time taken</span>
-        <span class="font-semibold text-white tabular-nums" x-text="formattedTotalTime + ' · avg ' + formattedAvgTime + '/question'"></span>
-      </div>
-
-      <!-- SANGAM FIX #3: "Back to Attempt" button hata diya gaya hai.
-           "Review Answers" wahi kaam karta tha, duplicate tha. -->
-      <div class="grid grid-cols-1 gap-3">
-        <a x-show="analyseUrl" x-cloak :href="analyseUrl" data-replace-link
-          @click.prevent="window.location.replace(analyseUrl)"
-          class="py-3 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light transition-colors">
-          📊 Analyse &amp; Reattempt
-        </a>
-        <button @click="showSummary = false"
-          class="py-3 rounded-xl text-sm font-semibold border border-gold/40 text-gold hover:bg-gold/10 transition-colors">
-          Review Answers Here
-        </button>
-        <a href="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
-           data-back-url="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
-           class="py-3 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
-          Exit to Quiz Menu
-        </a>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-// Endpoints for THIS attempt (all server-side authorised + validated).
-const ANSWER_URL = {{ url_for('user.practice_save_answer', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt.id) | tojson }};
-const NOTE_URL   = {{ url_for('user.practice_save_note',   slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt.id) | tojson }};
-const SUBMIT_URL = {{ url_for('user.practice_submit',      slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt.id) | tojson }};
-const SETS_URL   = {{ url_for('user.practice_sets',        slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) | tojson }};
+const ANSWER_URL  = {{ url_for('user.practice_save_answer', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt.id) | tojson }};
+const NOTE_URL    = {{ url_for('user.practice_save_note',   slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt.id) | tojson }};
+const SUBMIT_URL  = {{ url_for('user.practice_submit',      slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name, attempt_id=attempt.id) | tojson }};
+const SETS_URL    = {{ url_for('user.practice_sets',        slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) | tojson }};
+const ANALYSE_URL = {{ url_for('user.practice_analyse',     slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name) | tojson }};
 
 function practiceRunner() {
   return {
     questions: {{ questions | tojson }},
-    // Server-saved progress for this attempt (resume support): {qid: {selected_option, status, time_taken_sec, mistake_note}}
     savedProgress: {{ saved_progress | tojson }},
     currentIndex: 0,
     selected: {},
     answers: {},
     marked: {},
-    // "What mistake did I make" notes, keyed by question id
     notes: {},
-    noteState: {},          // qid -> 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+    noteState: {},
     submitError: '',
     isSubmitting: false,
-    serverSummary: null,    // authoritative numbers returned by /submit
+    serverSummary: null,
     imageErrorIds: {},
     showFinishConfirm: false,
     showSummary: false,
     isFinished: false,
 
-    // --- timing ---
     timeSpent: {},
     activeQuestionId: null,
     activeQuestionSeconds: 0,
     totalSeconds: 0,
     _clock: null,
 
-    // --- render state ---
     rendered: { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', explanation: '' },
     swapping: false,
     cardStyle: '',
@@ -424,23 +288,11 @@ function practiceRunner() {
     _renderer: null,
     _swapBarTimer: null,
 
-    /* =============================================================
-       BOOT
-       ============================================================= */
     init() {
-      // Double-init guard. x-init hata diya hai, par yeh belt-and-braces
-      // hai — agar kabhi galti se dobara laga to bhi ek hi clock banega.
-      if (this._booted) {
-        SangamQuiz.xray.warn('double init blocked');
-        return;
-      }
+      if (this._booted) return;
       this._booted = true;
-
       this._renderer = SangamQuiz.createRenderer();
-
       this._hydrateFromServer();
-
-      // Zombie ko har haal me pakdo
       SangamQuiz.armClockSentinel(() => this.isFinished);
 
       if (window.sangamInstallBackTrap) {
@@ -448,15 +300,11 @@ function practiceRunner() {
       }
       this._startClock();
       this._resetQuestionTimer();
-      this.showQuestion(0);
-
-      SangamQuiz.xray.set('mode', 'practice');
-      SangamQuiz.xray.set('questions', this.questions.length);
+      this.showQuestion(this.currentIndex);
     },
 
     destroy() { this._killClock(); },
 
-    /* Resume: put back answers / marks / time / notes that were saved on the server. */
     _hydrateFromServer() {
       let firstOpen = -1;
       this.questions.forEach((q, idx) => {
@@ -464,7 +312,6 @@ function practiceRunner() {
         if (!p) { if (firstOpen === -1) firstOpen = idx; return; }
         if (p.selected_option) {
           this.selected[q.id] = p.selected_option;
-          // A saved answer counts as SUBMITTED (feedback is shown), exactly as when it was made.
           if (p.status === 'answered' || p.status === 'answered_marked') this.answers[q.id] = p.selected_option;
         }
         if (p.status === 'marked' || p.status === 'answered_marked') this.marked[q.id] = true;
@@ -472,13 +319,10 @@ function practiceRunner() {
         if (p.mistake_note) { this.notes[q.id] = p.mistake_note; this.noteState[q.id] = 'saved'; }
         if (this.answers[q.id] == null && firstOpen === -1) firstOpen = idx;
       });
-      // Total time carries over too (sum of saved per-question time).
       this.totalSeconds = Object.values(this.timeSpent).reduce((a, b) => a + (b || 0), 0);
-      // Jump to the first question that still needs an answer.
       if (firstOpen > 0) this.currentIndex = firstOpen;
     },
 
-    /* ---- server sync ------------------------------------------------- */
     _statusFor(qid) {
       const answered = this.answers[qid] != null;
       const marked = !!this.marked[qid];
@@ -496,25 +340,19 @@ function practiceRunner() {
       } catch (e) { return { ok: false, data: {} }; }
     },
 
-    /* Fire-and-forget durable save of one question. Retries once on failure. */
     async _syncQuestion(qid) {
       if (!qid) return;
       const body = {
         question_id: qid,
-        // Only a SUBMITTED answer is persisted. A merely-highlighted (unsubmitted) pick must never
-        // become an answer just because the student toggled the review mark.
         selected_option: this.answers[qid] != null ? this.answers[qid] : null,
         status: this._statusFor(qid),
         time_taken_sec: this.timeSpent[qid] || 0,
       };
       let r = await this._post(ANSWER_URL, body);
       if (!r.ok) r = await this._post(ANSWER_URL, body);
-      if (!r.ok) SangamQuiz.xray.warn('answer sync failed', { qid });
     },
 
-    /* ---- mistake note ------------------------------------------------ */
     needsNote(qid) {
-      // Only for a submitted answer that was WRONG.
       const q = this.questions.find(x => x.id === qid);
       return !!q && this.answers[qid] != null && this.answers[qid] !== q.correct_option;
     },
@@ -528,12 +366,9 @@ function practiceRunner() {
     },
 
     noteStatusText(qid) {
-      return { saving: 'Saving…', saved: '✓ Saved', error: 'Could not save — try again', dirty: 'Unsaved' }[this.noteState[qid]] || '';
+      return { saving: 'Saving…', saved: '✓ Saved', error: 'Could not save', dirty: 'Unsaved' }[this.noteState[qid]] || '';
     },
 
-    /* =============================================================
-       CLOCK  —  ek hi interval, dono timers isi se chalte hain
-       ============================================================= */
     _startClock() {
       if (this.isFinished) return;
       this._killClock();
@@ -541,16 +376,11 @@ function practiceRunner() {
     },
 
     _tick() {
-      // Sabse zaroori guard: agar finish ho gaya to interval khud maro.
       if (this.isFinished) { this._killClock(); return; }
       this.totalSeconds++;
       if (this.activeQuestionId != null) {
         this.activeQuestionSeconds++;
         this.timeSpent[this.activeQuestionId] = this.activeQuestionSeconds;
-      }
-      if (SangamQuiz.debug) {
-        SangamQuiz.xray.set('total', this.totalSeconds + 's');
-        SangamQuiz.xray.set('live clocks', SangamQuiz.liveClockCount());
       }
     },
 
@@ -561,65 +391,48 @@ function practiceRunner() {
     _resetQuestionTimer() {
       const q = this.currentQuestion;
       if (this.isFinished) {
-        // Review mode: live ticking band, sirf record kiya hua time dikhao
         this.activeQuestionId = null;
         this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
         return;
       }
-      // FIX: agar is question ka answer already submit ho chuka hai (chahe
-      // isi session me ho ya reload ke baad resume kiya ho), to iska clock
-      // dobara mat chalao — sirf uska final recorded time dikhao. Sirf
-      // un-answered question ka live clock chalta hai.
       const alreadyAnswered = q && this.answers[q.id] != null;
       this.activeQuestionId = (q && !alreadyAnswered) ? q.id : null;
       this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
     },
 
-    /* SANGAM FIX #1: Finish dabate hi sab kuch band — page ke har
-       clock ko nuke kar diya jata hai, zombie bacha hi nahi sakta. */
+    /* HISTORY STACK FIX: Finishing a quiz immediately replaces this runner page (Page 2)
+       with the Result/Analyse page (Page 3) via window.location.replace(), so pressing Back
+       from the Result page goes straight to the Quiz List (Page 1) and NEVER re-opens the finished runner! */
     async finishNow() {
       if (this.isSubmitting) return;
-      this.showFinishConfirm = false;
       this.isSubmitting = true;
       this.submitError = '';
 
-      // Send the final state of every question; the SERVER decides what is correct.
       const answers = {};
       for (const q of this.questions) {
         answers[q.id] = {
-          selected_option: this.answers[q.id] != null ? this.answers[q.id] : null,   // unsubmitted picks don't count
+          selected_option: this.answers[q.id] != null ? this.answers[q.id] : null,
           status: this._statusFor(q.id),
           time_taken_sec: this.timeSpent[q.id] || 0,
         };
       }
       const r = await this._post(SUBMIT_URL, { answers, total_time_sec: this.totalSeconds });
-      this.isSubmitting = false;
-
       if (!r.ok) {
-        // Do NOT end the quiz locally -- nothing was saved, so let the student retry.
+        this.isSubmitting = false;
         this.submitError = (r.data && r.data.error) || 'Could not submit. Check your connection and try again.';
-        this.showFinishConfirm = true;
         return;
       }
-      this.serverSummary = r.data.summary || null;
-      this.analyseUrl = r.data.redirect || null;
       this.stopTimers();
-      this.showSummary = true;
+      window.location.replace((r.data && r.data.redirect) || ANALYSE_URL);
     },
-
-    analyseUrl: null,
 
     stopTimers() {
       this.isFinished = true;
       this.activeQuestionId = null;
       this._killClock();
-      SangamQuiz.stopAllClocks();   // <- purane double-init zombies bhi
-      SangamQuiz.xray.set('finished', 'yes / clocks=' + SangamQuiz.liveClockCount());
+      SangamQuiz.stopAllClocks();
     },
 
-    /* =============================================================
-       RENDER  —  black flash killer
-       ============================================================= */
     _rawFor(q) {
       if (!q) return { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', explanation: '' };
       return {
@@ -634,48 +447,27 @@ function practiceRunner() {
 
     _keyFor(q) { return q ? ('p' + q.id) : null; },
 
-    /* Naya question dikhao. Agar cache warm hai to swap INSTANT hai —
-       koi typeset, koi fade, koi blank frame nahi. Agar cache miss ho
-       (rare), purana content screen par tika rehta hai aur upar patli
-       gold line chalti hai — black screen kabhi nahi aata. */
     showQuestion(idx) {
       const q = this.questions[idx];
       if (!q) return;
 
       const token = ++this._swapToken;
       const key = this._keyFor(q);
-      const t0 = performance.now();
 
-      const apply = (map, hit) => {
-        if (token !== this._swapToken) return;      // user aage badh gaya
+      const apply = (map) => {
+        if (token !== this._swapToken) return;
         this.rendered = map;
         this.swapping = false;
         this._clearSwapBar();
         this._unlockHeight();
         this._hasContent = true;
-        if (hit) SangamQuiz.xray.stats.cacheHits++;
-        else SangamQuiz.xray.stats.cacheMisses++;
-        SangamQuiz.xray.afterPaint(() => {
-          if (token !== this._swapToken) return;
-          const ms = Math.round(performance.now() - t0);
-          SangamQuiz.xray.stats.transitions++;
-          SangamQuiz.xray.stats.lastSwapMs = ms;
-          SangamQuiz.xray.set('swap', 'Q' + (idx + 1) + ' ' + ms + 'ms ' + (hit ? 'HIT' : 'MISS'));
-          SangamQuiz.xray.set('cache', SangamQuiz.xray.stats.cacheHits + ' hit / ' + SangamQuiz.xray.stats.cacheMisses + ' miss');
-        });
         this._warmNeighbours(idx);
       };
 
       const cached = this._renderer.get(key);
-      if (cached) { apply(cached, true); return; }
+      if (cached) { apply(cached); return; }
 
-      // Pehli baar page khul raha hai aur abhi kuch dikha hi nahi hai —
-      // card ko khaali mat chhodo, raw text turant dikha do. MathJax
-      // ready hote hi yeh apne aap typeset version se replace ho jayega.
       if (!this._hasContent) this.rendered = this._rawFor(q);
-
-      // Cache miss — height lock karo taki card collapse na ho (yahi
-      // collapse pehle black gap jaisa dikhta tha)
       this._lockHeight();
       this._armSwapBar();
 
@@ -683,23 +475,22 @@ function practiceRunner() {
       const safety = setTimeout(() => {
         if (settled || token !== this._swapToken) return;
         settled = true;
-        apply(this._rawFor(q), false);       // 1.2s se zyada? raw hi dikha do
+        apply(this._rawFor(q));
       }, 1200);
 
       this._renderer.prepare(key, this._rawFor(q)).then((map) => {
         if (settled) return;
         settled = true;
         clearTimeout(safety);
-        apply(map, false);
+        apply(map);
       }).catch(() => {
         if (settled) return;
         settled = true;
         clearTimeout(safety);
-        apply(this._rawFor(q), false);
+        apply(this._rawFor(q));
       });
     },
 
-    /* Aage/peeche ke questions idle time me pehle se typeset kar lo */
     _warmNeighbours(idx) {
       const items = [];
       [idx + 1, idx + 2, idx + 3, idx - 1].forEach((i) => {
@@ -708,7 +499,6 @@ function practiceRunner() {
         items.push({ key: this._keyFor(q), raw: this._rawFor(q), image: this.hasValidImage(q) ? q.image_url : null });
       });
       this._renderer.warm(items);
-      if (SangamQuiz.debug) SangamQuiz.xray.set('warmed', this._renderer.stats().cached);
     },
 
     _lockHeight() {
@@ -722,7 +512,6 @@ function practiceRunner() {
     },
 
     _armSwapBar() {
-      // 90ms se kam lage to bar dikhao hi mat — warna blink lagega
       this._clearSwapBar();
       this._swapBarTimer = setTimeout(() => { this.swapping = true; }, 90);
     },
@@ -732,9 +521,6 @@ function practiceRunner() {
       this.swapping = false;
     },
 
-    /* =============================================================
-       FORMATTING / GETTERS
-       ============================================================= */
     formatSeconds(total) {
       total = total || 0;
       const m = Math.floor(total / 60).toString().padStart(2, '0');
@@ -746,19 +532,6 @@ function practiceRunner() {
     get formattedTotalTime() { return this.formatSeconds(this.totalSeconds); },
     get currentQuestion() { return this.questions[this.currentIndex] || null; },
 
-    /* SANGAM FIX: "Diagram failed to load" on questions with NO diagram.
-       Purana check tha sirf `image_url` ki truthiness — JS me khaali
-       spaces (" "), ek akela dash ("-"), ya koi bhi junk string bhi
-       truthy hoti hai. DB me kabhi kisi purane data-entry/bulk-paste
-       step se image_url column me aisi junk value bhar gayi thi
-       (khaali nahi, par asli URL bhi nahi) — is wajah se un sawalo
-       par jinme diagram tha hi nahi, image box dikh jata tha, browser
-       us junk string ko URL maan ke load karne ki koshish karta,
-       aur turant "failed to load" error fire ho jata — bina kabhi
-       koi image upload hue hi.
-       Ab: image box tabhi dikhega jab image_url ek asli http(s) URL
-       ho. Khaali, whitespace, ya kisi bhi non-URL junk string par
-       box hi nahi banega — na koi failed request, na koi error. */
     hasValidImage(q) {
       const url = q && q.image_url;
       if (typeof url !== 'string') return false;
@@ -767,45 +540,6 @@ function practiceRunner() {
       return /^https?:\/\//i.test(trimmed);
     },
 
-    get score() {
-      let s = 0;
-      for (const q of this.questions) { if (this.answers[q.id] === q.correct_option) s++; }
-      return s;
-    },
-
-    // Whole-quiz numbers from the server (authoritative; include carried-forward questions on partial reattempts).
-    get sv() { return this.serverSummary; },
-
-    get wrongCount() {
-      let w = 0;
-      for (const q of this.questions) { const a = this.answers[q.id]; if (a != null && a !== q.correct_option) w++; }
-      return w;
-    },
-
-    get skippedCount() {
-      let s = 0;
-      for (const q of this.questions) { if (this.answers[q.id] == null) s++; }
-      return s;
-    },
-
-    get attemptedCount() { return this.questions.length - this.skippedCount; },
-
-    get accuracyLabel() {
-      if (this.attemptedCount === 0) return 'No questions attempted';
-      const pct = Math.round((this.score / this.attemptedCount) * 100);
-      return pct + '% accuracy on ' + this.attemptedCount + ' attempted';
-    },
-
-    get chapterLabel() { return {{ chapter.name | tojson }} + ' · ' + {{ set_name | tojson }}; },
-
-    get formattedAvgTime() {
-      const n = this.questions.length || 1;
-      return this.formatSeconds(Math.round(this.totalSeconds / n));
-    },
-
-    /* =============================================================
-       INTERACTIONS
-       ============================================================= */
     pickOption(opt) {
       const q = this.currentQuestion;
       if (!q || this.isChecked(q.id) || this.isFinished) return;
@@ -818,43 +552,26 @@ function practiceRunner() {
       const q = this.currentQuestion;
       if (!q || this.selected[q.id] == null || this.isChecked(q.id) || this.isFinished) return;
       this.answers[q.id] = this.selected[q.id];
-      // FIX: submit hote hi is sawaal ka clock turant freeze karo — warna
-      // student explanation padhte waqt bhi time badhta rehta tha.
       if (this.activeQuestionId === q.id) this.activeQuestionId = null;
-      // Explanation already prerendered hai cache me — kuch typeset karne
-      // ki zaroorat nahi, isliye yahan koi MathJax call nahi.
-      this._syncQuestion(q.id);          // durable save (background)
+      this._syncQuestion(q.id);
     },
 
     toggleMark(questionId) {
       if (!questionId || this.isFinished) return;
       this.marked[questionId] = !this.marked[questionId];
-      this._syncQuestion(questionId);    // marks must survive a reload too
+      this._syncQuestion(questionId);
     },
 
-    /* SANGAM DIAGNOSTIC: broken-image detector.
-       Pehle: image load fail hone par sirf khaali safed box dikhta tha,
-       koi signal nahi milta tha ki galti kahan hai (broken URL? deleted
-       file? CORS?). Ab load/error dono track hote hain aur ?debug=1 me
-       x-ray HUD par bhi likha jata hai — turant pata chal jayega ki
-       kaunsa question ka diagram actually broken hai vs sirf CSS issue. */
     onImageLoad(evt, q) {
       if (!q) return;
       if (this.imageErrorIds[q.id]) delete this.imageErrorIds[q.id];
       const img = evt.target;
-      // naturalWidth 0 matlab browser ne "load" fire kiya par asal me
-      // koi decode-able pixel data nahi hai (corrupt file) — usko bhi
-      // error jaisa treat karo.
-      if (img.naturalWidth === 0) { this.onImageError(evt, q); return; }
-      SangamQuiz.xray.set('image Q' + (this.currentIndex + 1),
-        'loaded ' + img.naturalWidth + 'x' + img.naturalHeight);
+      if (img.naturalWidth === 0) this.onImageError(evt, q);
     },
 
     onImageError(evt, q) {
       if (!q) return;
       this.imageErrorIds[q.id] = true;
-      SangamQuiz.xray.warn('IMAGE FAILED for question', { id: q.id, url: q.image_url });
-      SangamQuiz.xray.set('image Q' + (this.currentIndex + 1), 'BROKEN ✗ ' + (q.image_url || 'no url'));
     },
     isMarked(questionId) { return questionId ? !!this.marked[questionId] : false; },
 
@@ -869,15 +586,11 @@ function practiceRunner() {
     goNext() { this._goto(this.currentIndex + 1); },
     goPrev() { this._goto(this.currentIndex - 1); },
 
-    /* =============================================================
-       STYLING HELPERS
-       ============================================================= */
     paletteClass(idx) {
       const q = this.questions[idx];
       const checked = this.answers[q.id];
       if (checked != null) return checked === q.correct_option ? 'bg-green-600 text-white' : 'bg-red-600 text-white';
       if (this.marked[q.id]) return 'bg-[#8A6A1F] text-[#F3E3B8]';
-      if (this.isFinished) return 'bg-transparent border border-dashed border-white/20 text-gray-500';
       if (this.selected[q.id] != null) return 'bg-white/20 text-white';
       return 'bg-[#2A2A2A] text-gray-400';
     },
@@ -887,10 +600,9 @@ function practiceRunner() {
       if (!q) return '';
       const checked = this.answers[q.id];
       if (checked == null) {
-        if (this.isFinished) return 'border-white/5 bg-[#1a1a1a] text-gray-500 cursor-default opacity-60';
         return this.selected[q.id] === opt
           ? 'border-gold bg-gold/10 text-white cursor-pointer ring-1 ring-gold'
-          : 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 hover:bg-[#222] cursor-pointer';
+          : 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 cursor-pointer';
       }
       if (opt === q.correct_option) return 'border-green-500/50 bg-green-500/10 text-white cursor-default ring-1 ring-green-500/50';
       if (opt === checked) return 'border-red-500/50 bg-red-500/10 text-white cursor-default ring-1 ring-red-500/50';
@@ -902,7 +614,6 @@ function practiceRunner() {
       if (!q) return '';
       const checked = this.answers[q.id];
       if (checked == null) {
-        if (this.isFinished) return 'border-white/10 text-gray-600';
         return this.selected[q.id] === opt
           ? 'border-gold bg-gold text-ink'
           : 'border-white/30 text-gray-400';
@@ -915,8 +626,4 @@ function practiceRunner() {
 }
 </script>
 {% endblock %}
-
-{% block extra_scripts %}
-<!-- Alpine.js is loaded globally in shared/base.html -->
-{% endblock %}
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
+<!-- STUDY SANGAM HUB v3.0 -->

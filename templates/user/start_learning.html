@@ -1,19 +1,45 @@
 {% extends "shared/base.html" %}
-{% block title %}Welcome — SANGAM STUDY{% endblock %}
+{% block title %}Welcome — STUDY SANGAM HUB{% endblock %}
 
 {% block content %}
-<section class="max-w-2xl mx-auto px-6 pt-20 pb-24 text-center relative z-10">
-    <p class="text-gold font-bold text-xs tracking-widest uppercase mb-3 border border-gold/30 bg-gold/10 px-3 py-1 rounded-full inline-block">YOU'RE ALL SET</p>
-    <h1 class="font-display text-4xl sm:text-5xl font-bold mb-4 text-white">Welcome to Sangam Study</h1>
-    <p class="text-gray-300 mb-12 max-w-md mx-auto leading-relaxed">
-        Mock test series, chapter-wise practice, and PYQs for NEET and JEE —
-        all in one place. Let's set up your stream and start preparing.
-    </p>
+<section class="max-w-lg mx-auto px-4 pt-10 sm:pt-14 pb-16 text-center relative z-10">
+    <div class="pw-tile p-6 sm:p-8 rounded-2xl relative overflow-hidden">
+        <div class="absolute -top-14 left-1/2 -translate-x-1/2 w-48 h-48 bg-gold/15 rounded-full blur-3xl pointer-events-none"></div>
 
-    <a href="{{ url_for('user.stream_select') }}"
-       class="inline-block bg-gold text-ink px-10 py-4 rounded-xl font-bold text-lg hover:bg-gold-light transition-all shadow-[0_4px_20px_rgba(212,160,23,0.3)]">
-        Start Learning &rarr;
-    </a>
+        <!-- Main Brand Logo -->
+        <img src="{{ url_for('static', filename='img/logo.png') }}"
+             alt="STUDY SANGAM HUB — CONNECT • LEARN • GROW"
+             class="w-28 h-28 sm:w-32 sm:h-32 mx-auto mb-4 rounded-2xl object-cover border border-gold/40 shadow-[0_8px_28px_rgba(0,0,0,0.45)] relative z-10">
+
+        <span class="text-gold font-extrabold text-[10px] tracking-widest uppercase mb-2 border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded-full inline-block relative z-10">
+            CONNECT • LEARN • GROW
+        </span>
+
+        <h1 class="font-display text-2xl sm:text-3xl font-bold mb-2 text-white relative z-10">
+            Welcome to Study Sangam Hub
+        </h1>
+
+        <p class="text-xs sm:text-sm text-gray-300 mb-6 max-w-sm mx-auto leading-relaxed relative z-10">
+            Chapter-wise MCQs, PYQ archives, and full-length NTA mock test series for NEET &amp; JEE.
+        </p>
+
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-2.5 relative z-10">
+            <a href="{{ next_url or url_for('user.enter_workspace') }}"
+               data-replace-link
+               onclick="try { sessionStorage.setItem('sangam_welcomed', '1'); } catch(e) {}"
+               class="btn-cute !px-6 !py-2.5 !text-xs sm:!text-sm w-full sm:w-auto">
+                <span>Start Learning</span>
+                <span>&rarr;</span>
+            </a>
+
+            {% if active_stream_slug %}
+            <a href="{{ url_for('user.switch_stream') }}"
+               class="btn-cute-soft !px-4 !py-2 !text-xs w-full sm:w-auto">
+                <span>🔄 Switch Stream ({{ active_stream_slug | upper }})</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
 </section>
 {% endblock %}
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
+<!-- STUDY SANGAM HUB v3.0 -->
