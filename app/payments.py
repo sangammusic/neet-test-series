@@ -5,6 +5,7 @@ Student journey
   /pay                          see the plan, press "Get Season Pass"
   POST /pay/start               reserves a unique amount  (SQL: create_order)
   /pay/order/<id>               QR + UPI link + UTR/screenshot form (or the status of the order)
+  /pay/preview                  direct checkout preview (so Admin/owner can always test the QR page)
   POST /pay/order/<id>/submit   saves the UTR, forwards it (+ screenshot) to YOUR Telegram
   /pay/order/<id>/status.json   the page polls this and refreshes itself when you approve
   /pay/history                  all of the student's payments
@@ -26,6 +27,7 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 
 from app.shared import payments_core as pay
 from app.shared.access import (
+    DEFAULT_SEASON_PASS_PLAN,
     get_active_plans, get_active_subscription, format_ist_date, parse_ts, premium_status,
 )
 from app.shared.security import minutes_text, rl_hit
@@ -53,9 +55,11 @@ def plans():
     if gate:
         return gate
     user_id = current_user_id()
+    db_plans = get_active_plans()
     return render_template(
         "payments/plans.html",
-        plans=get_active_plans(),
+        plans=db_plans if db_plans else [dict(DEFAULT_SEASON_PASS_PLAN)],
+        db_plans_ready=bool(db_plans),
         ps=premium_status(),
         open_order=pay.get_open_order_for_user(user_id),
         ready=pay.payments_ready(),
@@ -78,7 +82,8 @@ def start():
         flash(f"Too many attempts. Please try again in {minutes_text(wait)}.", "error")
         return redirect(url_for("payments.plans"))
 
-    result = pay.create_order(user_id, (request.form.get("plan_code") or "").strip())
+    plan_code = (request.form.get("plan_code") or "season_pass_2027").strip()
+    result = pay.create_order(user_id, plan_code)
     if result.get("ok") and pay.is_uuid(result.get("order_id")):
         return redirect(url_for("payments.checkout", order_id=result["order_id"]))
 
@@ -89,6 +94,50 @@ def start():
     }
     flash(messages.get(result.get("error"), "We couldn't start the payment. Please try again."), "error")
     return redirect(url_for("payments.plans"))
+
+
+@payments_bp.route("/pay/preview")
+def preview_checkout():
+    """
+    Direct checkout preview page so the site owner/Admin can inspect the QR code,
+    UPI link, and 12-digit UTR + screenshot form even before SQL tables or UPI_ID
+    are configured on Render.
+    """
+    gate = _login_gate()
+    if gate:
+        return gate
+    plan = (get_active_plans(include_fallback=True) or [dict(DEFAULT_SEASON_PASS_PLAN)])[0]
+    demo_order_id = "00000000-0000-4000-8000-000000000299"
+    demo_upi = pay.upi_id() if pay.payments_ready() else "yourname@fam"
+    base_amt = float(plan.get("price_inr") or 299)
+    payable_amt = round(base_amt + 0.37, 2)
+    order = {
+        "id": demo_order_id,
+        "base_amount": base_amt,
+        "payable_amount": payable_amt,
+        "status": "created",
+        "plans": plan,
+    }
+    upi_link = f"upi://pay?pa={demo_upi}&pn=Sangam%20Study&am={payable_amt:.2f}&cu=INR&tn=SSP-PREVIEW"
+    qr = pay.qr_svg(upi_link)
+    static_qr = url_for("static", filename=pay.static_qr_file()) if pay.static_qr_file() else None
+    valid_until = format_ist_date(plan.get("valid_until"))
+    cfg = {
+        "state": "pay",
+        "status": "created",
+        "secondsLeft": 2700,
+        "submitUrl": url_for("payments.submit", order_id=demo_order_id),
+        "statusUrl": url_for("payments.status_json", order_id=demo_order_id),
+        "upiLink": upi_link,
+        "isPreview": True,
+    }
+    return render_template(
+        "payments/checkout.html",
+        order=order, plan=plan, state="pay", cfg=cfg,
+        upi_id=demo_upi, upi_link=upi_link, qr_svg=qr, static_qr=static_qr,
+        ref="PREVIEW1", valid_until=valid_until, is_preview=True,
+        ready=pay.payments_ready(),
+    )
 
 
 def _view_state(order, seconds_left):
@@ -128,7 +177,7 @@ def checkout(order_id):
     if state == "pay":
         upi_link = pay.build_upi_link(order["payable_amount"], order["id"])
         qr = pay.qr_svg(upi_link)
-        if qr is None and pay.static_qr_file():
+        if pay.static_qr_file():
             static_qr = url_for("static", filename=pay.static_qr_file())
 
     valid_until = None
