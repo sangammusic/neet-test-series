@@ -1,18 +1,9 @@
+# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
 """
 payments_core.py -- everything about money that is NOT a web page.
 
 Both the student-facing blueprint (app/payments.py) and the admin panel
 (app/admin/payment_routes.py) use this file, so neither has to import the other.
-
-Contents
-  1. Config            UPI id / name, Telegram token / admin id
-  2. Order database    thin wrappers over the SQL functions in sql/phase1_payments.sql
-                       (plus automatic Python table fallback if SQL functions aren't created yet)
-  3. UPI link + QR     the QR is drawn on OUR server, with the exact amount inside it
-  4. Screenshot        re-encoded to a small clean JPEG (EXIF/GPS stripped)
-  5. Telegram          send approval card, edit it, fetch the screenshot, set the webhook
-
-Nothing in here ever logs the bot token or the screenshot.
 """
 import hashlib
 import hmac
@@ -23,15 +14,19 @@ import logging
 import os
 import random
 import re
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import quote
 
-from app.extensions import supabase_admin
-from app.shared.access import forget_premium, format_inr, format_ist_datetime, parse_ts
+from app.extensions import supabase_admin, cache
+from app.shared.access import (
+    DEFAULT_SEASON_PASS_PLAN,
+    forget_premium, format_inr, format_ist_datetime, parse_ts,
+)
 
-try:  # both are listed in requirements.txt; if one is missing the feature degrades, the site still boots
+try:
     import httpx
 except Exception:  # pragma: no cover
     httpx = None
@@ -88,7 +83,7 @@ def is_uuid(value):
 
 def short_ref(order_id):
     """8-character reference shown to students and admins, e.g. 'A1B2C3D4'."""
-    return str(order_id).replace("-", "")[:8].upper()
+    return str(order_id or "").replace("-", "")[:8].upper()
 
 
 # ======================================================================
@@ -117,6 +112,64 @@ def _utc_iso(delta_minutes=0):
     return t.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
+def _to_float(val, default=0.0):
+    try:
+        return round(float(val), 2)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_order(row):
+    """
+    Guarantees every order dict has numeric float amounts and dict-shaped `plans` / `profiles`
+    so Jinja templates never crash with TypeError or AttributeError.
+    """
+    if not isinstance(row, dict):
+        return None
+    out = dict(row)
+    base = _to_float(out.get("base_amount"), 299.0)
+    payable = _to_float(out.get("payable_amount"), base)
+    out["base_amount"] = base
+    out["payable_amount"] = payable
+
+    plans_val = out.get("plans")
+    if isinstance(plans_val, list):
+        plans_val = plans_val[0] if plans_val else None
+    if not isinstance(plans_val, dict) or not plans_val:
+        plans_val = {
+            "name": DEFAULT_SEASON_PASS_PLAN["name"],
+            "code": DEFAULT_SEASON_PASS_PLAN["code"],
+            "valid_until": DEFAULT_SEASON_PASS_PLAN["valid_until"],
+        }
+    out["plans"] = plans_val
+
+    prof_val = out.get("profiles")
+    if isinstance(prof_val, list):
+        prof_val = prof_val[0] if prof_val else None
+    if not isinstance(prof_val, dict):
+        prof_val = {}
+    out["profiles"] = prof_val
+    return out
+
+
+def _select_orders(build_query):
+    """
+    Runs a query against `orders` with `_ORDER_EMBED` first; if PostgREST schema cache
+    has not reloaded foreign-key relationships yet, falls back to `_ORDER_COLS`.
+    """
+    for cols in (_ORDER_EMBED, _ORDER_COLS):
+        try:
+            q = supabase_admin.table("orders").select(cols)
+            rows = build_query(q).execute().data or []
+            return [_normalize_order(r) for r in rows if isinstance(r, dict)]
+        except Exception as e:
+            if cols == _ORDER_COLS:
+                logger.error(f"Error querying orders: {e}")
+                return []
+            logger.warning(f"Orders embed query fell back to base columns: {e}")
+    return []
+
+
 def _rpc(name, params):
     """Calls a SQL function; always returns a dict ({'ok': False, 'error': 'server'} on any failure)."""
     try:
@@ -135,7 +188,6 @@ def create_order(user_id, plan_code):
     res = _rpc("create_order", {"p_user_id": user_id, "p_plan_code": plan_code})
     if res.get("ok") or res.get("error") in ("plan_not_found", "already_active", "busy"):
         return res
-    # Fallback if the SQL function create_order hasn't been created yet but tables exist
     if not res.get("_exc") or "simulated" in res.get("_exc", ""):
         return {"ok": False, "error": "server"}
     try:
@@ -148,11 +200,47 @@ def create_order(user_id, plan_code):
             .execute()
             .data or []
         )
+        if not plans and plan_code == DEFAULT_SEASON_PASS_PLAN["code"]:
+            try:
+                seeded = (
+                    supabase_admin.table("plans")
+                    .insert({
+                        "code": DEFAULT_SEASON_PASS_PLAN["code"],
+                        "name": DEFAULT_SEASON_PASS_PLAN["name"],
+                        "description": DEFAULT_SEASON_PASS_PLAN["description"],
+                        "price_inr": DEFAULT_SEASON_PASS_PLAN["price_inr"],
+                        "valid_until": DEFAULT_SEASON_PASS_PLAN["valid_until"],
+                        "features": DEFAULT_SEASON_PASS_PLAN["features"],
+                        "is_active": True,
+                        "display_order": 1,
+                    })
+                    .execute()
+                    .data or []
+                )
+                plans = seeded
+            except Exception:
+                pass
         if not plans:
             return {"ok": False, "error": "plan_not_found"}
         plan = plans[0]
         now = _utc_iso()
         supabase_admin.table("orders").update({"status": "expired"}).eq("status", "created").lt("expires_at", now).execute()
+
+        # Check active subscription
+        active_subs = (
+            supabase_admin.table("subscriptions")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("plan_id", plan["id"])
+            .eq("status", "active")
+            .lte("starts_at", now)
+            .gt("expires_at", now)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+        if active_subs:
+            return {"ok": False, "error": "already_active"}
 
         existing = (
             supabase_admin.table("orders")
@@ -205,98 +293,234 @@ def submit_order(order_id, user_id, utr):
     res = _rpc("submit_order", {"p_order_id": order_id, "p_user_id": user_id, "p_utr": utr})
     if res.get("ok") or res.get("error") != "server":
         return res
-    return {"ok": False, "error": "server"}
+    if not res.get("_exc") or "simulated" in res.get("_exc", ""):
+        return {"ok": False, "error": "server"}
+    try:
+        rows = (
+            supabase_admin.table("orders")
+            .select("*")
+            .eq("id", order_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+        if not rows:
+            return {"ok": False, "error": "not_found"}
+        v_order = rows[0]
+        st = v_order.get("status")
+        if st == "submitted":
+            if v_order.get("utr") == utr:
+                return {"ok": True, "already": True}
+            return {"ok": False, "error": "already_submitted"}
+        if st == "approved":
+            return {"ok": False, "error": "already_approved"}
+        if st in ("rejected", "cancelled"):
+            return {"ok": False, "error": "closed"}
+
+        dup_utr = (
+            supabase_admin.table("orders")
+            .select("id")
+            .eq("utr", utr)
+            .neq("id", order_id)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+        if dup_utr:
+            return {"ok": False, "error": "utr_used"}
+
+        supabase_admin.table("orders").update({
+            "status": "submitted",
+            "utr": utr,
+            "submitted_at": _utc_iso(),
+        }).eq("id", order_id).execute()
+        return {"ok": True, "already": False}
+    except Exception as e:
+        err_str = str(e).lower()
+        if "utr" in err_str:
+            return {"ok": False, "error": "utr_used"}
+        if "amount" in err_str or "pending" in err_str:
+            return {"ok": False, "error": "amount_reassigned"}
+        logger.error(f"Fallback submit_order failed: {e}")
+        return {"ok": False, "error": "server"}
 
 
 def approve_order(order_id, reviewer):
     res = _rpc("approve_order", {"p_order_id": order_id, "p_reviewer": reviewer})
     if res.get("ok"):
         forget_premium(res.get("user_id"))
-    return res
+        return res
+    if res.get("error") != "server" or not res.get("_exc") or "simulated" in res.get("_exc", ""):
+        return res
+    try:
+        rows = supabase_admin.table("orders").select("*").eq("id", order_id).limit(1).execute().data or []
+        if not rows:
+            return {"ok": False, "error": "not_found"}
+        v_order = rows[0]
+        if v_order.get("status") == "approved":
+            forget_premium(v_order.get("user_id"))
+            return {"ok": True, "already": True, "user_id": v_order.get("user_id")}
+        if v_order.get("status") not in ("submitted", "rejected"):
+            return {"ok": False, "error": "bad_status", "status": v_order.get("status")}
+        if not v_order.get("user_id"):
+            return {"ok": False, "error": "user_deleted"}
+
+        plans = supabase_admin.table("plans").select("*").eq("id", v_order["plan_id"]).limit(1).execute().data or []
+        v_plan = plans[0] if plans else DEFAULT_SEASON_PASS_PLAN
+        v_expires = v_plan.get("valid_until") or _utc_iso(60 * 24 * int(v_plan.get("valid_days") or 365))
+
+        supabase_admin.table("orders").update({
+            "status": "approved",
+            "reviewed_by": reviewer,
+            "reviewed_at": _utc_iso(),
+            "reject_reason": None,
+        }).eq("id", order_id).execute()
+
+        sub_ins = (
+            supabase_admin.table("subscriptions")
+            .upsert({
+                "user_id": v_order["user_id"],
+                "plan_id": v_order["plan_id"],
+                "stream_id": v_plan.get("stream_id"),
+                "order_id": order_id,
+                "source": "payment",
+                "status": "active",
+                "starts_at": _utc_iso(),
+                "expires_at": v_expires,
+            }, on_conflict="order_id")
+            .execute()
+            .data or []
+        )
+        forget_premium(v_order["user_id"])
+        return {
+            "ok": True,
+            "already": False,
+            "user_id": v_order["user_id"],
+            "expires_at": v_expires,
+            "subscription_id": sub_ins[0].get("id") if sub_ins else None,
+        }
+    except Exception as e:
+        logger.error(f"Fallback approve_order failed: {e}")
+        return {"ok": False, "error": "server"}
 
 
 def reject_order(order_id, reviewer, reason):
-    return _rpc("reject_order", {"p_order_id": order_id, "p_reviewer": reviewer, "p_reason": reason})
+    res = _rpc("reject_order", {"p_order_id": order_id, "p_reviewer": reviewer, "p_reason": reason})
+    if res.get("ok") or res.get("error") != "server" or not res.get("_exc") or "simulated" in res.get("_exc", ""):
+        return res
+    try:
+        rows = supabase_admin.table("orders").select("*").eq("id", order_id).limit(1).execute().data or []
+        if not rows:
+            return {"ok": False, "error": "not_found"}
+        v_order = rows[0]
+        if v_order.get("status") == "rejected":
+            return {"ok": True, "already": True, "user_id": v_order.get("user_id")}
+        if v_order.get("status") != "submitted":
+            return {"ok": False, "error": "bad_status", "status": v_order.get("status")}
+        clean_reason = (reason or "").strip()[:200] or "Payment could not be verified."
+        supabase_admin.table("orders").update({
+            "status": "rejected",
+            "reject_reason": clean_reason,
+            "reviewed_by": reviewer,
+            "reviewed_at": _utc_iso(),
+        }).eq("id", order_id).execute()
+        return {"ok": True, "already": False, "user_id": v_order.get("user_id")}
+    except Exception as e:
+        logger.error(f"Fallback reject_order failed: {e}")
+        return {"ok": False, "error": "server"}
 
 
 def revoke_order(order_id, reviewer, reason):
     res = _rpc("revoke_order", {"p_order_id": order_id, "p_reviewer": reviewer, "p_reason": reason})
     if res.get("ok"):
         forget_premium(res.get("user_id"))
-    return res
+        return res
+    if res.get("error") != "server" or not res.get("_exc") or "simulated" in res.get("_exc", ""):
+        return res
+    try:
+        rows = supabase_admin.table("orders").select("*").eq("id", order_id).limit(1).execute().data or []
+        if not rows:
+            return {"ok": False, "error": "not_found"}
+        v_order = rows[0]
+        if v_order.get("status") != "approved":
+            return {"ok": False, "error": "bad_status", "status": v_order.get("status")}
+        supabase_admin.table("subscriptions").update({"status": "revoked"}).eq("order_id", order_id).execute()
+        clean_reason = (reason or "").strip()[:200] or "Access revoked by admin."
+        supabase_admin.table("orders").update({
+            "status": "cancelled",
+            "reject_reason": clean_reason,
+            "reviewed_by": reviewer,
+            "reviewed_at": _utc_iso(),
+        }).eq("id", order_id).execute()
+        forget_premium(v_order.get("user_id"))
+        return {"ok": True, "user_id": v_order.get("user_id")}
+    except Exception as e:
+        logger.error(f"Fallback revoke_order failed: {e}")
+        return {"ok": False, "error": "server"}
 
 
 def payments_summary():
     res = _rpc("payments_summary", {})
     keys = ("revenue_today", "revenue_month", "revenue_total", "approved_count", "pending_count", "rejected_count")
-    return {k: res.get(k, 0) or 0 for k in keys}
+    if not res.get("_exc"):
+        return {k: res.get(k, 0) or 0 for k in keys}
+    try:
+        rows = supabase_admin.table("orders").select("status, payable_amount, reviewed_at").execute().data or []
+        approved = [r for r in rows if r.get("status") == "approved"]
+        pending = [r for r in rows if r.get("status") == "submitted"]
+        rejected = [r for r in rows if r.get("status") == "rejected"]
+        total = round(sum(_to_float(r.get("payable_amount")) for r in approved), 2)
+        return {
+            "revenue_today": total,
+            "revenue_month": total,
+            "revenue_total": total,
+            "approved_count": len(approved),
+            "pending_count": len(pending),
+            "rejected_count": len(rejected),
+        }
+    except Exception:
+        return {k: 0 for k in keys}
 
 
 def get_order(order_id):
     """Any order by id (admin / webhook use). None if missing."""
     if not is_uuid(order_id):
         return None
-    try:
-        rows = supabase_admin.table("orders").select(_ORDER_EMBED).eq("id", order_id).limit(1).execute().data
-        return rows[0] if rows else None
-    except Exception as e:
-        logger.error(f"Error fetching order {order_id}: {e}")
-        return None
+    rows = _select_orders(lambda q: q.eq("id", order_id).limit(1))
+    return rows[0] if rows else None
 
 
 def get_order_for_user(order_id, user_id):
     """The order, but ONLY if it belongs to this user (stops people opening each other's payments)."""
     if not is_uuid(order_id) or not user_id:
         return None
-    try:
-        rows = (
-            supabase_admin.table("orders").select(_ORDER_EMBED)
-            .eq("id", order_id).eq("user_id", user_id).limit(1).execute().data
-        )
-        return rows[0] if rows else None
-    except Exception as e:
-        logger.error(f"Error fetching order {order_id} for user {user_id}: {e}")
-        return None
+    rows = _select_orders(lambda q: q.eq("id", order_id).eq("user_id", user_id).limit(1))
+    return rows[0] if rows else None
 
 
 def list_orders_for_user(user_id, limit=50):
     if not user_id:
         return []
-    try:
-        return (
-            supabase_admin.table("orders").select(_ORDER_EMBED)
-            .eq("user_id", user_id).order("created_at", desc=True).limit(limit).execute().data or []
-        )
-    except Exception as e:
-        logger.error(f"Error listing orders for user {user_id}: {e}")
-        return []
+    return _select_orders(lambda q: q.eq("user_id", user_id).order("created_at", desc=True).limit(limit))
 
 
 def get_open_order_for_user(user_id):
     """The student's unfinished payment (created / submitted), newest first, or None."""
     if not user_id:
         return None
-    try:
-        rows = (
-            supabase_admin.table("orders").select(_ORDER_EMBED)
-            .eq("user_id", user_id).in_("status", ["created", "submitted"])
-            .order("created_at", desc=True).limit(1).execute().data
-        )
-        return rows[0] if rows else None
-    except Exception as e:
-        logger.error(f"Error fetching open order for user {user_id}: {e}")
-        return None
+    rows = _select_orders(
+        lambda q: q.eq("user_id", user_id).in_("status", ["created", "submitted"]).order("created_at", desc=True).limit(1)
+    )
+    return rows[0] if rows else None
 
 
 def list_orders_admin(statuses=None, limit=100):
-    try:
-        q = supabase_admin.table("orders").select(_ORDER_EMBED)
+    def _build(q):
         if statuses:
             q = q.in_("status", list(statuses))
-        return q.order("created_at", desc=True).limit(limit).execute().data or []
-    except Exception as e:
-        logger.error(f"Error listing orders for admin: {e}")
-        return []
+        return q.order("created_at", desc=True).limit(limit)
+    return _select_orders(_build)
 
 
 def save_telegram_refs(order_id, message_id, file_id):
@@ -320,7 +544,10 @@ def save_telegram_refs(order_id, message_id, file_id):
 
 def amount_text(amount):
     """299.37 -> '299.37' (exactly two decimals, no float surprises)."""
-    return str(Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    try:
+        return str(Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    except Exception:
+        return "299.00"
 
 
 def build_upi_link(amount, order_id):
@@ -395,13 +622,6 @@ SCREENSHOT_MESSAGES = {
 
 
 def sanitize_screenshot(raw):
-    """
-    Re-encodes an uploaded image as a small, clean JPEG:
-      * proves it really is a JPEG/PNG/WebP picture (not a renamed file)
-      * strips EXIF / GPS / other metadata
-      * shrinks it to at most 1280 px so it forwards to Telegram quickly
-    Returns JPEG bytes or raises ScreenshotError.
-    """
     if not raw:
         raise ScreenshotError("empty")
     if len(raw) > MAX_UPLOAD_BYTES:
@@ -415,7 +635,7 @@ def sanitize_screenshot(raw):
         raise ScreenshotError("unreadable")
     if (img.format or "").upper() not in ("JPEG", "PNG", "WEBP"):
         raise ScreenshotError("bad_type")
-    if img.width * img.height > 50_000_000:           # refuse "decompression bomb" pictures
+    if img.width * img.height > 50_000_000:
         raise ScreenshotError("too_large")
     try:
         img = ImageOps.exif_transpose(img)
@@ -443,7 +663,6 @@ def tg_token():
 
 
 def tg_admin_id():
-    """Your personal Telegram chat id (a number) from TG_ADMIN_CHAT_ID, or None."""
     try:
         return int((os.environ.get("TG_ADMIN_CHAT_ID") or "").strip())
     except ValueError:
@@ -460,11 +679,6 @@ def is_tg_admin(telegram_user_id):
 
 
 def tg_webhook_secret():
-    """
-    Telegram echoes this in the X-Telegram-Bot-Api-Secret-Token header of every
-    webhook call; we reject anything without it. Derived from SECRET_KEY so you
-    don't need yet another env var (set TG_WEBHOOK_SECRET to override).
-    """
     explicit = (os.environ.get("TG_WEBHOOK_SECRET") or "").strip()
     if explicit:
         return explicit
@@ -472,11 +686,7 @@ def tg_webhook_secret():
     return hmac.new(key, b"sangam-tg-webhook-v1", hashlib.sha256).hexdigest()
 
 
-def tg_call(method, *, json_body=None, data=None, files=None, timeout=10):
-    """
-    Calls the Telegram Bot API. Returns the 'result' (which may be True) or None on any failure.
-    Never logs the URL (it contains the bot token).
-    """
+def tg_call(method, *, json_body=None, data=None, files=None, timeout=8):
     token = tg_token()
     if not token or httpx is None:
         return None
@@ -531,6 +741,7 @@ def reject_keyboard(order_id):
 
 
 def format_admin_message(order, decision_text=None, note=None):
+    order = _normalize_order(order) or {}
     plan = order.get("plans") or {}
     prof = order.get("profiles") or {}
     lines = [
@@ -551,11 +762,7 @@ def format_admin_message(order, decision_text=None, note=None):
 
 
 def tg_send_order(order, photo_bytes=None):
-    """
-    Sends the approval card (with ✅/❌ buttons) to your Telegram chat.
-    Returns {'message_id': int|None, 'file_id': str|None}, or None if nothing could be sent.
-    """
-    if not tg_enabled():
+    if not tg_enabled() or not order:
         return None
     admin = tg_admin_id()
     markup = approval_keyboard(order["id"])
@@ -570,7 +777,7 @@ def tg_send_order(order, photo_bytes=None):
                 "reply_markup": json.dumps(markup),
             },
             files={"photo": ("payment.jpg", photo_bytes, "image/jpeg")},
-            timeout=25,
+            timeout=15,
         )
         if isinstance(result, dict):
             photos = result.get("photo") or []
@@ -594,8 +801,7 @@ def tg_send_order(order, photo_bytes=None):
 
 
 def tg_resend_existing(order):
-    """Re-sends an approval card for an order that is still waiting (re-uses the stored screenshot)."""
-    if not tg_enabled():
+    if not tg_enabled() or not order:
         return None
     admin = tg_admin_id()
     markup = approval_keyboard(order["id"])
@@ -616,7 +822,6 @@ def tg_resend_existing(order):
 
 
 def tg_edit_card(chat_id, message_id, text, is_photo):
-    """Replaces a card's text (caption for photo cards) and removes its buttons."""
     empty = {"inline_keyboard": []}
     if is_photo:
         return tg_call("editMessageCaption", json_body={
@@ -630,8 +835,7 @@ def tg_edit_card(chat_id, message_id, text, is_photo):
 
 
 def tg_update_order_card(order, decision_text):
-    """Edits the ORIGINAL approval card (the one saved on the order) to show the final decision."""
-    message_id = order.get("tg_message_id")
+    message_id = order.get("tg_message_id") if order else None
     if not (tg_enabled() and message_id):
         return
     tg_edit_card(
@@ -642,7 +846,6 @@ def tg_update_order_card(order, decision_text):
 
 
 def tg_fetch_file(file_id):
-    """Downloads a file from Telegram (used to show the screenshot to the admin). Bytes or None."""
     if not file_id or httpx is None:
         return None
     info = tg_call("getFile", json_body={"file_id": file_id})
@@ -650,7 +853,7 @@ def tg_fetch_file(file_id):
     if not path:
         return None
     try:
-        resp = httpx.get(f"https://api.telegram.org/file/bot{tg_token()}/{path}", timeout=15)
+        resp = httpx.get(f"https://api.telegram.org/file/bot{tg_token()}/{path}", timeout=10)
         return resp.content if resp.status_code == 200 else None
     except Exception as e:
         logger.error("Telegram file download failed: %s", type(e).__name__)
@@ -658,7 +861,6 @@ def tg_fetch_file(file_id):
 
 
 def tg_set_webhook(base_url):
-    """Points the bot at https://<your site>/tg-webhook, protected by the secret header."""
     url = base_url.rstrip("/") + "/tg-webhook"
     ok = tg_call("setWebhook", json_body={
         "url": url,
@@ -666,12 +868,19 @@ def tg_set_webhook(base_url):
         "allowed_updates": ["message", "callback_query"],
         "max_connections": 10,
     })
+    cache.delete("tg:webhook_info")
     return (ok is not None), url
 
 
 def tg_webhook_info():
-    info = tg_call("getWebhookInfo", timeout=5)
-    return info if isinstance(info, dict) else None
+    cached = cache.get("tg:webhook_info")
+    if cached is not None:
+        return cached
+    info = tg_call("getWebhookInfo", timeout=3)
+    res = info if isinstance(info, dict) else None
+    if res is not None:
+        cache.set("tg:webhook_info", res, timeout=60)
+    return res
 
 
 def tg_send_text(chat_id, text):

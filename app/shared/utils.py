@@ -1,3 +1,4 @@
+# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
 """
 Helpers used by both admin and user blueprints.
 
