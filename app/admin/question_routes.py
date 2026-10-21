@@ -21,6 +21,13 @@ from app.admin import admin_bp
 from app.admin.decorators import admin_required
 from app.extensions import supabase_admin
 from app.shared.latex_lint import lint_question_payload
+from app.shared.models import (
+    get_practice_folders_for_chapter,
+    get_practice_sets_for_folder,
+    get_practice_quiz_questions,
+    _normalize_practice_row,
+    _fetch_all_chapter_question_rows,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +101,7 @@ def _bulk_delete_questions_and_images(question_rows):
 
 
 def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_name, category,
-                             default_marks=4.0, default_negative=1.0):
+                             default_marks=4.0, default_negative=1.0, default_question_type="mcq"):
     if not isinstance(raw, dict):
         return None, "not a JSON object"
 
@@ -113,7 +120,13 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_na
     if difficulty_id not in difficulty_ids:
         return None, f"difficulty_id {difficulty_id} does not match any known difficulty level"
 
-    question_type = str(raw.get("question_type", "mcq")).strip().lower()
+    fallback_type = "pyq" if str(default_question_type or "mcq").strip().lower() == "pyq" else "mcq"
+    if "question_type" in raw and str(raw.get("question_type") or "").strip():
+        question_type = str(raw.get("question_type")).strip().lower()
+    elif "is_pyq" in raw:
+        question_type = "pyq" if bool(raw.get("is_pyq")) else "mcq"
+    else:
+        question_type = fallback_type
     if question_type not in ("mcq", "pyq"):
         return None, f"question_type must be 'mcq' or 'pyq', got {raw.get('question_type')!r}"
     is_pyq = (question_type == "pyq")
@@ -189,11 +202,15 @@ def _fetch_set_questions(chapter_id, is_pyq, category, folder_name, set_name):
                 .eq("folder_name", folder_name).eq("set_name", set_name)
                 .order("created_at", desc=True).order("id"))
     try:
-        return _fetch_all_rows(build(cols))
+        rows = _fetch_all_rows(build(cols))
     except Exception as e:
         if "marks" in str(e) or "column" in str(e).lower():
-            return _fetch_all_rows(build(cols.replace(", marks, negative_marks", "")))
-        raise
+            rows = _fetch_all_rows(build(cols.replace(", marks, negative_marks", "")))
+        else:
+            raise
+    if rows:
+        return rows
+    return get_practice_quiz_questions(chapter_id, "pyq" if is_pyq else "mcq", category, folder_name, set_name, columns="*")
 
 
 def _question_to_edit_json(q):
@@ -246,7 +263,7 @@ def questions_list():
     set_name = request.args.get("set")         
 
     subjects, chapters, chapter = [], [], None
-    folders, sets = [], []
+    folders, folder_stats, sets = [], {}, []
 
     if stream_id:
         subjects = supabase_admin.table("subjects").select("id, name").eq("stream_id", stream_id).eq("is_active", True).order("display_order").execute().data
@@ -258,28 +275,13 @@ def questions_list():
         chapter = supabase_admin.table("chapters").select("id, name").eq("id", chapter_id).maybe_single().execute().data
 
     if chapter_id and q_type and category:
-        is_pyq = (q_type == "pyq")
-
         if not folder_name:
-            # VIEW 1: Folder List — strictly filtered by category
-            rows = supabase_admin.table("questions").select("folder_name").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).execute().data
-            seen = []
-            for r in rows:
-                fn = r.get("folder_name") or DEFAULT_FOLDER
-                if fn not in seen:
-                    seen.append(fn)
-            folders = sorted(seen)
+            # VIEW 1: Folder List — paginated & legacy-safe, with quiz/question counts per folder
+            folders, folder_stats = get_practice_folders_for_chapter(chapter_id, q_type, category)
 
         elif not set_name:
-            # VIEW 2: Quiz (Set) List — inside folder and category
-            rows = supabase_admin.table("questions").select("set_name, marks, negative_marks").eq("chapter_id", chapter_id).eq("is_pyq", is_pyq).eq("category", category).eq("folder_name", folder_name).execute().data
-            grouped = {}
-            for r in rows:
-                sn = r.get("set_name") or DEFAULT_FOLDER
-                if sn not in grouped:
-                    grouped[sn] = {"name": sn, "count": 0, "marks": r.get("marks"), "negative_marks": r.get("negative_marks")}
-                grouped[sn]["count"] += 1
-            sets = sorted(grouped.values(), key=lambda x: x["name"])
+            # VIEW 2: Quiz (Set) List — paginated & natural-sorted
+            sets = get_practice_sets_for_folder(chapter_id, q_type, category, folder_name)
 
         else:
             return redirect(url_for(
@@ -294,7 +296,7 @@ def questions_list():
         "admin_questions.html",
         streams=streams, subjects=subjects, chapters=chapters,
         chapter=chapter, difficulty_levels=difficulty_levels,
-        folders=folders, sets=sets,
+        folders=folders, folder_stats=folder_stats, sets=sets,
         selected_stream_id=stream_id, selected_subject_id=subject_id, selected_chapter_id=chapter_id,
         selected_type=q_type, selected_category=category,
         selected_folder=folder_name, selected_set=set_name,
@@ -346,6 +348,7 @@ def questions_bulk_upload():
     if request.is_json:
         chapter_id = request.json.get("chapter_id")
         category = request.json.get("category")
+        q_type = str(request.json.get("type", "mcq")).strip().lower()
         folder_name = str(request.json.get("folder_name", "")).strip()
         set_name = str(request.json.get("set_name", "")).strip()
         default_marks = request.json.get("marks", 4)
@@ -355,6 +358,7 @@ def questions_bulk_upload():
     else:
         chapter_id = request.form.get("chapter_id")
         category = request.form.get("category")
+        q_type = str(request.form.get("type", "mcq")).strip().lower()
         folder_name = str(request.form.get("folder_name", "")).strip()
         set_name = str(request.form.get("set_name", "")).strip()
         default_marks = request.form.get("marks", 4)
@@ -389,7 +393,7 @@ def questions_bulk_upload():
     valid_payloads, valid_rownums = [], []
     failed_validation = []      # [{"row": 14, "reason": "..."}]
     for i, raw in enumerate(parsed, start=1):
-        payload, error = _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_name, category, default_marks, default_negative)
+        payload, error = _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_name, category, default_marks, default_negative, default_question_type=q_type)
         if error:
             failed_validation.append({"row": i, "reason": error})
         else:
@@ -561,6 +565,72 @@ def questions_folder_delete():
     except Exception as exc:
         logger.error(f"Folder delete error: {exc}")
         return jsonify({"ok": False, "error": "Failed to delete folder."}), 500
+
+
+@admin_bp.route("/questions/folder/merge-all", methods=["POST"])
+@admin_required
+def questions_folder_merge_all():
+    """
+    One-click fix when quizzes in a chapter got scattered across multiple folders
+    (e.g. 4 folders with 1 quiz each instead of 1 single folder with all quizzes).
+    Moves all quizzes in (chapter_id, type, category) into `target_folder`.
+    If two different folders had a quiz with the same generic set_name (e.g. 'Quiz 1'),
+    disambiguates the set_name so zero quizzes are lost!
+    """
+    data = request.json or {}
+    target_folder = str(data.get("target_folder", "")).strip()
+    chapter_id = data.get("chapter_id")
+    q_type = data.get("type")
+    category = data.get("category")
+
+    if not all([target_folder, chapter_id, q_type, category]):
+        return jsonify({"ok": False, "error": "Missing required data."}), 400
+
+    try:
+        is_pyq = (q_type == "pyq")
+        target_cat = str(category).strip().lower()
+        rows = _fetch_all_chapter_question_rows(
+            chapter_id, is_pyq, "id, folder_name, set_name, topic_name, category"
+        )
+        matching = [r for r in rows if _normalize_practice_row(r)[0] == target_cat]
+        if not matching:
+            return jsonify({"ok": False, "error": "No questions found in this chapter/category to merge."}), 400
+
+        set_to_folders = {}
+        for r in matching:
+            _cat, fn, sn = _normalize_practice_row(r)
+            set_to_folders.setdefault(sn, set()).add(fn)
+
+        updates = {}
+        for r in matching:
+            _cat, fn, sn = _normalize_practice_row(r)
+            new_sn = sn
+            if len(set_to_folders.get(sn, ())) > 1 and fn != target_folder:
+                if sn.lower() in ("set 1", "quiz 1", "practice set 1", DEFAULT_FOLDER.lower()):
+                    new_sn = fn
+                else:
+                    new_sn = f"{fn} - {sn}"
+            updates.setdefault(new_sn, []).append(r["id"])
+
+        for new_sn, qids in updates.items():
+            for i in range(0, len(qids), 100):
+                chunk = qids[i:i + 100]
+                supabase_admin.table("questions").update({
+                    "folder_name": target_folder,
+                    "set_name": new_sn,
+                    "topic_name": new_sn,
+                    "category": target_cat,
+                }).in_("id", chunk).execute()
+
+        return jsonify({
+            "ok": True,
+            "target_folder": target_folder,
+            "quiz_count": len(updates),
+            "question_count": len(matching),
+        })
+    except Exception as exc:
+        logger.error(f"Folder merge-all error: {exc}")
+        return jsonify({"ok": False, "error": "Failed to merge folders."}), 500
 
 
 # ==========================================
