@@ -1,46 +1,65 @@
 {% extends "shared/base.html" %}
-{% block title %}{{ chapter.name }} — {{ 'PYQ' if mode == 'pyq' else 'MCQ' }}{% endblock %}
+{% block title %}{{ chapter.name }} — {{ 'PYQ Archive' if mode == 'pyq' else 'Concept MCQs' }}{% endblock %}
 
 {% block content %}
-<section class="max-w-4xl mx-auto px-6 pt-12 pb-24 relative z-10">
+<section class="max-w-4xl mx-auto px-5 pt-8 pb-20 relative z-10">
   
-  <div class="mb-10 border-b border-white/10 pb-6">
-    <a href="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=chapter.id) }}" data-back-url="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=chapter.id) }}" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-flex items-center gap-2 transition-colors">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+  <div class="mb-7 border-b border-white/10 pb-4">
+    <a href="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=chapter.id) }}"
+       data-back-url="{{ url_for('user.practice_chapter_detail', slug=stream.slug, chapter_id=chapter.id) }}"
+       class="text-xs font-bold text-gray-400 hover:text-gold mb-3 inline-flex items-center gap-1.5 transition-colors">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
       </svg>
-      Back to Mode Selection
+      Back to Format Selection
     </a>
-    <div class="flex items-center gap-3 mb-2">
-        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full">{{ chapter.name }}</span>
+    <div class="flex items-center gap-2 mb-1.5">
+        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded">{{ chapter.name }}</span>
     </div>
-    <h1 class="font-display text-4xl font-bold text-white mb-2 tracking-tight">
-      {{ 'PYQ Practice' if mode == 'pyq' else 'MCQ Practice' }}
+    <h1 class="font-display text-2xl sm:text-3xl font-bold text-white tracking-tight">
+      {{ 'Past Exam Archive (PYQs)' if mode == 'pyq' else 'Concept & Topic MCQs' }}
     </h1>
-    <p class="text-gray-400 text-sm font-medium">How would you like to structure your practice session?</p>
+    <p class="text-gray-400 text-xs sm:text-sm font-medium mt-1">Select how you want to structure your practice session.</p>
   </div>
   
-  <div class="grid sm:grid-cols-2 gap-6">
-    <!-- TOPIC-WISE BUTTON -->
+  <!-- Compact Handcrafted Category Cards (Replaced "Random Question Practice" with Aesthetic Titles) -->
+  <div class="grid sm:grid-cols-2 gap-4">
+    <!-- TOPIC-WISE MASTERY -->
     <a href="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category='topic') }}"
-       class="block p-8 border border-white/10 rounded-2xl hover:border-gold/40 hover:shadow-[0_0_30px_rgba(212,160,23,0.15)] transition-all duration-300 bg-[#161616]/90 backdrop-blur-xl group relative overflow-hidden text-center flex flex-col items-center justify-center min-h-[200px]">
-      
-      <div class="absolute inset-y-0 left-0 w-1 bg-transparent group-hover:bg-gold transition-colors"></div>
-
-      <p class="font-display text-2xl font-bold text-white group-hover:text-gold transition-colors relative z-10 mb-2">Topic-wise Practice</p>
-      <p class="text-sm text-gray-400 group-hover:text-gray-300 transition-colors relative z-10">Pick a specific topic to drill</p>
+       class="flex items-center justify-between gap-4 p-5 border border-white/10 rounded-xl hover:border-gold/45 transition-all duration-200 bg-[#12141d]/90 backdrop-blur-xl group shadow-lg">
+      <div class="flex items-start gap-3.5">
+        <div class="w-10 h-10 rounded-lg bg-gold/10 border border-gold/25 text-gold flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10" />
+          </svg>
+        </div>
+        <div>
+          <p class="font-display text-lg font-bold text-white group-hover:text-gold transition-colors">Topic-wise Mastery</p>
+          <p class="text-xs text-gray-400 mt-1 leading-relaxed">Focused sub-topic drills to master one concept at a time.</p>
+        </div>
+      </div>
+      <span class="text-gray-500 group-hover:text-gold transition-colors text-sm font-bold shrink-0">&rarr;</span>
     </a>
     
-    <!-- RANDOM BUTTON -->
+    <!-- COMPLETE CHAPTER ARENA (replaces "Random Chapter Practice") -->
     <a href="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category='random') }}"
-       class="block p-8 border border-white/10 rounded-2xl hover:border-gold/40 hover:shadow-[0_0_30px_rgba(212,160,23,0.15)] transition-all duration-300 bg-[#161616]/90 backdrop-blur-xl group relative overflow-hidden text-center flex flex-col items-center justify-center min-h-[200px]">
-      
-      <div class="absolute inset-y-0 left-0 w-1 bg-transparent group-hover:bg-gold transition-colors"></div>
-
-      <p class="font-display text-2xl font-bold text-white group-hover:text-gold transition-colors relative z-10 mb-2">Random {{ 'PYQ' if mode == 'pyq' else 'Chapter' }} Practice</p>
-      <p class="text-sm text-gray-400 group-hover:text-gray-300 transition-colors relative z-10">Mixed questions from the whole chapter</p>
+       class="flex items-center justify-between gap-4 p-5 border border-white/10 rounded-xl hover:border-gold/45 transition-all duration-200 bg-[#12141d]/90 backdrop-blur-xl group shadow-lg">
+      <div class="flex items-start gap-3.5">
+        <div class="w-10 h-10 rounded-lg bg-emerald-400/10 border border-emerald-400/25 text-emerald-300 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <p class="font-display text-lg font-bold text-white group-hover:text-gold transition-colors">
+            {{ 'Archive PYQ Arena' if mode == 'pyq' else 'Complete Chapter Arena' }}
+          </p>
+          <p class="text-xs text-gray-400 mt-1 leading-relaxed">Comprehensive mixed-concept sets spanning the entire chapter.</p>
+        </div>
+      </div>
+      <span class="text-gray-500 group-hover:text-gold transition-colors text-sm font-bold shrink-0">&rarr;</span>
     </a>
   </div>
 </section>
 {% endblock %}
-<!-- SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21) -->
+<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->

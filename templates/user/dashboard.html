@@ -1,115 +1,172 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ stream.name }} Workspace — SANGAM STUDY{% endblock %}
 {% block content %}
-<section class="max-w-6xl mx-auto px-6 pt-12 pb-24 relative z-10">
+{% set ps = premium_status() %}
+<section class="max-w-5xl mx-auto px-5 pt-8 pb-20 relative z-10">
 
-  <!-- Minimalist Top Bar -->
-  <div class="flex items-center justify-between mb-12 border-b border-white/10 pb-6">
-    <div class="flex items-center gap-3">
-        <span class="text-xs font-bold tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full">{{ stream.name }}</span>
-        <span class="text-gray-500 font-medium">|</span>
-        <h1 class="font-display text-2xl font-bold text-white">Your Workspace</h1>
+  <!-- Compact Handcrafted Workspace Header (No stretched full-width banners) -->
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-7 border-b border-white/10 pb-4">
+    <div class="flex items-center gap-2.5">
+        <span class="text-[11px] font-extrabold tracking-widest uppercase text-gold border border-gold/35 bg-gold/10 px-2.5 py-1 rounded-md">{{ stream.name }}</span>
+        <span class="text-white/20">|</span>
+        <h1 class="font-display text-xl sm:text-2xl font-bold text-white tracking-tight">Your Workspace</h1>
     </div>
-    
-    <!-- SANGAM FIX: Changed "Switch Discipline" back to "Switch Stream" as strictly requested -->
-    <a href="{{ url_for('user.switch_stream') }}" class="group flex items-center gap-2 text-sm font-semibold text-gray-300 hover:text-white transition-colors bg-white/5 border border-white/10 hover:border-white/20 px-4 py-2 rounded-lg backdrop-blur-sm">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-      </svg>
-      Switch Stream
-    </a>
-  </div>
 
-  <!-- Plan status: one slim line, never a banner -->
-  {% set ps = premium_status() %}
-  {% if ps.active %}
-  <div class="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] px-5 py-3 text-sm">
-    <span class="font-semibold text-emerald-200">{{ 'Admin access' if ps.is_admin else ps.plan_name ~ ' is active' }}{% if ps.expires_label %} until {{ ps.expires_label }}{% endif %}</span>
-    <div class="flex flex-wrap items-center gap-4">
+    <!-- Right Controls: Admin Access Tab + Switch Stream -->
+    <div class="flex flex-wrap items-center gap-2.5">
       {% if ps.is_admin %}
-      <a href="{{ url_for('payments.plans') }}" class="font-semibold text-gold hover:underline">Season Pass &amp; QR</a>
-      <a href="{{ url_for('admin.payments_panel') }}" class="font-semibold text-emerald-300 hover:underline">Admin Approvals</a>
+      <!-- Direct 1-Click Admin Dashboard Pill -->
+      <a href="{{ url_for('admin.dashboard') }}"
+         class="inline-flex items-center gap-1.5 text-xs font-bold text-ink bg-gold hover:bg-gold-light px-3.5 py-2 rounded-lg transition-all shadow-[0_2px_12px_rgba(212,160,23,0.25)]">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
+        Admin Dashboard
+      </a>
+
+      <!-- Compact Admin Access Tab Dropdown -->
+      <div x-data="{ adminTab: false }" class="relative z-40">
+        <button type="button" @click="adminTab = !adminTab" @click.outside="adminTab = false"
+                class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-400/30 px-3 py-2 rounded-lg transition-all focus:outline-none">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          Admin Access
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 transition-transform duration-200" :class="adminTab ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        <div x-show="adminTab" x-cloak x-transition.opacity.duration.150ms
+             class="absolute right-0 mt-2 w-64 bg-[#12151f] border border-white/15 rounded-xl shadow-2xl overflow-hidden origin-top-right backdrop-blur-xl p-1.5">
+          <div class="px-3 py-1.5 mb-1 border-b border-white/5">
+            <p class="text-[10px] font-black uppercase tracking-widest text-emerald-400">Quick Admin Actions</p>
+          </div>
+          <a href="{{ url_for('admin.dashboard') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-white hover:bg-white/5 transition-colors">
+            <span>🛠️ Full Admin Dashboard</span>
+            <span class="text-[10px] text-gray-400">&rarr;</span>
+          </a>
+          <a href="{{ url_for('admin.questions_list') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-200 hover:bg-white/5 hover:text-gold transition-colors">
+            <span>➕ Add Chapter Quiz / Material</span>
+            <span class="text-[10px] text-gray-400">MCQs</span>
+          </a>
+          <a href="{{ url_for('admin.test_series_list') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-200 hover:bg-white/5 hover:text-gold transition-colors">
+            <span>📦 Add / Manage Mock Tests</span>
+            <span class="text-[10px] text-gray-400">Series</span>
+          </a>
+          <a href="{{ url_for('admin.payments_panel') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-emerald-300 hover:bg-white/5 transition-colors">
+            <span>✅ Payment Approvals</span>
+            <span class="text-[10px] text-gray-400">Orders</span>
+          </a>
+          <a href="{{ url_for('payments.plans') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gold hover:bg-white/5 transition-colors">
+            <span>💎 Season Pass &amp; QR Page</span>
+            <span class="text-[10px] text-gray-400">Preview</span>
+          </a>
+        </div>
+      </div>
+      {% elif ps.active %}
+      <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-400/25 px-3 py-1.5 rounded-lg">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+        {{ ps.plan_name or 'Season Pass' }} Active
+      </span>
+      {% elif ps.offer_name %}
+      <a href="{{ url_for('payments.plans') }}"
+         class="inline-flex items-center gap-1.5 text-xs font-bold text-gold bg-gold/10 hover:bg-gold/20 border border-gold/30 px-3 py-2 rounded-lg transition-colors">
+        💎 {{ ps.offer_name }} ({{ ps.offer_price | inr }})
+      </a>
       {% endif %}
-      <a href="{{ url_for('payments.history') }}" class="font-semibold text-gray-300 hover:text-white transition-colors">My payments</a>
+
+      <a href="{{ url_for('user.switch_stream') }}"
+         class="group inline-flex items-center gap-1.5 text-xs font-semibold text-gray-300 hover:text-white transition-colors bg-white/5 border border-white/10 hover:border-white/25 px-3.5 py-2 rounded-lg backdrop-blur-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-gold group-hover:rotate-180 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+        Switch Stream
+      </a>
     </div>
   </div>
-  {% elif ps.offer_name %}
-  <a href="{{ url_for('payments.plans') }}" class="mb-8 flex items-center justify-between gap-4 rounded-xl border border-gold/30 bg-gold/[0.07] px-5 py-3 text-sm transition-colors hover:bg-gold/10">
-    <span class="font-semibold text-gray-100">Unlock every premium test and practice set with the {{ ps.offer_name }}, {{ ps.offer_price | inr }}</span>
-    <span class="shrink-0 font-bold text-gold">See plan &rarr;</span>
-  </a>
-  {% endif %}
 
-  <!-- The 3-Column Professional Action Grid (No long banners, all proportional) -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <!-- 3 Compact, Handcrafted Study Modules (Proportional & Low-Profile) -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-    <!-- Card 1: Practice Module -->
-    <div class="bg-scholar-card border border-scholar-border rounded-2xl p-8 backdrop-blur-xl hover:border-white/20 transition-all group flex flex-col h-full shadow-2xl">
-      <div class="w-12 h-12 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-gray-300 mb-6 group-hover:scale-110 transition-transform">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      </div>
-      <h2 class="font-display text-2xl font-bold text-white mb-3">Chapter-wise Practice</h2>
-      <p class="text-sm text-gray-400 font-medium leading-relaxed mb-8 flex-grow">Master your concepts with strictly verified, topic-wise practice sessions and Previous Year Questions (PYQs).</p>
-      <a href="{{ url_for('user.practice_subjects', slug=stream.slug) }}" class="mt-auto flex items-center gap-2 text-sm font-bold text-white bg-white/5 border border-white/10 hover:bg-white/10 w-fit px-6 py-3 rounded-lg transition-colors">
-        Start Practice &rarr;
-      </a>
-    </div>
-
-    <!-- Card 2: Evaluation Engine (Mock Tests + My Attempts) -->
-    <div class="bg-scholar-card border border-gold/20 rounded-2xl p-8 backdrop-blur-xl hover:border-gold/40 transition-all group flex flex-col h-full shadow-[0_0_30px_rgba(212,160,23,0.05)] relative overflow-hidden">
-      <!-- Premium Accent Glow -->
-      <div class="absolute top-0 right-0 w-32 h-32 bg-gold/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-gold/20 transition-colors"></div>
-
-      <div class="flex justify-between items-start mb-6 relative z-10">
-        <div class="w-12 h-12 bg-gold/10 border border-gold/20 rounded-xl flex items-center justify-center text-gold group-hover:scale-110 transition-transform">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    <!-- Module 1: Chapter-wise Practice -->
+    <div class="bg-[#12141d]/90 border border-white/10 hover:border-gold/40 rounded-xl p-5 backdrop-blur-xl transition-all duration-200 group flex flex-col justify-between shadow-lg">
+      <div>
+        <div class="flex items-center justify-between mb-3.5">
+          <div class="w-9 h-9 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center text-gold group-hover:bg-gold/15 group-hover:border-gold/30 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
+          </div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-white/[0.04] border border-white/10 px-2 py-0.5 rounded">MCQs &amp; PYQs</span>
         </div>
-        <span class="text-[10px] uppercase font-black tracking-widest text-gold bg-gold/10 border border-gold/20 px-2 py-1 rounded">Premium</span>
+        <h2 class="font-display text-lg font-bold text-white mb-1.5 group-hover:text-gold transition-colors">Chapter-wise Practice</h2>
+        <p class="text-xs text-gray-400 leading-relaxed mb-4">Topic-wise mastery drills, complete chapter arenas, and authentic past-exam PYQ archives.</p>
       </div>
 
-      <h2 class="font-display text-2xl font-bold text-white mb-3 relative z-10">Mock Test Series</h2>
-      <p class="text-sm text-gray-400 font-medium leading-relaxed mb-8 flex-grow relative z-10">Access full-length, strictly verified NTA-pattern mock tests organized in dedicated VIP folders.</p>
-      
-      <div class="mt-auto space-y-3 relative z-10">
-          <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}" class="flex items-center justify-center gap-2 text-sm font-bold text-ink bg-gold hover:bg-gold-light w-full px-6 py-3 rounded-lg transition-colors shadow-md">
-            Take Mock Tests
-          </a>
-          <!-- My Attempts elegantly integrated here -->
-          <a href="{{ url_for('user.profile') }}" class="flex items-center justify-center gap-2 text-sm font-semibold text-gray-400 hover:text-gold w-full py-2 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            View My Attempts
-          </a>
+      <div class="pt-3 border-t border-white/5">
+        <a href="{{ url_for('user.practice_subjects', slug=stream.slug) }}"
+           class="flex items-center justify-between text-xs font-bold text-white bg-white/[0.06] hover:bg-gold hover:text-ink border border-white/10 hover:border-gold px-3.5 py-2.5 rounded-lg transition-all">
+          <span>Start Practice</span>
+          <span>&rarr;</span>
+        </a>
       </div>
     </div>
 
-    <!-- Card 3: The Community (Clean Square Box matching the other cards) -->
-    <div class="bg-[#229ED9]/5 border border-[#229ED9]/20 rounded-2xl p-8 backdrop-blur-xl hover:border-[#229ED9]/40 transition-all group flex flex-col h-full shadow-2xl relative overflow-hidden">
-      <!-- Telegram Blue Glow -->
-      <div class="absolute bottom-0 right-0 w-32 h-32 bg-[#229ED9]/10 rounded-full blur-3xl -mr-10 -mb-10 group-hover:bg-[#229ED9]/20 transition-colors"></div>
+    <!-- Module 2: Mock Test Series -->
+    <div class="bg-[#12141d]/90 border border-gold/25 hover:border-gold/50 rounded-xl p-5 backdrop-blur-xl transition-all duration-200 group flex flex-col justify-between shadow-lg relative overflow-hidden">
+      <div class="absolute -top-10 -right-10 w-24 h-24 bg-gold/10 rounded-full blur-2xl pointer-events-none"></div>
 
-      <div class="w-12 h-12 bg-[#229ED9]/10 border border-[#229ED9]/20 rounded-xl flex items-center justify-center text-[#229ED9] mb-6 group-hover:scale-110 transition-transform relative z-10">
-        <svg viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16c-.169 1.858-.896 6.728-.896 6.728-.041.24-.145.483-.361.62-.216.135-.481.129-.702.03l-3.128-1.516-1.51 1.454c-.155.153-.353.199-.548.126l.373-3.31 6.004-5.446c.263-.235-.058-.366-.4-.135l-7.435 4.687-3.2-1.02c-.696-.222-.71-.696.146-1.03l12.494-4.822c.58-.216 1.088.14.9 1.041z"/>
-        </svg>
+      <div class="relative z-10">
+        <div class="flex items-center justify-between mb-3.5">
+          <div class="w-9 h-9 bg-gold/10 border border-gold/25 rounded-lg flex items-center justify-center text-gold">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          </div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-gold bg-gold/10 border border-gold/25 px-2 py-0.5 rounded">NTA Pattern</span>
+        </div>
+        <h2 class="font-display text-lg font-bold text-white mb-1.5 group-hover:text-gold transition-colors">Mock Test Series</h2>
+        <p class="text-xs text-gray-400 leading-relaxed mb-4">Full-length &amp; part-syllabus timed mock tests with accuracy, speed, and mistake-note analytics.</p>
       </div>
-      <h2 class="font-display text-2xl font-bold text-white mb-3 relative z-10">SANGAM Community</h2>
-      <p class="text-sm text-gray-400 font-medium leading-relaxed mb-8 flex-grow relative z-10">Don't prepare alone. Get instant doubt resolutions, daily updates, and premium study materials.</p>
-      
-      <a href="https://t.me/neetjeesangam" target="_blank" rel="noopener noreferrer" class="mt-auto flex items-center justify-between text-sm font-bold text-white bg-[#229ED9]/20 hover:bg-[#229ED9]/30 border border-[#229ED9]/30 w-full px-5 py-3 rounded-lg transition-colors relative z-10">
-        Join Telegram 
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-        </svg>
-      </a>
+
+      <div class="pt-3 border-t border-white/5 flex items-center gap-2 relative z-10">
+        <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}"
+           class="flex-1 text-center text-xs font-bold text-ink bg-gold hover:bg-gold-light px-3 py-2.5 rounded-lg transition-colors shadow-sm">
+          Take Tests
+        </a>
+        <a href="{{ url_for('user.profile') }}"
+           class="text-center text-xs font-semibold text-gray-300 hover:text-gold bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2.5 rounded-lg transition-colors">
+          My Attempts
+        </a>
+      </div>
+    </div>
+
+    <!-- Module 3: Books & Premium Material (Opens Library Page -> Join Our Telegram Channel) -->
+    <div class="bg-[#12141d]/90 border border-white/10 hover:border-amber-400/40 rounded-xl p-5 backdrop-blur-xl transition-all duration-200 group flex flex-col justify-between shadow-lg relative overflow-hidden">
+      <div class="absolute -bottom-10 -right-10 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+      <div class="relative z-10">
+        <div class="flex items-center justify-between mb-3.5">
+          <div class="w-9 h-9 bg-amber-400/10 border border-amber-400/25 rounded-lg flex items-center justify-center text-amber-300 group-hover:scale-105 transition-transform">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+          </div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-300 bg-amber-400/10 border border-amber-400/25 px-2 py-0.5 rounded">Digital Library</span>
+        </div>
+        <h2 class="font-display text-lg font-bold text-white mb-1.5 group-hover:text-amber-300 transition-colors">Books &amp; Premium Material</h2>
+        <p class="text-xs text-gray-400 leading-relaxed mb-4">Curated reference books, NCERT markups, rapid revision short notes, and formula sheets.</p>
+      </div>
+
+      <div class="pt-3 border-t border-white/5 relative z-10">
+        <a href="{{ url_for('user.books_materials', slug=stream.slug) }}"
+           class="flex items-center justify-between text-xs font-bold text-amber-200 bg-amber-400/10 hover:bg-gold hover:text-ink border border-amber-400/25 hover:border-gold px-3.5 py-2.5 rounded-lg transition-all">
+          <span>Open Library</span>
+          <span>&rarr;</span>
+        </a>
+      </div>
     </div>
 
   </div>
 </section>
 {% endblock %}
-<!-- SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21) -->
+<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
