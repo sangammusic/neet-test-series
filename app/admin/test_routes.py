@@ -1,19 +1,4 @@
-# SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21)
-"""
-Pillar 1: Mock Test Series (The Folder System).
-
-Flow:
-1. Level 1: Admin creates "Test Series Folders" (mock_test_series).
-2. Level 2: Admin drills into a folder to see/create Tests.
-   - BUG FIXED: Duplicate categories filtered.
-   - VALIDATION: total_marks removed from initial creation. Marks_per_question handles it.
-   - SANGAM FIX: Dynamic Auto-Creation of Categories via Text Input instead of Dropdown.
-3. Level 3: Admin manages questions for a test via:
-    A. 25-Chunk Upload (3-Tabs) with STRICT SANGAM STUDY HUB RULES (45-45-90 for 720 marks).
-    B. Live JSON Edit: Seamless replacement of JSON + Image toggle (No Duplicates).
-    C. Undo Chunk: Temporary history destruction with Deep Storage Cleanup.
-    D. Deep Storage Permanent Cleanup (Fixed Chunking Bug for 100% Wipe).
-"""
+# STUDY SANGAM HUB v3.0 — Mock Test Series (Free vs Paid Test Series Folders + Fast Cache Invalidation)
 import json
 import logging
 import re
@@ -24,6 +9,8 @@ from app.admin import admin_bp
 from app.admin.decorators import admin_required
 from app.admin.mock_question_routes import _validate_mock_question
 from app.extensions import supabase_admin, cache
+from app.shared import payments_core as pay
+from app.shared.access import enrich_series_list, get_series_pricing, invalidate_series_plans_cache
 from app.shared.latex_lint import lint_question_payload
 
 logger = logging.getLogger(__name__)
@@ -31,26 +18,24 @@ logger = logging.getLogger(__name__)
 BUCKET_NAME = "question-images"
 
 
-def _invalidate_test_questions_cache(test_id):
+def _invalidate_test_questions_cache(test_id=None, series_id=None):
     """
-    Call this after ANY change to a test's question set (upload, undo,
-    remove, wipe). get_mock_questions_for_test() and
-    get_mock_question_ids_for_test() are cached (see app/shared/models.py)
-    since students hit them constantly during a mock test -- but that
-    means without this, an admin's edit wouldn't show up for students
-    until the cache naturally expired (up to 5 min later).
+    Clears all cached mock test and series lookups immediately when Admin creates,
+    edits, or deletes a folder, test, or question so students never see stale data.
     """
-    from app.shared.models import get_mock_questions_for_test, get_mock_question_ids_for_test
-    cache.delete_memoized(get_mock_questions_for_test, test_id)
-    cache.delete_memoized(get_mock_question_ids_for_test, test_id)
+    from app.shared.models import (
+        get_mock_questions_for_test,
+        get_mock_question_ids_for_test,
+        invalidate_mock_series_cache,
+    )
+    if test_id:
+        cache.delete_memoized(get_mock_questions_for_test, test_id)
+        cache.delete_memoized(get_mock_question_ids_for_test, test_id)
+    invalidate_mock_series_cache(series_id=series_id, test_id=test_id)
+    invalidate_series_plans_cache()
 
 
 def _delete_image_from_storage(image_url):
-    """
-    Fallback Helper function for single image deletions.
-    SANGAM STUDY HUB FIX: Safely strips trailing query params ('?') and 
-    strictly matches the bucket path to prevent silent Storage API failures.
-    """
     if not image_url:
         return
     try:
@@ -65,8 +50,20 @@ def _delete_image_from_storage(image_url):
         logger.error(f"Failed to delete image from storage {image_url}: {e}")
 
 
+def _parse_series_paid_and_price(form):
+    access_type = (form.get("access_type") or "").strip().lower()
+    is_paid = (access_type == "paid") or (form.get("is_paid") in ("1", "true", "on"))
+    try:
+        price_inr = round(float(form.get("price_inr") or 0), 2)
+    except (TypeError, ValueError):
+        price_inr = 0.0
+    if not is_paid or price_inr <= 0:
+        return False, 0.0
+    return True, price_inr
+
+
 # ==========================================
-# LEVEL 1: TEST SERIES FOLDERS
+# LEVEL 1: TEST SERIES FOLDERS (FREE OR PAID + PRICE)
 # ==========================================
 @admin_bp.route("/test-series", methods=["GET", "POST"])
 @admin_required
@@ -74,31 +71,50 @@ def test_series_list():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         stream_id = request.form.get("stream_id")
-        # A folder must belong to exactly one stream from the moment it's
-        # created -- this is what previously let one folder silently hold
-        # tests from multiple streams, and let every stream's students see
-        # every folder (see sql/migration_test_series_stream.sql).
+        is_paid, price_inr = _parse_series_paid_and_price(request.form)
+
         if not name or not stream_id:
-            flash("Please select a Stream and enter a folder name.", "error")
+            flash("Please select a Stream and enter a Test Series folder name.", "error")
         else:
+            created_row = None
             try:
-                supabase_admin.table("mock_test_series").insert(
-                    {"name": name, "stream_id": stream_id}
-                ).execute()
-                flash(f"Folder '{name}' created successfully.", "success")
+                # Try inserting with is_paid & price_inr columns first
+                try:
+                    res = supabase_admin.table("mock_test_series").insert(
+                        {"name": name, "stream_id": stream_id, "is_paid": is_paid, "price_inr": price_inr}
+                    ).execute()
+                    created_row = (res.data or [None])[0]
+                except Exception:
+                    res = supabase_admin.table("mock_test_series").insert(
+                        {"name": name, "stream_id": stream_id}
+                    ).execute()
+                    created_row = (res.data or [None])[0]
+
+                if created_row and created_row.get("id"):
+                    pay.sync_series_plan(
+                        series_id=created_row["id"],
+                        name=name,
+                        is_paid=is_paid,
+                        price_inr=price_inr,
+                        stream_id=stream_id,
+                    )
+                _invalidate_test_questions_cache(series_id=created_row.get("id") if created_row else None)
+                label = f"Paid (₹{int(price_inr) if price_inr == int(price_inr) else price_inr})" if is_paid else "Free"
+                flash(f"Test Series '{name}' created as {label}.", "success")
             except Exception as exc:
                 logger.error(f"Test series creation failed: {exc}")
                 flash("Could not create folder. Please try again.", "error")
         return redirect(url_for("admin.test_series_list"))
 
     streams = supabase_admin.table("streams").select("id, name").order("display_order").execute().data
-    series = (
+    raw_series = (
         supabase_admin.table("mock_test_series")
         .select("*, streams(name)")
         .order("created_at", desc=True)
         .execute()
-        .data
+        .data or []
     )
+    series = enrich_series_list(raw_series)
     return render_template("admin_test_folders.html", series=series, streams=streams)
 
 
@@ -106,15 +122,40 @@ def test_series_list():
 @admin_required
 def test_series_edit(series_id):
     new_name = request.form.get("name", "").strip()
+    is_paid, price_inr = _parse_series_paid_and_price(request.form)
+
     if not new_name:
         flash("Folder name cannot be empty.", "error")
     else:
         try:
-            supabase_admin.table("mock_test_series").update({"name": new_name}).eq("id", series_id).execute()
-            flash("Folder renamed successfully.", "success")
+            try:
+                supabase_admin.table("mock_test_series").update(
+                    {"name": new_name, "is_paid": is_paid, "price_inr": price_inr}
+                ).eq("id", series_id).execute()
+            except Exception:
+                supabase_admin.table("mock_test_series").update({"name": new_name}).eq("id", series_id).execute()
+
+            folder_row = supabase_admin.table("mock_test_series").select("stream_id").eq("id", series_id).maybe_single().execute().data or {}
+            pay.sync_series_plan(
+                series_id=series_id,
+                name=new_name,
+                is_paid=is_paid,
+                price_inr=price_inr,
+                stream_id=folder_row.get("stream_id"),
+            )
+            # Also sync all tests inside this series so their is_premium & price_inr match the folder
+            try:
+                supabase_admin.table("tests").update(
+                    {"is_premium": is_paid, "price_inr": price_inr}
+                ).eq("series_id", series_id).execute()
+            except Exception:
+                pass
+
+            _invalidate_test_questions_cache(series_id=series_id)
+            flash("Test Series updated successfully.", "success")
         except Exception as exc:
-            logger.error(f"Folder rename failed: {exc}")
-            flash("Could not rename folder.", "error")
+            logger.error(f"Folder update failed: {exc}")
+            flash("Could not update folder.", "error")
             
     return redirect(url_for("admin.test_series_list"))
 
@@ -122,10 +163,6 @@ def test_series_edit(series_id):
 @admin_bp.route("/test-series/<series_id>/delete", methods=["POST"])
 @admin_required
 def test_series_delete(series_id):
-    """
-    Nuclear Deletion: Cascades through all Tests, Questions, and Bucket Images.
-    Strict chunking employed to prevent payload limits on massive folder wipes.
-    """
     try:
         tests_in_series = supabase_admin.table("tests").select("id").eq("series_id", series_id).execute().data
         test_ids = [t["id"] for t in tests_in_series]
@@ -174,7 +211,6 @@ def test_series_delete(series_id):
                     except Exception as e:
                         logger.error(f"Bucket batch delete raised an exception: {e}")
 
-            # Wipe mapping and tests efficiently
             if test_ids:
                 for i in range(0, len(test_ids), 40):
                     chunk = test_ids[i:i+40]
@@ -187,6 +223,12 @@ def test_series_delete(series_id):
                     supabase_admin.table("mock_questions").delete().in_("id", chunk).execute()
 
         supabase_admin.table("mock_test_series").delete().eq("id", series_id).execute()
+        try:
+            from app.shared.access import series_plan_code
+            supabase_admin.table("plans").update({"is_active": False}).eq("code", series_plan_code(series_id)).execute()
+        except Exception:
+            pass
+        _invalidate_test_questions_cache(series_id=series_id)
         flash("Folder and ALL its tests, questions, and images were permanently wiped.", "success")
     except Exception as exc:
         logger.error(f"Folder deletion failed: {exc}")
@@ -206,16 +248,14 @@ def series_tests(series_id):
         flash("Test Series Folder not found.", "error")
         return redirect(url_for("admin.test_series_list"))
 
+    pricing = get_series_pricing(series_data)
+    series_data["is_paid"] = pricing["is_paid"]
+    series_data["price_inr"] = pricing["price_inr"]
+
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         marks_per_question_raw = request.form.get("marks_per_question")
-        # The folder's own stream is now the source of truth for every test
-        # created inside it (a folder belongs to exactly one stream -- see
-        # sql/migration_test_series_stream.sql). Only fall back to the form
-        # field for an older folder that predates that column and still has
-        # stream_id = NULL, so nothing already in production breaks.
         stream_id = series_data.get("stream_id") or request.form.get("stream_id")
-
         category_name = request.form.get("category_name", "").strip()
 
         if not title or not marks_per_question_raw or not str(marks_per_question_raw).strip() or not category_name or not stream_id:
@@ -247,6 +287,7 @@ def series_tests(series_id):
         negative_marking_raw = float(request.form.get("negative_marking") or 0)
         negative_marking = abs(negative_marking_raw)
 
+        # Inherits Free/Paid status & price directly from the parent Test Series Folder
         payload = {
             "series_id": series_id,
             "stream_id": stream_id,
@@ -256,13 +297,14 @@ def series_tests(series_id):
             "duration_minutes": int(request.form.get("duration_minutes") or 180),
             "total_marks": 0, 
             "negative_marking": negative_marking,
-            "is_premium": request.form.get("is_premium") == "on",
-            "price_inr": float(request.form.get("price_inr") or 0),
+            "is_premium": bool(pricing["is_paid"]),
+            "price_inr": float(pricing["price_inr"] or 0),
         }
         
         try:
             result = supabase_admin.table("tests").insert(payload).execute()
             test_id = result.data[0]["id"]
+            _invalidate_test_questions_cache(test_id=test_id, series_id=series_id)
             flash("Test created — you can now set targets and start uploading questions.", "success")
             return redirect(url_for("admin.tests_upload", test_id=test_id, mpq=marks_per_question_raw))
         except Exception as exc:
@@ -270,12 +312,8 @@ def series_tests(series_id):
             flash("Could not create test.", "error")
             return redirect(url_for("admin.series_tests", series_id=series_id))
 
-    # Streams dropdown is only still needed on the create-test form for the
-    # rare legacy folder that has no stream_id of its own yet (see above).
     streams = supabase_admin.table("streams").select("id, name").order("display_order").execute().data
 
-    # Categories are scoped to the folder's stream once it has one, so the
-    # "Category" field only ever offers categories that make sense here.
     cats_query = supabase_admin.table("test_categories").select("id, name, stream_id").order("display_order")
     if series_data.get("stream_id"):
         cats_query = cats_query.eq("stream_id", series_data["stream_id"])
@@ -290,7 +328,7 @@ def series_tests(series_id):
 
     tests = (
         supabase_admin.table("tests")
-        .select("id, title, duration_minutes, total_marks, is_premium, is_active, streams(name)")
+        .select("id, title, description, duration_minutes, total_marks, is_premium, is_active, streams(name)")
         .eq("series_id", series_id)
         .order("created_at", desc=True)
         .execute()
@@ -326,6 +364,7 @@ def tests_lock_targets(test_id):
         
     try:
         supabase_admin.table("tests").update({"total_marks": int(total_marks)}).eq("id", test_id).execute()
+        _invalidate_test_questions_cache(test_id=test_id)
         return jsonify({"ok": True, "total_marks": total_marks})
     except Exception as exc:
         logger.error(f"Target lock failed: {exc}")
@@ -340,10 +379,6 @@ def tests_manage(test_id):
         flash("Test not found.", "error")
         return redirect(url_for("admin.test_series_list"))
 
-    # SANGAM FIX: Added 'correct_option' to select payload so frontend dropdown pre-fills correctly.
-    # The full question body (options, explanation, difficulty, premium flag) is also fetched
-    # because the admin "Edit JSON" modal pre-fills its textarea from it -- previously the box
-    # opened blank and _validate_mock_question rejected whatever incomplete JSON was typed.
     mapped = (
         supabase_admin.table("mock_test_questions")
         .select(
@@ -358,7 +393,6 @@ def tests_manage(test_id):
         .data
     )
 
-    # mock_question_id -> pre-filled JSON dict for the Edit JSON modal (rendered via |tojson)
     edit_json_map = {}
     for m in mapped:
         mq = m.get("mock_questions") or {}
@@ -372,13 +406,10 @@ def tests_manage(test_id):
             "option_d": mq.get("option_d") or "",
             "correct_option": (mq.get("correct_option") or "").strip(),
             "difficulty_id": mq.get("difficulty_id"),
-            # is_pyq/pyq_year: _validate_mock_question drops pyq_year when is_pyq is falsy
             "is_pyq": bool(mq.get("is_pyq")),
             "pyq_year": mq.get("pyq_year"),
             "explanation": mq.get("explanation") or "",
             "has_image": bool(mq.get("has_image")),
-            # image_url must round-trip: the validator sets it to None when absent,
-            # which would wipe an already-uploaded diagram on save.
             "image_url": mq.get("image_url") or "",
             "is_premium": bool(mq.get("is_premium")),
         }
@@ -391,7 +422,7 @@ def tests_manage(test_id):
 def tests_bulk_map_questions(test_id):
     is_ajax = request.args.get("ajax") == "1"
     
-    test = supabase_admin.table("tests").select("id, stream_id, total_marks").eq("id", test_id).maybe_single().execute().data
+    test = supabase_admin.table("tests").select("id, stream_id, total_marks, series_id").eq("id", test_id).maybe_single().execute().data
     if not test:
         if is_ajax: return jsonify({"ok": False, "error": "Test not found."}), 404
         flash("Test not found.", "error")
@@ -432,10 +463,6 @@ def tests_bulk_map_questions(test_id):
             errors.append(f"row {i}: {error}")
         else:
             valid_payloads.append(payload)
-
-    # NOTE: the old text-only duplicate check aborted the WHOLE chunk on one generic-stem match
-    # ("Match the following:"), silently dropping up to 25 valid questions. Removed: every valid row is
-    # inserted, exactly like chapter-wise uploads now handle real duplicates (full fingerprint).
 
     total_marks_val = int(test.get("total_marks") or 0)
     if total_marks_val == 720 and not errors:
@@ -488,7 +515,7 @@ def tests_bulk_map_questions(test_id):
             if is_ajax: return jsonify({"ok": False, "error": "Mapping to test failed. Please try again."}), 500
 
     if inserted_ids:
-        _invalidate_test_questions_cache(test_id)
+        _invalidate_test_questions_cache(test_id=test_id, series_id=test.get("series_id"))
 
     latex_warnings = [{"row": i + 1, "fields": w} for i, p in enumerate(valid_payloads) for w in [lint_question_payload(p)] if w]
     return jsonify({"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "inserted_ids": inserted_ids, "errors": errors, "latex_warnings": latex_warnings})
@@ -524,7 +551,7 @@ def tests_undo_chunk(test_id):
         supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).in_("mock_question_id", question_ids).execute()
         supabase_admin.table("mock_questions").delete().in_("id", question_ids).execute()
 
-        _invalidate_test_questions_cache(test_id)
+        _invalidate_test_questions_cache(test_id=test_id)
         return jsonify({"ok": True, "message": "Chunk successfully undone and wiped."})
     except Exception as exc:
         logger.error(f"Undo error: {exc}")
@@ -542,7 +569,7 @@ def tests_remove_question(test_id, question_id):
         supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).eq("mock_question_id", question_id).execute()
         supabase_admin.table("mock_questions").delete().eq("id", question_id).execute()
 
-        _invalidate_test_questions_cache(test_id)
+        _invalidate_test_questions_cache(test_id=test_id)
 
         is_ajax = request.args.get("ajax") == "1" or request.is_json
         if is_ajax:
@@ -582,13 +609,13 @@ def tests_edit_question(test_id, question_id):
         old_q = supabase_admin.table("mock_questions").select("image_url, has_image").eq("id", question_id).maybe_single().execute().data
         if not old_q:
             return jsonify({"ok": False, "error": "Question not found (it may have been deleted). Reload the page."}), 404
-        # Editing / switching Image OFF must NEVER delete the uploaded file (only "Remove Image" does).
         if not (raw.get("image_url") or "").strip():
             payload["image_url"] = old_q.get("image_url")
         if payload.get("image_url"):
             payload["has_image"] = bool(raw.get("has_image", True))
 
         supabase_admin.table("mock_questions").update(payload).eq("id", question_id).execute()
+        _invalidate_test_questions_cache(test_id=test_id)
         return jsonify({"ok": True, "has_image": payload.get("has_image"), "image_url": payload.get("image_url"),
                         "latex_warnings": lint_question_payload(payload)})
     except Exception as exc:
@@ -606,7 +633,6 @@ def toggle_question_image(question_id):
     has_image = bool(data["has_image"])
     
     try:
-        # OFF only flips the flag; the uploaded file is KEPT so toggling ON restores it.
         supabase_admin.table("mock_questions").update({"has_image": has_image}).eq("id", question_id).execute()
         return jsonify({"ok": True})
     except Exception as exc:
@@ -685,6 +711,7 @@ def tests_delete(test_id):
                 chunk = question_ids[i:i+40]
                 supabase_admin.table("mock_questions").delete().in_("id", chunk).execute()
 
+        _invalidate_test_questions_cache(test_id=test_id, series_id=series_id)
         flash("Test and ALL related questions/images permanently wiped from DB and Storage.", "success")
         if series_id:
             return redirect(url_for("admin.series_tests", series_id=series_id))
