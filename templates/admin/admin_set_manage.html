@@ -31,9 +31,9 @@
        ========================================== -->
   <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-5 mb-8 border-b border-gray-200 pb-6">
     <div>
-      <div class="flex items-center gap-2 mb-2">
-          <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type=selected_type, category=selected_category, folder=selected_folder) }}" class="text-sm font-bold text-gray-400 hover:text-indigo-600 transition-colors flex items-center gap-1">
-              &larr; Back to Quiz List
+      <div class="flex flex-wrap items-center gap-3 mb-2">
+          <a href="{{ url_for('admin.questions_list', stream_id=selected_stream_id, subject_id=selected_subject_id, chapter_id=selected_chapter_id, type=selected_type, category=selected_category, folder=selected_folder) }}" class="text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+              &larr; Back to Quizzes in "{{ selected_folder }}"
           </a>
       </div>
       <h1 class="font-display text-4xl text-ink font-bold mb-1">📝 {{ selected_set }}</h1>
@@ -392,6 +392,7 @@
         try {
           const payload = {
               chapter_id: '{{ selected_chapter_id }}',
+              type: '{{ selected_type }}',
               category: '{{ selected_category }}',
               folder_name: '{{ selected_folder }}',
               set_name: '{{ selected_set }}',
