@@ -1,0 +1,394 @@
+{% extends "shared/base.html" %}
+{% block title %}{% if state == 'approved' %}Payment approved{% elif state == 'waiting' %}Verifying payment{% else %}Complete your payment{% endif %} — SANGAM STUDY{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* The QR is an inline SVG with a viewBox: let CSS size it. */
+  .qr-box svg { display: block; width: 100%; height: 100%; }
+  @media (prefers-reduced-motion: reduce) { .pay-pulse { animation: none !important; } }
+</style>
+{% endblock %}
+
+{# One reusable block for "enter your UTR + optional screenshot" (used while paying and for late payers) #}
+{% macro proof_form(heading, intro) %}
+<div class="rounded-2xl border border-white/10 bg-[#161616]/90 backdrop-blur-xl p-6 sm:p-7 mt-5">
+  <h2 class="font-display text-xl font-bold text-white mb-1">{{ heading }}</h2>
+  <p class="text-sm text-gray-400 leading-relaxed mb-5">{{ intro }}</p>
+
+  <label for="utr" class="block text-sm font-semibold text-gray-300 mb-2">UTR (UPI reference number)</label>
+  <input id="utr" type="text" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="12-digit number"
+         aria-describedby="utr-help"
+         class="w-full bg-[#0f0f0f] border border-white/10 rounded-xl px-4 py-3.5 text-white text-lg tracking-widest tabular-nums placeholder-gray-600 placeholder:tracking-normal placeholder:text-base focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/50 transition-all">
+  <p id="utr-help" class="text-xs text-gray-500 mt-2 leading-relaxed">
+    Open your payment app, then the payment details. Look for "UTR", "UPI Ref No." or "Transaction ID" — it has 12 digits.
+  </p>
+
+  <div class="mt-6">
+    <p class="text-sm font-semibold text-gray-300 mb-2">Payment screenshot <span class="font-normal text-gray-500">(optional, but it speeds up approval)</span></p>
+    <input id="shot" type="file" accept="image/*" class="sr-only">
+    <label for="shot" id="shot-pick"
+           class="flex items-center justify-center gap-2 w-full cursor-pointer rounded-xl border border-dashed border-white/20 px-4 py-4 text-sm font-semibold text-gray-300 hover:border-gold/50 hover:text-white transition-colors">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+      Choose screenshot
+    </label>
+    <div id="shot-preview" class="hidden mt-3 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+      <img id="shot-img" alt="Screenshot preview" class="h-16 w-16 rounded-lg object-cover bg-white/5">
+      <div class="min-w-0 flex-1">
+        <p id="shot-name" class="truncate text-sm font-semibold text-gray-200">screenshot</p>
+        <p id="shot-size" class="text-xs text-gray-500"></p>
+      </div>
+      <button type="button" id="shot-remove" class="rounded-lg px-3 py-2 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/10 transition-colors">Remove</button>
+    </div>
+  </div>
+
+  <p id="pay-error" role="alert" class="hidden mt-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300"></p>
+
+  <button type="button" id="pay-submit" disabled
+          class="mt-6 w-full rounded-xl bg-gold py-3.5 font-bold text-ink shadow-[0_4px_14px_0_rgba(212,160,23,0.2)] transition-all hover:bg-gold-light disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-gold">
+    <span id="pay-submit-label">Submit for verification</span>
+  </button>
+  <p class="mt-4 text-center text-xs leading-relaxed text-gray-500">Your plan unlocks as soon as we match this payment in our account.</p>
+</div>
+{% endmacro %}
+
+{% block content %}
+<section class="relative z-10 mx-auto max-w-xl px-5 sm:px-6 pt-10 pb-24" id="pay-root">
+
+  <a href="{{ url_for('payments.plans') }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-400 hover:text-white transition-colors">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+    Plans
+  </a>
+
+  {% if is_preview is defined and is_preview %}
+  <div class="mt-5 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-xs leading-relaxed text-amber-200">
+    <strong>🔍 Payment Page Preview Mode:</strong> This is how the payment screen looks to students.
+    {% if not ready %}Set <code class="bg-black/40 px-1.5 py-0.5 rounded font-mono">UPI_ID=yourname@fam</code> in Render Environment Variables and run <code class="bg-black/40 px-1.5 py-0.5 rounded font-mono">sql/phase1_payments.sql</code> in Supabase SQL Editor to accept real orders.{% endif %}
+  </div>
+  {% endif %}
+
+  <header class="mt-6 mb-8">
+    <h1 class="font-display text-3xl font-bold text-white">{{ plan.name or 'Season Pass' }}</h1>
+    <p class="mt-1 text-gray-400">
+      {% if valid_until %}{% if state == 'approved' %}Active until {{ valid_until }}{% else %}Valid until {{ valid_until }}{% endif %}{% endif %}
+    </p>
+    <p class="mt-0.5 text-xs text-gray-500">Payment reference {{ ref }}</p>
+  </header>
+
+  {# ============================ PAY ============================ #}
+  {% if state == 'pay' %}
+    {% set paise = (((order.payable_amount | float(299.0)) - (order.base_amount | float(299.0))) * 100) | round | int %}
+    <div class="rounded-2xl border border-gold/30 bg-gold/[0.06] p-6 sm:p-7">
+      <p class="text-sm text-gray-400">Pay exactly</p>
+      <div class="mt-1 flex items-end justify-between gap-4">
+        <p class="font-display text-5xl font-bold text-white tabular-nums" id="pay-amount">{{ order.payable_amount | inr(true) }}</p>
+        <button type="button" data-copy="{{ '%.2f' | format(order.payable_amount | float(299.0)) }}"
+                class="mb-1 shrink-0 rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-gray-200 hover:bg-white/10 transition-colors">Copy amount</button>
+      </div>
+      <p class="mt-4 text-sm leading-relaxed text-gray-400">
+        The {{ paise }} paise on top of {{ order.base_amount | inr }} is how we recognise your payment.
+        You pay {{ order.payable_amount | inr(true) }} in total, and nothing else is charged.
+      </p>
+    </div>
+
+    <div class="mt-5 rounded-2xl border border-white/10 bg-[#161616]/90 backdrop-blur-xl p-6 sm:p-7">
+      <div class="flex items-center gap-3 mb-5">
+        <span class="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-gold/40 text-sm font-semibold text-gold" aria-hidden="true">1</span>
+        <h2 class="font-display text-xl font-bold text-white">Pay with any UPI app</h2>
+      </div>
+
+      <div class="flex flex-col items-center">
+        {% if qr_svg %}
+          <div class="qr-box h-60 w-60 overflow-hidden rounded-2xl bg-white p-2 sm:h-64 sm:w-64 shadow-lg">{{ qr_svg | safe }}</div>
+          <p class="mt-3 text-center text-sm text-gray-400">Scan with PhonePe, Google Pay, Paytm, FamPay or any UPI app. The amount is already filled in.</p>
+          {% if static_qr %}
+          <details class="mt-3 text-center text-xs text-gray-400">
+            <summary class="cursor-pointer font-semibold text-gold hover:underline">Or view backup static QR image</summary>
+            <div class="mx-auto mt-2 h-52 w-52 overflow-hidden rounded-2xl bg-white p-2"><img src="{{ static_qr }}" alt="Backup UPI QR code" class="h-full w-full object-contain"></div>
+          </details>
+          {% endif %}
+        {% elif static_qr %}
+          <div class="h-60 w-60 overflow-hidden rounded-2xl bg-white p-2 sm:h-64 sm:w-64 shadow-lg"><img src="{{ static_qr }}" alt="UPI QR code" class="h-full w-full object-contain"></div>
+          <p class="mt-3 text-center text-sm text-amber-300">Enter the exact amount yourself: {{ order.payable_amount | inr(true) }}</p>
+        {% else %}
+          <p class="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-center text-sm text-amber-200">
+            The QR code isn't available right now. Use the UPI ID below and pay exactly {{ order.payable_amount | inr(true) }}.
+          </p>
+        {% endif %}
+
+        <a id="upi-open" href="{{ upi_link }}" class="hidden mt-5 w-full items-center justify-center rounded-xl border border-gold/40 py-3 font-bold text-gold hover:bg-gold/10 transition-colors">
+          Open my UPI app
+        </a>
+      </div>
+
+      <div class="mt-6 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+        <div class="min-w-0">
+          <p class="text-xs text-gray-500">UPI ID</p>
+          <p class="truncate font-semibold text-white">{{ upi_id }}</p>
+        </div>
+        <button type="button" data-copy="{{ upi_id }}"
+                class="shrink-0 rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-gray-200 hover:bg-white/10 transition-colors">Copy</button>
+      </div>
+
+      <p class="mt-5 text-center text-sm text-gray-400">
+        This amount is reserved for you for <span id="pay-timer" class="font-semibold text-white tabular-nums" aria-live="off">--:--</span>
+      </p>
+    </div>
+
+    <div class="mt-8 flex items-center gap-3">
+      <span class="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-gold/40 text-sm font-semibold text-gold" aria-hidden="true">2</span>
+      <p class="text-sm text-gray-400">After paying, come back here and send us the proof.</p>
+    </div>
+    {{ proof_form('Send your payment proof', 'We check your UTR against our account. Entering it correctly is the fastest way to get approved.') }}
+
+  {# ============================ LATE ============================ #}
+  {% elif state == 'late' %}
+    <div class="rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] p-6 sm:p-7">
+      <h2 class="font-display text-xl font-bold text-white mb-2">This payment window has ended</h2>
+      <p class="text-sm leading-relaxed text-gray-300">
+        If you already paid {{ order.payable_amount | inr(true) }}, enter your UTR below and we will still check it.
+        If you haven't paid yet, start a new payment so you get a fresh amount.
+      </p>
+      <form method="POST" action="{{ url_for('payments.start') }}" class="mt-5">
+        <input type="hidden" name="plan_code" value="{{ plan.code }}">
+        <button type="submit" class="w-full rounded-xl border border-gold/40 py-3 font-bold text-gold hover:bg-gold/10 transition-colors">Start a new payment</button>
+      </form>
+    </div>
+    {{ proof_form('I already paid', 'Enter the UTR of the payment you made.') }}
+
+  {# ============================ WAITING ============================ #}
+  {% elif state == 'waiting' %}
+    <div class="rounded-2xl border border-white/10 bg-[#161616]/90 backdrop-blur-xl p-6 sm:p-7">
+      <div class="flex items-center gap-3">
+        <span class="pay-pulse relative flex h-3 w-3" aria-hidden="true">
+          <span class="absolute inline-flex h-full w-full rounded-full bg-gold opacity-60 motion-safe:animate-ping"></span>
+          <span class="relative inline-flex h-3 w-3 rounded-full bg-gold"></span>
+        </span>
+        <h2 class="font-display text-xl font-bold text-white">We're verifying your payment</h2>
+      </div>
+      <p class="mt-3 text-sm leading-relaxed text-gray-400">
+        You get access the moment it's approved. This page refreshes by itself, so you can keep it open or come back later.
+      </p>
+      <dl class="mt-6 divide-y divide-white/5 text-sm">
+        <div class="flex justify-between gap-4 py-3"><dt class="text-gray-500">Amount</dt><dd class="font-semibold text-white tabular-nums">{{ order.payable_amount | inr(true) }}</dd></div>
+        <div class="flex justify-between gap-4 py-3"><dt class="text-gray-500">UTR</dt><dd class="font-semibold text-white tabular-nums">{{ order.utr }}</dd></div>
+        <div class="flex justify-between gap-4 py-3"><dt class="text-gray-500">Submitted</dt><dd class="font-semibold text-white">{{ order.submitted_at | ist_datetime }}</dd></div>
+      </dl>
+      <p id="poll-note" class="mt-4 hidden text-xs text-gray-500">Still waiting? Refresh this page to check again.</p>
+    </div>
+
+  {# ============================ APPROVED ============================ #}
+  {% elif state == 'approved' %}
+    <div class="rounded-2xl border border-emerald-400/30 bg-emerald-400/[0.07] p-6 sm:p-8 text-center">
+      <div class="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-emerald-400/15 text-emerald-300" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+      </div>
+      <h2 class="font-display text-2xl font-bold text-white">Payment approved</h2>
+      <p class="mt-2 text-gray-300">Your {{ plan.name or 'plan' }} is active{% if valid_until %} until {{ valid_until }}{% endif %}. Every premium test and practice set is unlocked.</p>
+      <a href="{{ url_for('user.landing') }}" class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gold py-3.5 font-bold text-ink hover:bg-gold-light transition-colors">Start practising</a>
+      <a href="{{ url_for('payments.history') }}" class="mt-3 inline-block text-sm font-semibold text-gray-400 hover:text-white transition-colors">View my payments</a>
+    </div>
+
+  {# ============================ REJECTED ============================ #}
+  {% elif state == 'rejected' %}
+    <div class="rounded-2xl border border-red-400/30 bg-red-400/[0.06] p-6 sm:p-7">
+      <h2 class="font-display text-xl font-bold text-white mb-2">We couldn't verify this payment</h2>
+      <p class="text-sm leading-relaxed text-gray-300">{{ order.reject_reason or 'The payment could not be matched with our account.' }}</p>
+      <form method="POST" action="{{ url_for('payments.start') }}" class="mt-5">
+        <input type="hidden" name="plan_code" value="{{ plan.code }}">
+        <button type="submit" class="w-full rounded-xl bg-gold py-3.5 font-bold text-ink hover:bg-gold-light transition-colors">Pay again</button>
+      </form>
+      <p class="mt-4 text-center text-sm text-gray-400">Money deducted? <a href="{{ support_url }}" target="_blank" rel="noopener" class="font-semibold text-gold hover:underline">Contact support</a> with your UTR.</p>
+    </div>
+
+  {# ============================ ENDED ============================ #}
+  {% else %}
+    <div class="rounded-2xl border border-white/10 bg-[#161616]/90 backdrop-blur-xl p-6 sm:p-7">
+      <h2 class="font-display text-xl font-bold text-white mb-2">This payment was cancelled</h2>
+      <p class="text-sm leading-relaxed text-gray-400">{{ order.reject_reason or 'This payment is no longer active.' }}</p>
+      <form method="POST" action="{{ url_for('payments.start') }}" class="mt-5">
+        <input type="hidden" name="plan_code" value="{{ plan.code }}">
+        <button type="submit" class="w-full rounded-xl border border-gold/40 py-3 font-bold text-gold hover:bg-gold/10 transition-colors">Start a new payment</button>
+      </form>
+    </div>
+  {% endif %}
+
+  <p class="mt-10 text-center text-sm text-gray-500">
+    Need help? <a href="{{ support_url }}" target="_blank" rel="noopener" class="font-semibold text-gold hover:underline">Contact support</a>
+    <br>
+    <span class="text-xs">By paying you agree to our <a href="{{ url_for('legal.terms') }}" class="underline hover:text-gray-300">Terms</a> and <a href="{{ url_for('legal.refund_policy') }}" class="underline hover:text-gray-300">Refund policy</a>.</span>
+  </p>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>window.PAY_CFG = {{ cfg | tojson }};</script>
+<script>
+(function () {
+  'use strict';
+  var cfg = window.PAY_CFG || {};
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------- copy buttons ---------- */
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var text = btn.getAttribute('data-copy');
+      var label = btn.textContent;
+      function done() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = label; }, 1400); }
+      function fallback() {
+        var t = document.createElement('textarea');
+        t.value = text; t.setAttribute('readonly', '');
+        t.style.position = 'fixed'; t.style.opacity = '0';
+        document.body.appendChild(t); t.select();
+        try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ }
+        document.body.removeChild(t);
+      }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else { fallback(); }
+    });
+  });
+
+  /* ---------- "Open my UPI app" only makes sense on a phone ---------- */
+  var openBtn = $('upi-open');
+  if (openBtn && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    openBtn.classList.remove('hidden');
+    openBtn.classList.add('flex');
+  }
+
+  /* ---------- reservation countdown ---------- */
+  var timerEl = $('pay-timer');
+  var left = parseInt(cfg.secondsLeft, 10) || 0;
+  function tick() {
+    if (!timerEl) { return; }
+    if (left <= 0) { timerEl.textContent = 'a moment longer. Refresh the page if it has ended'; return; }
+    var m = Math.floor(left / 60), s = left % 60;
+    timerEl.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    left -= 1;
+    setTimeout(tick, 1000);
+  }
+  tick();
+
+  /* ---------- proof form ---------- */
+  var utr = $('utr'), submit = $('pay-submit'), errBox = $('pay-error');
+  var shotInput = $('shot'), shotBlob = null;
+
+  function showError(msg) { if (errBox) { errBox.textContent = msg; errBox.classList.remove('hidden'); } }
+  function clearError() { if (errBox) { errBox.classList.add('hidden'); errBox.textContent = ''; } }
+  function setBusy(b) {
+    if (!submit) { return; }
+    submit.disabled = b || (utr.value.length !== 12);
+    $('pay-submit-label').textContent = b ? 'Submitting…' : 'Submit for verification';
+    if (utr) { utr.disabled = b; }
+  }
+
+  if (utr && submit) {
+    utr.addEventListener('input', function () {
+      utr.value = utr.value.replace(/\D/g, '').slice(0, 12);
+      submit.disabled = utr.value.length !== 12;
+      clearError();
+    });
+    utr.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !submit.disabled) { e.preventDefault(); submit.click(); }
+    });
+  }
+
+  /* shrink big phone screenshots in the browser before uploading (saves mobile data) */
+  function compress(file, cb) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function () {
+      try {
+        var max = 1280, w = img.naturalWidth, h = img.naturalHeight;
+        var r = Math.min(1, max / Math.max(w, h));
+        var c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w * r)); c.height = Math.max(1, Math.round(h * r));
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (blob) { cb(blob || file); }, 'image/jpeg', 0.82);
+      } catch (e) { URL.revokeObjectURL(url); cb(file); }
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); cb(file); };
+    img.src = url;
+  }
+
+  function kb(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+
+  if (shotInput) {
+    shotInput.addEventListener('change', function () {
+      clearError();
+      var f = shotInput.files && shotInput.files[0];
+      if (!f) { return; }
+      if (f.type && f.type.indexOf('image/') !== 0) { showError('Please choose an image (JPG or PNG).'); shotInput.value = ''; return; }
+      if (f.size > 25 * 1048576) { showError('That image is too large. Please choose a smaller screenshot.'); shotInput.value = ''; return; }
+      compress(f, function (blob) {
+        shotBlob = blob;
+        $('shot-img').src = URL.createObjectURL(blob);
+        $('shot-name').textContent = f.name || 'screenshot';
+        $('shot-size').textContent = kb(blob.size);
+        $('shot-preview').classList.remove('hidden');
+        $('shot-pick').classList.add('hidden');
+      });
+    });
+    $('shot-remove').addEventListener('click', function () {
+      shotBlob = null; shotInput.value = '';
+      $('shot-preview').classList.add('hidden');
+      $('shot-pick').classList.remove('hidden');
+    });
+  }
+
+  if (submit) {
+    submit.addEventListener('click', function () {
+      clearError();
+      if (cfg.isPreview) {
+        showError('Preview Mode: Set UPI_ID in Render Environment Variables and run sql/phase1_payments.sql in Supabase to submit real orders.');
+        return;
+      }
+      if (utr.value.length !== 12) { showError('Enter the 12-digit UTR from your payment app.'); utr.focus(); return; }
+      var fd = new FormData();
+      fd.append('utr', utr.value);
+      if (shotBlob) { fd.append('screenshot', shotBlob, 'payment.jpg'); }
+      setBusy(true);
+      fetch(cfg.submitUrl, {
+        method: 'POST', body: fd, credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(function (r) {
+          return r.json().catch(function () { return { ok: false, error: 'Unexpected response. Please try again.' }; });
+        })
+        .then(function (j) {
+          if (j && j.ok) { window.location.replace(j.redirect || window.location.href); return; }
+          setBusy(false);
+          showError((j && j.error) || 'Could not submit. Please try again.');
+        })
+        .catch(function () {
+          setBusy(false);
+          showError('Network problem. Check your connection and try again.');
+        });
+    });
+  }
+
+  /* ---------- waiting: refresh by itself once you approve ---------- */
+  if (cfg.state === 'waiting') {
+    var polls = 0;
+    var poll = function () {
+      fetch(cfg.statusUrl, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin', cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j && j.status && j.status !== 'submitted') { window.location.reload(); return; }
+          next();
+        })
+        .catch(next);
+    };
+    var next = function () {
+      polls += 1;
+      if (polls >= 60) { var n = $('poll-note'); if (n) { n.classList.remove('hidden'); } return; }
+      setTimeout(poll, polls < 20 ? 8000 : 20000);
+    };
+    setTimeout(poll, 8000);
+  }
+})();
+</script>
+{% endblock %}
+<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
