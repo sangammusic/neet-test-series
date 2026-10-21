@@ -3,46 +3,32 @@
 {% block content %}
 <section class="max-w-4xl mx-auto px-3.5 sm:px-5 pt-6 pb-16 relative z-10">
   
-  <div class="mb-5 border-b border-white/10 pb-3.5 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}" data-back-url="{{ url_for('user.tests_feed', slug=stream.slug) }}" class="btn-cute-soft mb-2">
-        &larr; All Test Series
-      </a>
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ stream.name }}</span>
-        {% if series.is_paid %}
-          {% if series.has_access %}
-            <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-400/35 px-2 py-0.5 rounded">✓ Purchased &amp; Unlocked</span>
-          {% else %}
-            <span class="text-[9px] font-black uppercase bg-gold/15 text-gold border border-gold/40 px-2 py-0.5 rounded">🔒 Paid Series · {{ series.price_inr | inr }}</span>
-          {% endif %}
+  <div class="mb-5 border-b border-white/10 pb-3.5">
+    <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}" data-back-url="{{ url_for('user.tests_feed', slug=stream.slug) }}" class="btn-cute-soft mb-2">
+      &larr; All Test Series
+    </a>
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ stream.name }}</span>
+      {% if series.is_paid %}
+        {% if series.has_access %}
+          <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-400/35 px-2 py-0.5 rounded">✓ Unlocked</span>
         {% else %}
-          <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-400/35 px-2 py-0.5 rounded">🟢 Free Series</span>
+          <span class="text-[9px] font-black uppercase bg-gold/15 text-gold border border-gold/40 px-2 py-0.5 rounded">🔒 Paid · {{ series.price_inr | inr }}</span>
         {% endif %}
-        <h1 class="font-display text-lg sm:text-2xl font-bold text-white">{{ series.name }}</h1>
-      </div>
-    </div>
-
-    {% if series.is_paid and not series.has_access %}
-      {% if series.pending_order_id and series.pending_status == 'submitted' %}
-        <a href="{{ url_for('payments.checkout', order_id=series.pending_order_id) }}" class="btn-cute">
-          ⏳ Payment Verification Pending &rarr;
-        </a>
       {% else %}
-        <a href="{{ url_for('payments.buy_series', series_id=series.id) }}" class="btn-cute">
-          🔒 Purchase {{ series.name }} ({{ series.price_inr | inr }}) &rarr;
-        </a>
+        <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-400/35 px-2 py-0.5 rounded">🟢 Free Series</span>
       {% endif %}
-    {% endif %}
+      <h1 class="font-display text-lg sm:text-2xl font-bold text-white">{{ series.name }}</h1>
+    </div>
   </div>
 
-  <!-- Paid Series Unlock Banner if Locked -->
+  <!-- Single Unlock Banner if Series is Paid & Locked (Not repeated on every card) -->
   {% if series.is_paid and not series.has_access %}
-  <div class="mb-5 pw-tile p-4 sm:p-5 border-gold/45 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  <div class="mb-5 pw-tile p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
     <div>
       <p class="font-display text-sm sm:text-base font-bold text-white">🔒 Unlock All Tests in {{ series.name }}</p>
       <p class="text-xs text-gray-300 mt-0.5">
-        This is a Paid Test Series ({{ series.price_inr | inr }}). Purchase once via UPI QR and get instant access after Admin approval on Telegram.
+        One-time purchase ({{ series.price_inr | inr }}) unlocks every mock test in this series after Telegram Bot approval.
       </p>
     </div>
     {% if series.pending_order_id and series.pending_status == 'submitted' %}
@@ -51,18 +37,18 @@
       </a>
     {% else %}
       <a href="{{ url_for('payments.buy_series', series_id=series.id) }}" class="btn-cute shrink-0">
-        Purchase Now · {{ series.price_inr | inr }} &rarr;
+        Purchase Series · {{ series.price_inr | inr }} &rarr;
       </a>
     {% endif %}
   </div>
   {% endif %}
 
-  <!-- Compact PW-Style Test Cards (2 cols on mobile/tablet/desktop) -->
+  <!-- Test Cards inside Series -->
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
     {% for t in tests %}
     <div class="pw-tile p-3.5 sm:p-4 flex items-center justify-between gap-3 group">
       <div class="min-w-0 flex-1">
-        <p class="font-display text-sm sm:text-base font-bold text-white group-hover:text-gold transition-colors truncate">{{ t.title }}</p>
+        <p class="font-display text-sm sm:text-base font-bold text-white truncate">{{ t.title }}</p>
         {% if t.description %}
         <p class="text-[11px] text-gray-400 mt-0.5 font-medium line-clamp-1">{{ t.description }}</p>
         {% endif %}
@@ -78,9 +64,9 @@
       
       <div class="shrink-0">
         {% if series.is_paid and not series.has_access %}
-          <a href="{{ url_for('payments.buy_series', series_id=series.id) }}" class="btn-cute !py-1.5 !px-3 !text-[11px]">
-            <span>🔒 Unlock ({{ series.price_inr | inr }})</span>
-          </a>
+          <span class="text-[11px] font-bold text-gray-400 border border-white/15 bg-white/5 px-2.5 py-1.5 rounded-lg inline-block">
+            🔒 Locked
+          </span>
         {% else %}
           <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}" data-replace-link class="btn-cute !py-1.5 !px-3 !text-[11px]">
             <span>Attempt</span>
@@ -98,4 +84,3 @@
   </div>
 </section>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->

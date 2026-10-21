@@ -1,167 +1,106 @@
 {% extends "shared/base.html" %}
-{% block title %}My Profile, Purchases &amp; Attempts — STUDY SANGAM HUB{% endblock %}
+{% block title %}My Attempts — STUDY SANGAM HUB{% endblock %}
 {% block content %}
-{% set chips = {
-  'approved':  ('Approved & Unlocked', 'border-emerald-400/35 bg-emerald-400/15 text-emerald-300'),
-  'submitted': ('Verifying on Bot',    'border-amber-400/35 bg-amber-400/15 text-amber-200'),
-  'created':   ('Not paid yet',        'border-white/15 bg-white/5 text-gray-300'),
-  'rejected':  ('Disapproved',         'border-red-400/35 bg-red-500/15 text-red-300'),
-  'expired':   ('Expired',             'border-white/15 bg-white/5 text-gray-400'),
-  'cancelled': ('Cancelled',           'border-white/15 bg-white/5 text-gray-400')
-} %}
 <section class="max-w-4xl mx-auto px-3.5 sm:px-5 pt-6 pb-20 font-body relative z-10">
 
   <!-- Top Header -->
   <div class="flex flex-wrap items-center justify-between gap-3 mb-5 border-b border-white/10 pb-3.5">
     <div>
       <a href="{{ url_for('user.my_dashboard') }}" data-back-url="{{ url_for('user.my_dashboard') }}" class="btn-cute-soft mb-2">
-        &larr; Back to Workspace
+        &larr; Workspace
       </a>
-      <h1 class="font-display text-xl sm:text-2xl font-bold text-white tracking-tight">My Profile &amp; Activity</h1>
-      <p class="text-gray-400 text-xs mt-0.5">Your purchased Test Series, payment records, and mock test history.</p>
+      <h1 class="font-display text-xl sm:text-2xl font-bold text-white tracking-tight">📊 My Mock Test Attempts</h1>
+      <p class="text-gray-400 text-xs mt-0.5">Your mock test scores, completion status, and question-by-question review.</p>
     </div>
-
-    <div class="flex items-center gap-2">
-      <a href="{{ url_for('user.settings') }}" class="btn-cute-soft">⚙️ Settings</a>
-      {% if attempts %}
-      <form action="{{ url_for('user.clear_history') }}" method="POST" onsubmit="return confirm('⚠️ DANGER: Permanently wipe ALL your test history and scores?');">
-        <button type="submit" class="btn-cute-soft !border-red-500/35 !text-red-400">
-          🗑️ Reset Progress
-        </button>
-      </form>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- =========================================================================
-       SECTION 1: MY PURCHASES & MY PAYMENTS (Unlocked Test Series & Orders)
-       ========================================================================= -->
-  <div class="mb-7">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="font-display text-sm sm:text-base font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-        <span>🛍️</span>
-        <span>My Purchases &amp; Payments</span>
-      </h2>
-      <a href="{{ url_for('payments.history') }}" class="text-[11px] font-bold text-gold hover:underline">Full Payment History &rarr;</a>
-    </div>
-
-    {% if orders and orders|length > 0 %}
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-      {% for o in orders %}
-      {% set st = (o.get('status') if o is mapping else o.status) or 'created' %}
-      {% set chip = chips.get(st, ('Unknown', 'border-white/15 bg-white/5 text-gray-300')) %}
-      {% set plan_obj = o.get('plans') if (o is mapping and o.get('plans') is mapping) else {} %}
-      <a href="{{ url_for('payments.checkout', order_id=o.id) }}"
-         class="pw-tile p-3.5 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <p class="font-display font-bold text-xs sm:text-sm text-white truncate">📦 {{ plan_obj.get('name') or 'Test Series' }}</p>
-          <p class="text-[10px] text-gray-400 mt-0.5">{{ o.created_at | ist_datetime }}</p>
-        </div>
-        <div class="text-right shrink-0">
-          <p class="font-display text-sm font-bold text-gold tabular-nums">{{ o.payable_amount | inr(true) }}</p>
-          <span class="inline-block rounded-full border px-2 py-0.5 text-[9px] font-bold mt-0.5 {{ chip[1] }}">{{ chip[0] }}</span>
-        </div>
-      </a>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="pw-tile p-4 text-center rounded-xl">
-      <p class="text-xs font-semibold text-gray-300">No Paid Test Series purchased yet.</p>
-      <p class="text-[11px] text-gray-400 mt-0.5">Free Test Series are already unlocked. When you purchase a Paid Test Series, it appears here.</p>
-    </div>
-    {% endif %}
-  </div>
-
-  <!-- =========================================================================
-       SECTION 2: MY TEST ATTEMPTS & ANALYTICS
-       ========================================================================= -->
-  <div>
-    <h2 class="font-display text-sm sm:text-base font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-1.5">
-      <span>📊</span>
-      <span>My Mock Test Attempts</span>
-    </h2>
 
     {% if attempts %}
-    <!-- Compact 3-in-a-row Stats Grid -->
-    <div class="grid grid-cols-3 gap-2.5 mb-5">
-      <div class="pw-tile p-3 text-center">
-        <p class="text-xl sm:text-2xl font-display font-bold text-white">{{ attempts|length }}</p>
-        <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Attempted</p>
-      </div>
-      <div class="pw-tile p-3 text-center">
-        <p class="text-xl sm:text-2xl font-display font-bold text-green-400">
-          {{ attempts|selectattr('submitted_at')|list|length }}
-        </p>
-        <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Completed</p>
-      </div>
-      <div class="pw-tile p-3 text-center">
-        <p class="text-xl sm:text-2xl font-display font-bold text-gold">
-          {% set scored = attempts|selectattr('score', 'defined')|selectattr('score', 'ne', none)|list %}
-          {{ (scored|sum(attribute='score') / scored|length)|round(1) if scored else '—' }}
-        </p>
-        <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Avg Score</p>
-      </div>
-    </div>
-
-    <div class="space-y-2.5">
-      {% for a in attempts %}
-      {% set stream_slug = ((a.tests.get('streams') or {}).get('slug') or 'neet') if a.tests else 'neet' %}
-      <div class="pw-tile p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2">
-            <h3 class="font-bold text-white text-sm sm:text-base truncate">{{ a.tests.title if a.tests else 'Mock Test' }}</h3>
-            <span class="text-[10px] font-semibold text-gray-400 shrink-0">#{{ a.attempt_no }}</span>
-          </div>
-          <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-gray-400 mt-1.5">
-            {% if a.submitted_at %}
-              <span class="text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded uppercase font-bold">Completed</span>
-              <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded">✓ {{ a.correct_count }}</span>
-              <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded">✗ {{ a.wrong_count }}</span>
-              <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded">Skip {{ a.skipped_count }}</span>
-            {% else %}
-              <span class="text-gold bg-gold/10 border border-gold/25 px-2 py-0.5 rounded uppercase font-bold">In Progress</span>
-            {% endif %}
-          </div>
-        </div>
-
-        <div class="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/10">
-          {% if a.submitted_at %}
-          <div class="text-left sm:text-right">
-            <p class="font-display text-base sm:text-lg font-bold text-white leading-none">{{ a.score }} <span class="text-[10px] text-gray-400">/ {{ a.tests.total_marks if a.tests else a.total_questions }}</span></p>
-          </div>
-          {% endif %}
-
-          <div class="flex gap-1.5 shrink-0">
-            {% if a.submitted_at %}
-              <a href="{{ url_for('user.test_attempt_review', slug=stream_slug, test_id=a.test_id, attempt_id=a.id) }}" class="btn-cute !py-1.5 !px-3 !text-[11px]">
-                 Review
-              </a>
-              {% if a.is_latest %}
-              <a href="{{ url_for('user.test_analyse', slug=stream_slug, test_id=a.test_id) }}" class="btn-cute-soft !py-1.5 !px-3 !text-[11px]">
-                 Analyse
-              </a>
-              {% endif %}
-            {% else %}
-              <a href="{{ url_for('user.test_attempt', slug=stream_slug, test_id=a.test_id, attempt_id=a.id) }}" class="btn-cute !py-1.5 !px-3 !text-[11px]">
-                 Resume
-              </a>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="pw-tile p-8 text-center rounded-xl">
-      <p class="font-display text-base font-bold text-white mb-1">No Mock Tests Attempted Yet</p>
-      <p class="text-gray-400 text-xs mb-4">When you attempt mock tests, your scores and question-level analytics will appear here.</p>
-      <a href="{{ url_for('user.my_dashboard') }}" class="btn-cute">
-        Explore Mock Tests &rarr;
-      </a>
-    </div>
+    <form action="{{ url_for('user.clear_history') }}" method="POST" onsubmit="return confirm('⚠️ Permanently wipe ALL your test history and scores?');">
+      <button type="submit" class="btn-cute-soft !border-red-500/35 !text-red-400">
+        🗑️ Reset History
+      </button>
+    </form>
     {% endif %}
   </div>
+
+  {% if attempts %}
+  <!-- Compact 3-in-a-row Stats Grid -->
+  <div class="grid grid-cols-3 gap-2.5 mb-5">
+    <div class="pw-tile p-3 text-center">
+      <p class="text-xl sm:text-2xl font-display font-bold text-white">{{ attempts|length }}</p>
+      <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Attempted</p>
+    </div>
+    <div class="pw-tile p-3 text-center">
+      <p class="text-xl sm:text-2xl font-display font-bold text-emerald-400">
+        {{ attempts|selectattr('submitted_at')|list|length }}
+      </p>
+      <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Completed</p>
+    </div>
+    <div class="pw-tile p-3 text-center">
+      <p class="text-xl sm:text-2xl font-display font-bold text-gold">
+        {% set scored = attempts|selectattr('score', 'defined')|selectattr('score', 'ne', none)|list %}
+        {{ (scored|sum(attribute='score') / scored|length)|round(1) if scored else '—' }}
+      </p>
+      <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Avg Score</p>
+    </div>
+  </div>
+
+  <div class="space-y-2.5">
+    {% for a in attempts %}
+    {% set stream_slug = ((a.tests.get('streams') or {}).get('slug') or 'neet') if a.tests else 'neet' %}
+    <div class="pw-tile p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2">
+          <h3 class="font-bold text-white text-sm sm:text-base truncate">{{ a.tests.title if a.tests else 'Mock Test' }}</h3>
+          <span class="text-[10px] font-semibold text-gray-400 shrink-0">#{{ a.attempt_no }}</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-gray-400 mt-1.5">
+          {% if a.submitted_at %}
+            <span class="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded uppercase font-bold">Completed</span>
+            <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded">✓ {{ a.correct_count }}</span>
+            <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded">✗ {{ a.wrong_count }}</span>
+            <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded">Skip {{ a.skipped_count }}</span>
+          {% else %}
+            <span class="text-gold bg-gold/10 border border-gold/25 px-2 py-0.5 rounded uppercase font-bold">In Progress</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/10">
+        {% if a.submitted_at %}
+        <div class="text-left sm:text-right">
+          <p class="font-display text-base sm:text-lg font-bold text-white leading-none">{{ a.score }} <span class="text-[10px] text-gray-400">/ {{ a.tests.total_marks if a.tests else a.total_questions }}</span></p>
+        </div>
+        {% endif %}
+
+        <div class="flex gap-1.5 shrink-0">
+          {% if a.submitted_at %}
+            <a href="{{ url_for('user.test_attempt_review', slug=stream_slug, test_id=a.test_id, attempt_id=a.id) }}" class="btn-cute !py-1.5 !px-3 !text-[11px]">
+               Review
+            </a>
+            {% if a.is_latest %}
+            <a href="{{ url_for('user.test_analyse', slug=stream_slug, test_id=a.test_id) }}" class="btn-cute-soft !py-1.5 !px-3 !text-[11px]">
+               Analyse
+            </a>
+            {% endif %}
+          {% else %}
+            <a href="{{ url_for('user.test_attempt', slug=stream_slug, test_id=a.test_id, attempt_id=a.id) }}" class="btn-cute !py-1.5 !px-3 !text-[11px]">
+               Resume
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="pw-tile p-8 text-center rounded-xl">
+    <p class="font-display text-base font-bold text-white mb-1">No Mock Tests Attempted Yet</p>
+    <p class="text-gray-400 text-xs mb-4">When you attempt mock tests, your scores and question-level analytics will appear here.</p>
+    <a href="{{ url_for('user.my_dashboard') }}" class="btn-cute">
+      Explore Mock Tests &rarr;
+    </a>
+  </div>
+  {% endif %}
 
 </section>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->
