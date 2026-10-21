@@ -411,9 +411,9 @@ as $$
                   and reviewed_at >= (date_trunc('month', timezone('Asia/Kolkata', now())) at time zone 'Asia/Kolkata')
             ), 0),
         'revenue_total',   coalesce(sum(payable_amount) filter (where status = 'approved'), 0),
-        'approved_count',  count(*) filter (where status = 'approved'),
-        'pending_count',   count(*) filter (where status = 'submitted'),
-        'rejected_count',  count(*) filter (where status = 'rejected')
+        'approved_count',  count(1) filter (where status = 'approved'),
+        'pending_count',   count(1) filter (where status = 'submitted'),
+        'rejected_count',  count(1) filter (where status = 'rejected')
     )
     from public.orders;
 $$;
