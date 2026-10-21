@@ -8,7 +8,7 @@
   <h1 class="font-display text-3xl sm:text-4xl font-bold mb-4 {{ 'text-white' if dark else 'text-slate-900' }}">{{ title }}</h1>
   <p class="leading-relaxed mb-10 {{ 'text-gray-400' if dark else 'text-slate-600' }}">{{ message }}</p>
   <div class="flex flex-col sm:flex-row gap-3 justify-center">
-    <a href="javascript:history.back()"
+    <a href="{{ url_for('user.landing') }}" data-back-url="{{ url_for('user.landing') }}"
        class="inline-flex justify-center items-center px-6 py-3 rounded-xl border font-semibold transition-colors {{ 'border-white/15 text-gray-200 hover:bg-white/5' if dark else 'border-slate-300 text-slate-700 hover:bg-slate-100' }}">
       Go back
     </a>
@@ -19,3 +19,4 @@
   </div>
 </section>
 {% endblock %}
+<!-- SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21) -->

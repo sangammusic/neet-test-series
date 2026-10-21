@@ -21,7 +21,7 @@
                         gold: { DEFAULT: '#D4A017', light: '#E8C158' },
                         scholar: {
                             bg: '#0a0a0a',
-                            card: 'rgba(22, 22, 22, 0.72)',
+                            card: 'rgba(22, 22, 22, 0.78)',
                             border: 'rgba(255, 255, 255, 0.10)'
                         }
                     },
@@ -47,32 +47,149 @@
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-    <!-- GLOBAL DOUBLE-SUBMIT GUARD -->
+    <!-- SANGAM HISTORY & NAVIGATION ENGINE (Eliminates Mobile Back-Button Quiz Loops) -->
     <script>
-        document.addEventListener('submit', function (e) {
-            const form = e.target;
-            if (!(form instanceof HTMLFormElement)) return;
-            requestAnimationFrame(function () {
-                if (form.defaultPrevented) return;
-                const buttons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
-                buttons.forEach(function (btn) {
-                    btn.disabled = true;
-                    btn.dataset.originalHtml = btn.innerHTML;
-                    if (btn.tagName === 'BUTTON') {
-                        btn.innerHTML = '⏳ Please wait…';
-                    }
-                });
-            });
-        }, true);
-    </script>
+        (function () {
+            'use strict';
 
-    <!-- GLOBAL BFCACHE GUARD -->
-    <script>
-        window.addEventListener('pageshow', function (event) {
-            if (event.persisted) {
-                window.location.reload();
+            function samePath(urlA, urlB) {
+                try {
+                    var a = new URL(urlA, window.location.origin);
+                    var b = new URL(urlB, window.location.origin);
+                    return a.origin === b.origin && a.pathname.replace(/\/+$/, '') === b.pathname.replace(/\/+$/, '');
+                } catch (e) {
+                    return false;
+                }
             }
-        });
+
+            function isTransientQuizPath(urlStr) {
+                try {
+                    var u = new URL(urlStr, window.location.origin);
+                    return /\/(run|attempt|analyse|review|start|result)(\/|$)/.test(u.pathname);
+                } catch (e) {
+                    return true;
+                }
+            }
+
+            /* Navigate one step up the hierarchy without ever re-opening a finished/exited quiz */
+            window.sangamBack = function (fallbackUrl) {
+                if (!fallbackUrl) {
+                    window.location.replace('/');
+                    return false;
+                }
+                try {
+                    if (
+                        document.referrer &&
+                        samePath(document.referrer, fallbackUrl) &&
+                        !isTransientQuizPath(document.referrer) &&
+                        window.history.length > 1
+                    ) {
+                        window.history.back();
+                        return false;
+                    }
+                } catch (e) {}
+                window.location.replace(fallbackUrl);
+                return false;
+            };
+
+            /* Trap mobile hardware/gesture Back button on transient quiz/analyse pages
+               so pressing Back always lands cleanly on the target parent menu */
+            window.sangamInstallBackTrap = function (targetUrl) {
+                if (!targetUrl || !window.history || !window.history.pushState) return;
+                try {
+                    var stateObj = { sangamTrap: true, target: targetUrl };
+                    window.history.pushState(stateObj, '', window.location.href);
+                    window.addEventListener('popstate', function () {
+                        window.location.replace(targetUrl);
+                    });
+                } catch (e) {}
+            };
+
+            document.addEventListener('click', function (e) {
+                var backLink = e.target.closest ? e.target.closest('[data-back-url]') : null;
+                if (backLink) {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                    e.preventDefault();
+                    window.sangamBack(backLink.getAttribute('data-back-url') || backLink.getAttribute('href'));
+                    return;
+                }
+                var replaceLink = e.target.closest ? e.target.closest('[data-replace-link]') : null;
+                if (replaceLink) {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                    var href = replaceLink.getAttribute('href');
+                    if (href && href.indexOf('javascript:') !== 0) {
+                        e.preventDefault();
+                        window.location.replace(href);
+                    }
+                }
+            });
+
+            /* Intercept [data-replace-form] submissions via XHR so starting a quiz/test
+               REPLACES the overview page in browser history instead of pushing onto it */
+            document.addEventListener('submit', function (e) {
+                var form = e.target;
+                if (!(form instanceof HTMLFormElement)) return;
+                if (e.defaultPrevented) return;
+
+                if (form.hasAttribute('data-replace-form') && window.fetch && window.FormData) {
+                    e.preventDefault();
+                    var buttons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+                    buttons.forEach(function (btn) {
+                        btn.disabled = true;
+                        btn.dataset.originalHtml = btn.innerHTML;
+                        if (btn.tagName === 'BUTTON') btn.innerHTML = '⏳ Starting…';
+                    });
+                    fetch(form.action, {
+                        method: (form.method || 'POST').toUpperCase(),
+                        body: new FormData(form),
+                        credentials: 'same-origin',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(function (res) {
+                        if (res.redirected && res.url) {
+                            window.location.replace(res.url);
+                            return null;
+                        }
+                        return res.json().catch(function () { return null; });
+                    })
+                    .then(function (data) {
+                        if (!data) return;
+                        if (data.redirect) {
+                            window.location.replace(data.redirect);
+                        } else {
+                            form.removeAttribute('data-replace-form');
+                            form.submit();
+                        }
+                    })
+                    .catch(function () {
+                        form.removeAttribute('data-replace-form');
+                        form.submit();
+                    });
+                    return;
+                }
+
+                requestAnimationFrame(function () {
+                    if (form.defaultPrevented) return;
+                    var buttons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+                    buttons.forEach(function (btn) {
+                        btn.disabled = true;
+                        btn.dataset.originalHtml = btn.innerHTML;
+                        if (btn.tagName === 'BUTTON') {
+                            btn.innerHTML = '⏳ Please wait…';
+                        }
+                    });
+                });
+            }, false);
+
+            window.addEventListener('pageshow', function (event) {
+                if (event.persisted) {
+                    window.location.reload();
+                }
+            });
+        })();
     </script>
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
@@ -88,86 +205,15 @@
 <body class="{% if request.path.startswith('/admin') %}bg-gray-50 text-slate-900{% else %}text-gray-200 antialiased relative min-h-screen flex flex-col{% endif %} font-body">
 
     {% if not request.path.startswith('/admin') %}
-    <!-- THE SCHOLAR MASTER BACKGROUND (Vibrant Gold/Amber/Cream Book, Coffee Cup & Pencil on Dark Theme) -->
+    <!-- REALISTIC STUDY DESK PHOTOGRAPH BACKGROUND (No cartoon SVG drawings) -->
     <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none select-none" aria-hidden="true">
-        <!-- 1. Deep rich dark midnight base -->
-        <div class="absolute inset-0 bg-[#07090f]"></div>
-
-        <!-- 2. Natural color desk study backdrop (removed mix-blend-luminosity so warm colors stay visible) -->
-        <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1456324504439-367cee3b3c32?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-25"></div>
-
-        <!-- 3. Soft warm ambient glows so the dark theme feels alive -->
-        <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-amber-500/10 blur-[110px]"></div>
-        <div class="absolute top-1/3 -right-24 w-96 h-96 rounded-full bg-sky-500/10 blur-[120px]"></div>
-        <div class="absolute -bottom-28 left-1/4 w-96 h-96 rounded-full bg-gold/10 blur-[120px]"></div>
-
-        <!-- 4. Balanced dark gradient vignette for crystal-clear text readability -->
-        <div class="absolute inset-0 bg-gradient-to-b from-[#07090f]/70 via-[#0a0d14]/75 to-[#07090f]/90"></div>
-
-        <!-- 5. COLORFUL STATIC STUDY DESK ARTWORK: Open Book & Pencil (Bottom-Left) -->
-        <svg class="absolute bottom-6 left-4 sm:left-10 w-56 sm:w-72 h-auto opacity-45 sm:opacity-60 drop-shadow-[0_0_25px_rgba(212,160,23,0.22)]"
-             viewBox="0 0 320 220" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <!-- Warm Golden Book Cover / Base -->
-            <path d="M26 155 C75 142, 122 148, 150 164 C178 148, 225 142, 274 155 L282 170 C228 158, 180 165, 150 182 C120 165, 72 158, 18 170 Z"
-                  fill="#D4A017" fill-opacity="0.35" stroke="#FBBF24" stroke-width="2.2"/>
-            <!-- Left Cream Page -->
-            <path d="M32 68 C78 56, 122 64, 150 82 L150 164 C122 146, 78 138, 32 150 Z"
-                  fill="#FEF3C7" fill-opacity="0.16" stroke="#FDE68A" stroke-width="2.2" stroke-linejoin="round"/>
-            <!-- Right Cream Page -->
-            <path d="M268 68 C222 56, 178 64, 150 82 L150 164 C178 146, 222 138, 268 150 Z"
-                  fill="#FEF3C7" fill-opacity="0.16" stroke="#FDE68A" stroke-width="2.2" stroke-linejoin="round"/>
-            <!-- Center Spine & Gold Bookmark Ribbon -->
-            <line x1="150" y1="82" x2="150" y2="168" stroke="#F59E0B" stroke-width="2.5"/>
-            <path d="M150 164 L143 196 L150 189 L157 196 Z" fill="#EF4444" fill-opacity="0.85" stroke="#FCA5A5" stroke-width="1.2"/>
-            <!-- Colored Study Lines on Left Page -->
-            <path d="M50 88 C82 81, 112 85, 134 96" stroke="#FBBF24" stroke-width="2" stroke-linecap="round"/>
-            <path d="M50 104 C82 97, 112 101, 134 112" stroke="#93C5FD" stroke-width="1.8" stroke-linecap="round" stroke-opacity="0.85"/>
-            <path d="M50 120 C82 113, 112 117, 134 128" stroke="#FDE68A" stroke-width="1.8" stroke-linecap="round" stroke-opacity="0.75"/>
-            <!-- Colored Study Lines & Formula Accent on Right Page -->
-            <path d="M166 96 C188 85, 218 81, 250 88" stroke="#38BDF8" stroke-width="2" stroke-linecap="round"/>
-            <path d="M166 112 C188 101, 218 97, 250 104" stroke="#FDE68A" stroke-width="1.8" stroke-linecap="round" stroke-opacity="0.85"/>
-            <path d="M166 128 C188 117, 218 113, 250 120" stroke="#34D399" stroke-width="1.8" stroke-linecap="round" stroke-opacity="0.85"/>
-            <!-- Vibrant Diagonal Pencil resting across the book -->
-            <g transform="translate(185, 28) rotate(32)">
-                <!-- Pencil Body (Bright Gold/Amber) -->
-                <rect x="0" y="0" width="16" height="118" rx="2" fill="#F59E0B" fill-opacity="0.85" stroke="#FEF08A" stroke-width="1.6"/>
-                <line x1="5.5" y1="0" x2="5.5" y2="118" stroke="#FDE68A" stroke-width="1" stroke-opacity="0.7"/>
-                <line x1="10.5" y1="0" x2="10.5" y2="118" stroke="#D97706" stroke-width="1" stroke-opacity="0.8"/>
-                <!-- Pink/Coral Eraser & Silver Ferrule -->
-                <path d="M0 0 C0 -7, 16 -7, 16 0 Z" fill="#FB7185" stroke="#FECDD3" stroke-width="1.5"/>
-                <rect x="0" y="0" width="16" height="8" fill="#94A3B8" stroke="#E2E8F0" stroke-width="1.2"/>
-                <!-- Wooden Cone & Graphite Tip -->
-                <polygon points="0,118 16,118 8,140" fill="#FDE68A" stroke="#F59E0B" stroke-width="1.4"/>
-                <polygon points="5,131 11,131 8,140" fill="#38BDF8"/>
-            </g>
-        </svg>
-
-        <!-- 6. COLORFUL STATIC STUDY DESK ARTWORK: Steaming Coffee Cup & Pen (Top/Bottom-Right) -->
-        <svg class="absolute bottom-8 right-4 sm:right-12 w-48 sm:w-64 h-auto opacity-45 sm:opacity-60 drop-shadow-[0_0_25px_rgba(245,158,11,0.22)]"
-             viewBox="0 0 260 220" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <!-- Rising Warm Steam Wisps -->
-            <path d="M98 72 C88 56, 108 44, 98 26" stroke="#FDE68A" stroke-width="2.4" stroke-linecap="round" stroke-opacity="0.85"/>
-            <path d="M122 66 C112 48, 134 36, 122 16" stroke="#F59E0B" stroke-width="2.6" stroke-linecap="round" stroke-opacity="0.9"/>
-            <path d="M146 72 C136 56, 156 44, 146 26" stroke="#38BDF8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.8"/>
-            <!-- Cup Handle -->
-            <path d="M174 96 C202 96, 204 138, 170 142" stroke="#FBBF24" stroke-width="6" stroke-linecap="round"/>
-            <path d="M174 96 C198 96, 200 138, 170 142" stroke="#FEF3C7" stroke-width="2" stroke-linecap="round"/>
-            <!-- Cup Body (Warm Amber-Terracotta + Gold Rim) -->
-            <path d="M68 84 L176 84 L164 152 C161 168, 146 176, 122 176 C98 176, 83 168, 80 152 Z"
-                  fill="#D97706" fill-opacity="0.38" stroke="#FBBF24" stroke-width="2.4" stroke-linejoin="round"/>
-            <!-- Coffee Rim Ellipse -->
-            <ellipse cx="122" cy="84" rx="54" ry="11" fill="#78350F" fill-opacity="0.85" stroke="#FDE68A" stroke-width="2.2"/>
-            <!-- Decorative Gold Band on Cup -->
-            <path d="M73 112 Q122 122 171 112" stroke="#FDE68A" stroke-width="2" stroke-opacity="0.8"/>
-            <!-- Saucer -->
-            <ellipse cx="122" cy="180" rx="76" ry="12" fill="#F59E0B" fill-opacity="0.28" stroke="#FBBF24" stroke-width="2.2"/>
-            <!-- Study Pen / Highlighter beside saucer -->
-            <g transform="translate(36, 194) rotate(-8)">
-                <rect x="0" y="0" width="140" height="9" rx="4.5" fill="#38BDF8" fill-opacity="0.75" stroke="#BAE6FD" stroke-width="1.4"/>
-                <rect x="18" y="0" width="26" height="9" fill="#FBBF24" fill-opacity="0.9"/>
-                <polygon points="140,1 140,8 154,4.5" fill="#FEF3C7" stroke="#FBBF24" stroke-width="1.2"/>
-            </g>
-        </svg>
+        <div class="absolute inset-0 bg-[#080a0f]"></div>
+        <!-- High-resolution realistic photograph of a study desk with open notebook, coffee cup, and pen -->
+        <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1456324504439-367cee3b3c32?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-40"></div>
+        <!-- Subtle warm ambient lighting + vignette so the real desk photo is visible while keeping text crisp -->
+        <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-amber-500/10 blur-[120px]"></div>
+        <div class="absolute -bottom-28 right-1/4 w-96 h-96 rounded-full bg-gold/10 blur-[130px]"></div>
+        <div class="absolute inset-0 bg-gradient-to-b from-[#080a0f]/65 via-[#080a0f]/60 to-[#080a0f]/85"></div>
     </div>
     {% endif %}
 
@@ -198,3 +244,4 @@
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>
+<!-- SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21) -->
