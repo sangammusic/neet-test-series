@@ -1,10 +1,16 @@
 {% extends "shared/base.html" %}
-{% block title %}Premium Content{% endblock %}
+{% block title %}Premium Content — SANGAM STUDY{% endblock %}
 {% block content %}
-<section class="max-w-md mx-auto px-6 pt-20 pb-24 text-center">
-  <p class="text-4xl mb-4">🔒</p>
-  <h1 class="font-display text-2xl font-semibold text-ink mb-3">This is Premium content</h1>
-  <p class="text-ink/60 mb-8">Log in and unlock premium access to practice this topic.</p>
-  <a href="{{ url_for('auth.login') }}" class="inline-block bg-gold text-ink font-semibold py-2.5 px-6 rounded-md hover:bg-gold-light">Log In to Continue</a>
+<section class="max-w-md mx-auto px-6 pt-20 pb-24 text-center relative z-10">
+  <div class="bg-[#161616]/90 border border-gold/30 rounded-2xl p-8 backdrop-blur-xl shadow-2xl">
+    <p class="text-4xl mb-4">🔒</p>
+    <h1 class="font-display text-2xl font-bold text-white mb-3">This is Premium Content</h1>
+    <p class="text-gray-300 mb-8 text-sm leading-relaxed">Unlock every premium practice set and mock test with the Season Pass.</p>
+    {% if session.get('user_id') %}
+    <a href="{{ url_for('payments.plans') }}" class="inline-block w-full bg-gold text-ink font-bold py-3 px-6 rounded-xl hover:bg-gold-light transition-colors">See the Season Pass &rarr;</a>
+    {% else %}
+    <a href="{{ url_for('auth.login') }}" class="inline-block w-full bg-gold text-ink font-bold py-3 px-6 rounded-xl hover:bg-gold-light transition-colors">Log In to Continue &rarr;</a>
+    {% endif %}
+  </div>
 </section>
 {% endblock %}

@@ -20,20 +20,32 @@
 
   <div class="grid sm:grid-cols-2 gap-5">
     {% for f in folders %}
+    {% set st = (folder_stats or {}).get(f, {}) %}
     <a href="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=f) }}"
-       class="flex items-center gap-4 p-6 border border-white/10 rounded-xl hover:border-gold/40 hover:shadow-[0_0_20px_rgba(212,160,23,0.1)] transition-all bg-[#161616]/90 backdrop-blur-md group relative overflow-hidden">
+       class="flex items-center justify-between gap-4 p-6 border border-white/10 rounded-xl hover:border-gold/40 hover:shadow-[0_0_20px_rgba(212,160,23,0.1)] transition-all bg-[#161616]/90 backdrop-blur-md group relative overflow-hidden">
       
       <!-- Subtle Hover Accent -->
       <div class="absolute inset-y-0 left-0 w-1 bg-transparent group-hover:bg-gold transition-colors"></div>
 
-      <!-- Clean Folder Icon -->
-      <div class="bg-white/5 border border-white/10 text-gold p-3 rounded-lg group-hover:bg-gold/10 transition-colors shrink-0">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
-          <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/>
-        </svg>
+      <div class="flex items-center gap-4 min-w-0">
+        <!-- Clean Folder Icon -->
+        <div class="bg-white/5 border border-white/10 text-gold p-3 rounded-lg group-hover:bg-gold/10 transition-colors shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/>
+          </svg>
+        </div>
+        
+        <div class="min-w-0">
+          <span class="font-bold text-white text-lg group-hover:text-gold transition-colors block truncate">{{ f }}</span>
+          {% if st.get('quiz_count') %}
+          <span class="text-xs text-gray-400 font-medium mt-0.5 block">
+            {{ st.quiz_count }} Quiz{{ 'zes' if st.quiz_count != 1 else '' }} &middot; {{ st.question_count }} Question{{ 's' if st.question_count != 1 else '' }}
+          </span>
+          {% endif %}
+        </div>
       </div>
-      
-      <span class="font-bold text-white text-lg group-hover:text-gold transition-colors">{{ f }}</span>
+
+      <span class="text-gray-500 group-hover:text-gold transition-colors shrink-0">&rarr;</span>
     </a>
     {% else %}
     <div class="col-span-full text-center p-12 bg-[#161616]/90 rounded-2xl border border-dashed border-white/20 backdrop-blur-md">
