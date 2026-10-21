@@ -1,6 +1,7 @@
-# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
+# SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21)
 import re
-from flask import render_template, request, redirect, url_for, session, jsonify, abort, flash
+from flask import render_template, render_template_string, request, redirect, url_for, session, jsonify, abort, flash
+from jinja2 import TemplateNotFound
 
 from app.user import user_bp
 from app.extensions import supabase_admin, supabase_public, new_auth_client
@@ -36,30 +37,39 @@ from app.shared.utils import is_logged_in, current_user_id
 # auth.login. There is no more "continue without an account" path.
 # ==========================================
 
+_BOOKS_MATERIALS_FALLBACK_HTML = '{% extends "shared/base.html" %}\n{% block title %}Books & Premium Material — {{ stream.name }}{% endblock %}\n{% block content %}\n<section class="max-w-4xl mx-auto px-5 pt-8 pb-20 relative z-10" x-data="{ selectedItem: null }">\n\n  <!-- Compact Top Header -->\n  <div class="mb-7 border-b border-white/10 pb-4 flex flex-wrap items-center justify-between gap-3">\n    <div>\n      <a href="{{ url_for(\'user.stream_dashboard\', slug=stream.slug) }}"\n         data-back-url="{{ url_for(\'user.stream_dashboard\', slug=stream.slug) }}"\n         class="text-xs font-bold text-gray-400 hover:text-gold mb-2 inline-flex items-center gap-1.5 transition-colors">\n        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">\n          <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />\n        </svg>\n        Back to Workspace\n      </a>\n      <div class="flex items-center gap-2.5">\n        <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded">{{ stream.name }}</span>\n        <h1 class="font-display text-2xl font-bold text-white tracking-tight">Books &amp; Premium Material</h1>\n      </div>\n    </div>\n  </div>\n\n  <!-- 3 Compact Resource Shelves (Clicking any item opens the Telegram Channel Vault) -->\n  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">\n\n    <!-- Shelf 1 -->\n    <button type="button" @click="selectedItem = \'NCERT & Standard Reference Books\'"\n            class="text-left bg-[#12141d]/90 border border-white/10 hover:border-gold/45 rounded-xl p-5 backdrop-blur-xl transition-all group flex flex-col justify-between shadow-lg">\n      <div>\n        <div class="w-9 h-9 rounded-lg bg-gold/10 border border-gold/25 text-gold flex items-center justify-center mb-3">\n          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">\n            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />\n          </svg>\n        </div>\n        <h2 class="font-display text-base font-bold text-white mb-1 group-hover:text-gold transition-colors">Reference Books &amp; NCERT</h2>\n        <p class="text-xs text-gray-400 leading-relaxed mb-3">Highlighted NCERT PDFs, exemplar banks, and standard {{ stream.name }} reference books.</p>\n      </div>\n      <span class="text-xs font-bold text-gold inline-flex items-center gap-1">Access Books &rarr;</span>\n    </button>\n\n    <!-- Shelf 2 -->\n    <button type="button" @click="selectedItem = \'Short Notes & Formula Handbooks\'"\n            class="text-left bg-[#12141d]/90 border border-white/10 hover:border-gold/45 rounded-xl p-5 backdrop-blur-xl transition-all group flex flex-col justify-between shadow-lg">\n      <div>\n        <div class="w-9 h-9 rounded-lg bg-emerald-400/10 border border-emerald-400/25 text-emerald-300 flex items-center justify-center mb-3">\n          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">\n            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />\n          </svg>\n        </div>\n        <h2 class="font-display text-base font-bold text-white mb-1 group-hover:text-emerald-300 transition-colors">Short Notes &amp; Mindmaps</h2>\n        <p class="text-xs text-gray-400 leading-relaxed mb-3">One-page revision sheets, reaction charts, and chapter-wise formula handbooks.</p>\n      </div>\n      <span class="text-xs font-bold text-emerald-300 inline-flex items-center gap-1">Access Notes &rarr;</span>\n    </button>\n\n    <!-- Shelf 3 -->\n    <button type="button" @click="selectedItem = \'Premium Modules & Ranker DPPs\'"\n            class="text-left bg-[#12141d]/90 border border-white/10 hover:border-gold/45 rounded-xl p-5 backdrop-blur-xl transition-all group flex flex-col justify-between shadow-lg">\n      <div>\n        <div class="w-9 h-9 rounded-lg bg-amber-400/10 border border-amber-400/25 text-amber-300 flex items-center justify-center mb-3">\n          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">\n            <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />\n          </svg>\n        </div>\n        <h2 class="font-display text-base font-bold text-white mb-1 group-hover:text-amber-300 transition-colors">Premium Study Modules</h2>\n        <p class="text-xs text-gray-400 leading-relaxed mb-3">High-yield coaching modules, daily practice papers (DPPs), and ranker booklets.</p>\n      </div>\n      <span class="text-xs font-bold text-amber-300 inline-flex items-center gap-1">Access Modules &rarr;</span>\n    </button>\n\n  </div>\n\n  <!-- Official Telegram Channel Card (Shown directly + highlighted when a shelf is clicked) -->\n  <div class="bg-[#12151f]/95 border rounded-xl p-5 sm:p-6 backdrop-blur-xl shadow-xl transition-all"\n       :class="selectedItem ? \'border-[#229ED9] ring-1 ring-[#229ED9]/40\' : \'border-[#229ED9]/30\'">\n    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">\n      <div class="flex items-start gap-3.5">\n        <div class="w-10 h-10 rounded-xl bg-[#229ED9]/15 border border-[#229ED9]/30 flex items-center justify-center text-[#229ED9] shrink-0 mt-0.5">\n          <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">\n            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16c-.169 1.858-.896 6.728-.896 6.728-.041.24-.145.483-.361.62-.216.135-.481.129-.702.03l-3.128-1.516-1.51 1.454c-.155.153-.353.199-.548.126l.373-3.31 6.004-5.446c.263-.235-.058-.366-.4-.135l-7.435 4.687-3.2-1.02c-.696-.222-.71-.696.146-1.03l12.494-4.822c.58-.216 1.088.14.9 1.041z"/>\n          </svg>\n        </div>\n        <div>\n          <p x-show="selectedItem" x-cloak class="text-[11px] font-bold text-gold uppercase tracking-wider mb-1">\n            Selected: <span x-text="selectedItem"></span>\n          </p>\n          <h3 class="font-display text-lg font-bold text-white">Join Our Telegram Channel</h3>\n          <p class="text-xs text-gray-400 mt-1 leading-relaxed max-w-lg">\n            All {{ stream.name }} books, handwritten short notes, PDFs, and premium study materials are uploaded and updated daily on our official Telegram channel.\n          </p>\n        </div>\n      </div>\n\n      <a href="https://t.me/neetjeesangam" target="_blank" rel="noopener noreferrer"\n         class="shrink-0 inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-bold text-white bg-[#229ED9] hover:bg-[#1e8ec4] px-5 py-3 rounded-xl shadow-[0_4px_16px_rgba(34,158,217,0.3)] transition-all">\n        <span>Join Our Telegram Channel</span>\n        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">\n          <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />\n        </svg>\n      </a>\n    </div>\n  </div>\n\n</section>\n{% endblock %}\n<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->\n'
+
+
+def _resolve_active_stream_slug(existing):
+    preferred = session.get("active_stream_slug")
+    if preferred and any(s.get("slug") == preferred for s in (existing or [])):
+        return preferred
+    if existing:
+        return existing[0]["slug"]
+    return None
+
+
 @user_bp.route("/")
 def landing():
     if not is_logged_in():
         return redirect(url_for("auth.login"))
 
     existing = get_streams_for_user(user_id=current_user_id())
-    if existing:
-        return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
+    slug = _resolve_active_stream_slug(existing)
+    if slug:
+        return redirect(url_for("user.stream_dashboard", slug=slug))
     return redirect(url_for("user.start_learning"))
 
 
 @user_bp.route("/start")
 def start_learning():
-    """
-    The page a logged-in user lands on right after login/registration:
-    a simple welcome screen with a single 'Start Learning' button that
-    leads into board/stream selection.
-    """
     if not is_logged_in():
         return redirect(url_for("auth.login"))
 
     existing = get_streams_for_user(user_id=current_user_id())
-    if existing:
-        return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
+    slug = _resolve_active_stream_slug(existing)
+    if slug:
+        return redirect(url_for("user.stream_dashboard", slug=slug))
 
     return render_template("start_learning.html")
 
@@ -74,23 +84,33 @@ def stream_select():
 
     if request.method == "GET":
         force = request.args.get("force") == "1"
+        existing = get_streams_for_user(user_id=user_id)
+        current_stream_id = existing[0]["id"] if existing else None
 
-        if not force:
-            existing = get_streams_for_user(user_id=user_id)
-            if existing:
-                return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
+        if not force and existing:
+            return redirect(url_for("user.stream_dashboard", slug=_resolve_active_stream_slug(existing)))
 
-        return render_template("stream_select.html", streams=streams)
+        return render_template("stream_select.html", streams=streams, current_stream_id=current_stream_id)
 
-    selected_ids = request.form.getlist("stream_ids")
+    raw_ids = request.form.getlist("stream_ids") or ([request.form.get("stream_id")] if request.form.get("stream_id") else [])
+    selected_ids = [sid for sid in raw_ids if sid]
     if not selected_ids:
         return render_template("stream_select.html", streams=streams, error="Pick at least one stream.")
 
-    rows = [{"user_id": user_id, "stream_id": sid} for sid in selected_ids]
-    supabase_admin.table("user_streams").upsert(rows).execute()
+    # Exclusive single-stream selection: keep only the chosen stream so NEET and JEE never mix
+    chosen_id = selected_ids[0]
+    first_stream = next((s for s in streams if s["id"] == chosen_id), None)
+    if not first_stream:
+        return render_template("stream_select.html", streams=streams, error="Pick a valid stream.")
 
-    session["active_stream_ids"] = selected_ids
-    first_stream = next((s for s in streams if s["id"] == selected_ids[0]), None)
+    try:
+        supabase_admin.table("user_streams").delete().eq("user_id", user_id).execute()
+    except Exception:
+        pass
+    supabase_admin.table("user_streams").upsert([{"user_id": user_id, "stream_id": chosen_id}]).execute()
+
+    session["active_stream_ids"] = [chosen_id]
+    session["active_stream_slug"] = first_stream["slug"]
     return redirect(url_for("user.stream_dashboard", slug=first_stream["slug"]))
 
 
@@ -102,7 +122,24 @@ def stream_dashboard(slug):
     stream = get_stream_by_slug(slug)
     if not stream:
         return render_template("shared/404.html"), 404
+    session["active_stream_slug"] = stream["slug"]
     return render_template("dashboard.html", stream=stream)
+
+
+@user_bp.route("/streams/<slug>/materials")
+def books_materials(slug):
+    if not is_logged_in():
+        return redirect(url_for("auth.login"))
+
+    stream = get_stream_by_slug(slug)
+    if not stream:
+        return render_template("shared/404.html"), 404
+    for tpl in ("books_materials.html", "user/books_materials.html"):
+        try:
+            return render_template(tpl, stream=stream)
+        except TemplateNotFound:
+            continue
+    return render_template_string(_BOOKS_MATERIALS_FALLBACK_HTML, stream=stream)
 
 
 @user_bp.route("/switch-stream")
@@ -118,8 +155,9 @@ def my_dashboard():
         return redirect(url_for("auth.login"))
 
     existing = get_streams_for_user(user_id=current_user_id())
-    if existing:
-        return redirect(url_for("user.stream_dashboard", slug=existing[0]["slug"]))
+    slug = _resolve_active_stream_slug(existing)
+    if slug:
+        return redirect(url_for("user.stream_dashboard", slug=slug))
     return redirect(url_for("user.stream_select"))
 
 
@@ -127,11 +165,22 @@ def my_dashboard():
 # MENU 1: CHAPTER-WISE MCQ/PYQ PRACTICE (8-LEVEL SANGAM FLOW)
 # ==========================================
 
+def _chapter_matches_stream(chapter, stream):
+    if not chapter or not stream:
+        return False
+    ch_stream_slug = (((chapter.get("subjects") or {}).get("streams") or {}).get("slug"))
+    if ch_stream_slug and ch_stream_slug != stream.get("slug"):
+        return False
+    return True
+
+
 @user_bp.route("/streams/<slug>/practice")
 def practice_subjects(slug):
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
+    if not stream:
+        abort(404)
     subjects = get_subjects_for_stream(stream["id"])
     return render_template("practice_subjects.html", stream=stream, subjects=subjects)
 
@@ -141,6 +190,11 @@ def practice_chapters(slug, subject_id):
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
+    if not stream:
+        abort(404)
+    valid_subject_ids = {s["id"] for s in (get_subjects_for_stream(stream["id"]) or [])}
+    if valid_subject_ids and subject_id not in valid_subject_ids:
+        return redirect(url_for("user.practice_subjects", slug=stream["slug"]))
     chapters = get_chapters_for_subject(subject_id)
     return render_template("practice_chapters.html", stream=stream, chapters=chapters)
 
@@ -152,16 +206,24 @@ def practice_chapter_detail(slug, chapter_id):
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
+    if not stream or not chapter:
+        abort(404)
+    if not _chapter_matches_stream(chapter, stream):
+        return redirect(url_for("user.practice_subjects", slug=stream["slug"]))
     return render_template("practice_chapter_detail.html", stream=stream, chapter=chapter)
 
 
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>")
 def practice_category(slug, chapter_id, mode):
-    """Level 5: Select Topic-wise or Random"""
+    """Level 5: Select Topic-wise Mastery or Chapter Arena"""
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
+    if not stream or not chapter:
+        abort(404)
+    if not _chapter_matches_stream(chapter, stream):
+        return redirect(url_for("user.practice_subjects", slug=stream["slug"]))
     return render_template("practice_category.html", stream=stream, chapter=chapter, mode=mode)
 
 
@@ -172,6 +234,10 @@ def practice_folders(slug, chapter_id, mode, category):
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
+    if not stream or not chapter:
+        abort(404)
+    if not _chapter_matches_stream(chapter, stream):
+        return redirect(url_for("user.practice_subjects", slug=stream["slug"]))
     folders, folder_stats = get_practice_folders_for_chapter(chapter_id, mode, category)
     return render_template(
         "practice_folders.html",
@@ -187,6 +253,10 @@ def practice_sets(slug, chapter_id, mode, category, folder):
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
     chapter = get_chapter_by_id(chapter_id)
+    if not stream or not chapter:
+        abort(404)
+    if not _chapter_matches_stream(chapter, stream):
+        return redirect(url_for("user.practice_subjects", slug=stream["slug"]))
     sets = get_practice_sets_for_folder(chapter_id, mode, category, folder)
     return render_template("practice_sets.html", stream=stream, chapter=chapter, mode=mode, category=category, folder=folder, sets=sets)
 
@@ -538,14 +608,23 @@ def tests_feed(slug):
     # NULL (created before this column existed) is also shown to every
     # stream for now, so nothing already-live silently disappears -- see
     # sql/migration_test_series_stream.sql.
-    series_list = (
+    raw_series = (
         supabase_public.table("mock_test_series")
         .select("*")
         .or_(f"stream_id.eq.{stream['id']},stream_id.is.null")
         .order("created_at", desc=True)
         .execute()
-        .data
+        .data or []
     )
+    other_slug = "jee" if stream["slug"].lower() == "neet" else ("neet" if stream["slug"].lower() == "jee" else "")
+    series_list = [
+        s for s in raw_series
+        if s.get("stream_id") == stream["id"]
+        or (
+            s.get("stream_id") is None
+            and (not other_slug or other_slug not in (s.get("name") or "").lower())
+        )
+    ]
     return render_template("tests_feed.html", stream=stream, series_list=series_list)
 
 
