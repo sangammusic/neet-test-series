@@ -36,9 +36,8 @@ def _count_orphaned_mock_questions():
 @admin_required
 def dashboard():
     """
-    Landing page after admin login. Shows quick content counts.
-    CRITICAL FIX: Removed nested Storage API calls that caused massive timeouts.
-    Now uses O(1) Database queries to count uploaded images instantly.
+    Lightweight Admin Control Center for Render Free Tier.
+    Fetches only essential table counts with zero heavy orphan or storage scans.
     """
     def _count(table):
         try:
@@ -46,35 +45,6 @@ def dashboard():
             return res.count or 0
         except Exception as e:
             logger.error(f"Error counting {table}: {e}")
-            return 0
-
-    def _count_pending_images(table):
-        try:
-            res = (
-                supabase_admin.table(table)
-                .select("id", count="exact")
-                .eq("has_image", True)
-                .is_("image_url", "null")
-                .limit(1)
-                .execute()
-            )
-            return res.count or 0
-        except Exception as e:
-            logger.error(f"Error counting pending images in {table}: {e}")
-            return 0
-
-    def _count_uploaded_images(table):
-        try:
-            res = (
-                supabase_admin.table(table)
-                .select("id", count="exact")
-                .not_.is_("image_url", "null")
-                .limit(1)
-                .execute()
-            )
-            return res.count or 0
-        except Exception as e:
-            logger.error(f"Error counting uploaded images in {table}: {e}")
             return 0
 
     counts = {
@@ -85,42 +55,9 @@ def dashboard():
         "tests": _count("tests"),
     }
 
-    try:
-        incomplete_count = supabase_admin.table("test_attempts").select("id", count="exact").is_("submitted_at", "null").limit(1).execute().count or 0
-    except Exception:
-        incomplete_count = 0
-
-    garbage_info = {
-        "incomplete_attempts": incomplete_count,
-    }
-
-    try:
-        q_images = _count_uploaded_images("questions")
-        mq_images = _count_uploaded_images("mock_questions")
-        uploaded_count = q_images + mq_images
-        estimated_mb = round((uploaded_count * 100) / 1024, 1)
-    except Exception as e:
-        logger.warning(f"Fast storage calc failed: {e}")
-        uploaded_count = None
-        estimated_mb = None
-
-    storage_info = {
-        "uploaded_count": uploaded_count,
-        "estimated_mb": estimated_mb,
-        "pending_questions": _count_pending_images("questions"),
-        "pending_mock_questions": _count_pending_images("mock_questions"),
-    }
-
-    orphan_info = {
-        "orphaned_mock_questions": _count_orphaned_mock_questions(),
-    }
-
     return render_template(
         "admin_dashboard.html",
         counts=counts,
-        storage_info=storage_info,
-        garbage_info=garbage_info,
-        orphan_info=orphan_info,
     )
 
 
