@@ -21,17 +21,9 @@
       <h1 class="font-display text-2xl sm:text-3xl font-bold text-ink">Payment Approvals</h1>
       <p class="text-xs sm:text-sm text-ink/60 mt-0.5">Verify student UTR payments or manage content from your Admin Control Center.</p>
     </div>
-    <div class="flex flex-wrap items-center gap-2">
-      <a href="{{ url_for('admin.dashboard') }}" class="inline-flex items-center gap-1.5 text-xs font-bold bg-ink text-white px-4 py-2.5 rounded-lg hover:bg-ink-light transition-colors shadow-sm">
-        🛠️ Admin Dashboard
-      </a>
-      <a href="{{ url_for('admin.questions_list') }}" class="inline-flex items-center gap-1.5 text-xs font-bold bg-white border border-ink/15 text-ink px-3.5 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
-        ➕ Add Chapter Quiz
-      </a>
-      <a href="{{ url_for('admin.test_series_list') }}" class="inline-flex items-center gap-1.5 text-xs font-bold bg-white border border-ink/15 text-ink px-3.5 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
-        📦 Mock Tests
-      </a>
-    </div>
+    <a href="{{ url_for('admin.dashboard') }}" data-back-url="{{ url_for('admin.dashboard') }}" class="btn-cute-soft">
+      &larr; Back to Admin
+    </a>
   </div>
 
   <!-- ===== Compact Revenue Metrics ===== -->
