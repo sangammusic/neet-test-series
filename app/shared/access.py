@@ -1,4 +1,4 @@
-# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
+# SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21)
 """
 access.py -- the ONE place that decides "may this person see this content?"
 

@@ -1,4 +1,4 @@
-# SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21)
+# SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21)
 """
 Thin data-access functions shared by user and admin blueprints.
 
@@ -156,8 +156,9 @@ def get_streams_for_user(user_id: str = None):
     try:
         res = (
             supabase_public.table("user_streams")
-            .select("streams(id, name, slug)")
+            .select("streams(id, name, slug), joined_at")
             .eq("user_id", user_id)
+            .order("joined_at", desc=True)
             .execute()
         )
         return [row["streams"] for row in res.data if row.get("streams")]
