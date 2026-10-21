@@ -14,15 +14,21 @@
     <div class="mb-8 rounded-2xl border border-emerald-400/30 bg-emerald-400/[0.07] p-6">
       <p class="font-display text-xl font-bold text-white">{{ 'You have admin access' if ps.is_admin else 'Your ' ~ ps.plan_name ~ ' is active' }}</p>
       {% if ps.expires_label %}<p class="mt-1 text-gray-300">Valid until {{ ps.expires_label }}.</p>{% endif %}
+      {% if ps.is_admin %}
+      <p class="mt-1.5 text-sm text-gray-300">As Admin, all premium content is unlocked for you. You can still test or preview the student Payment QR &amp; UTR page below.</p>
+      {% endif %}
       <div class="mt-5 flex flex-col gap-3 sm:flex-row">
         <a href="{{ url_for('user.landing') }}" class="inline-flex items-center justify-center rounded-xl bg-gold px-6 py-3 font-bold text-ink hover:bg-gold-light transition-colors">Go to my workspace</a>
         <a href="{{ url_for('payments.history') }}" class="inline-flex items-center justify-center rounded-xl border border-white/15 px-6 py-3 font-semibold text-gray-200 hover:bg-white/5 transition-colors">My payments</a>
+        {% if ps.is_admin %}
+        <a href="{{ url_for('payments.preview_checkout') }}" class="inline-flex items-center justify-center rounded-xl border border-gold/40 bg-gold/10 px-6 py-3 font-bold text-gold hover:bg-gold/20 transition-colors">Preview Payment QR Page &rarr;</a>
+        {% endif %}
       </div>
     </div>
   {% endif %}
 
   {# ---- unfinished payment ---- #}
-  {% if open_order and not ps.active %}
+  {% if open_order and (not ps.active or ps.is_admin) %}
     <a href="{{ url_for('payments.checkout', order_id=open_order.id) }}"
        class="mb-8 flex items-center justify-between gap-4 rounded-2xl border border-gold/40 bg-gold/[0.07] p-5 transition-colors hover:bg-gold/10">
       <div>
@@ -35,7 +41,13 @@
 
   {% if not ready %}
     <div class="mb-8 rounded-2xl border border-amber-400/30 bg-amber-400/[0.07] p-5 text-sm text-amber-200">
-      Payments will open very soon. Please check back shortly.
+      <p class="font-semibold">Payments will open very soon. Please check back shortly.</p>
+      {% if ps.is_admin %}
+      <p class="mt-2 text-xs text-amber-300/90">
+        <strong>Admin Tip:</strong> Add <code class="rounded bg-black/40 px-1.5 py-0.5 font-mono">UPI_ID=yourname@fam</code> in Render Environment Variables (or <code class="rounded bg-black/40 px-1.5 py-0.5 font-mono">.env</code>) and run <code class="rounded bg-black/40 px-1.5 py-0.5 font-mono">sql/phase1_payments.sql</code> in Supabase to enable live student orders.
+        <a href="{{ url_for('payments.preview_checkout') }}" class="ml-1 font-bold text-gold underline">Click here to preview the Payment QR Page now &rarr;</a>
+      </p>
+      {% endif %}
     </div>
   {% endif %}
 
@@ -63,15 +75,33 @@
       {% endfor %}
     </ul>
 
-    {% if not ps.active %}
-    <form method="POST" action="{{ url_for('payments.start') }}" class="mt-8">
-      <input type="hidden" name="plan_code" value="{{ plan.code }}">
-      <button type="submit" {% if not ready %}disabled{% endif %}
-              class="w-full rounded-xl bg-gold py-4 text-lg font-bold text-ink shadow-[0_4px_14px_0_rgba(212,160,23,0.2)] transition-all hover:bg-gold-light hover:shadow-[0_6px_20px_rgba(212,160,23,0.3)] disabled:cursor-not-allowed disabled:opacity-40">
-        Get {{ plan.name }} for {{ plan.price_inr | inr }}
-      </button>
-      <p class="mt-3 text-center text-sm text-gray-500">Pay with any UPI app. You'll see the QR code on the next screen.</p>
-    </form>
+    {% if not ps.active or ps.is_admin %}
+      {% if ready and (db_plans_ready is not defined or db_plans_ready) %}
+      <form method="POST" action="{{ url_for('payments.start') }}" class="mt-8">
+        <input type="hidden" name="plan_code" value="{{ plan.code }}">
+        <button type="submit"
+                class="w-full rounded-xl bg-gold py-4 text-lg font-bold text-ink shadow-[0_4px_14px_0_rgba(212,160,23,0.2)] transition-all hover:bg-gold-light hover:shadow-[0_6px_20px_rgba(212,160,23,0.3)]">
+          Get {{ plan.name }} for {{ plan.price_inr | inr }}
+        </button>
+        <p class="mt-3 text-center text-sm text-gray-500">Pay with any UPI app. You'll see the QR code on the next screen.</p>
+      </form>
+      {% else %}
+      <div class="mt-8">
+        <form method="POST" action="{{ url_for('payments.start') }}">
+          <input type="hidden" name="plan_code" value="{{ plan.code }}">
+          <button type="submit" disabled
+                  class="w-full rounded-xl bg-gold py-4 text-lg font-bold text-ink opacity-40 cursor-not-allowed">
+            Get {{ plan.name }} for {{ plan.price_inr | inr }}
+          </button>
+        </form>
+        <div class="mt-4 text-center">
+          <a href="{{ url_for('payments.preview_checkout') }}"
+             class="inline-flex items-center justify-center gap-2 rounded-xl border border-gold/40 bg-gold/10 px-6 py-3 text-sm font-bold text-gold hover:bg-gold/20 transition-colors">
+            Open Payment Page Preview (QR + UTR) &rarr;
+          </a>
+        </div>
+      </div>
+      {% endif %}
     {% endif %}
   </article>
   {% else %}
@@ -84,7 +114,7 @@
     <div class="divide-y divide-white/10 rounded-2xl border border-white/10 bg-[#161616]/70">
       <details class="group p-5">
         <summary class="cursor-pointer list-none font-semibold text-white">How do I pay?</summary>
-        <p class="mt-3 leading-relaxed text-gray-400">Scan the QR code we show you with any UPI app (PhonePe, Google Pay, Paytm and others). Then send us the UTR from your payment, and a screenshot if you like.</p>
+        <p class="mt-3 leading-relaxed text-gray-400">Scan the QR code we show you with any UPI app (PhonePe, Google Pay, Paytm, FamPay and others). Then send us the 12-digit UTR from your payment, and a screenshot if you like.</p>
       </details>
       <details class="group p-5">
         <summary class="cursor-pointer list-none font-semibold text-white">How long does approval take?</summary>
