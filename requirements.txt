@@ -4,7 +4,6 @@ supabase==2.7.4
 python-dotenv==1.0.1
 Pillow==10.4.0
 Flask-Caching==2.3.0
-gevent==24.11.1
 # --- added in Phase 0/1 ---
 # QR code for UPI payments (pure Python, zero dependencies)
 segno==1.6.1
