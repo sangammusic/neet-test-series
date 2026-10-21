@@ -23,10 +23,16 @@
   <!-- Plan status: one slim line, never a banner -->
   {% set ps = premium_status() %}
   {% if ps.active %}
-  <a href="{{ url_for('payments.history') }}" class="mb-8 flex items-center justify-between gap-4 rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] px-5 py-3 text-sm transition-colors hover:bg-emerald-400/10">
+  <div class="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] px-5 py-3 text-sm">
     <span class="font-semibold text-emerald-200">{{ 'Admin access' if ps.is_admin else ps.plan_name ~ ' is active' }}{% if ps.expires_label %} until {{ ps.expires_label }}{% endif %}</span>
-    <span class="shrink-0 font-semibold text-gray-400">My payments</span>
-  </a>
+    <div class="flex flex-wrap items-center gap-4">
+      {% if ps.is_admin %}
+      <a href="{{ url_for('payments.plans') }}" class="font-semibold text-gold hover:underline">Season Pass &amp; QR</a>
+      <a href="{{ url_for('admin.payments_panel') }}" class="font-semibold text-emerald-300 hover:underline">Admin Approvals</a>
+      {% endif %}
+      <a href="{{ url_for('payments.history') }}" class="font-semibold text-gray-300 hover:text-white transition-colors">My payments</a>
+    </div>
+  </div>
   {% elif ps.offer_name %}
   <a href="{{ url_for('payments.plans') }}" class="mb-8 flex items-center justify-between gap-4 rounded-xl border border-gold/30 bg-gold/[0.07] px-5 py-3 text-sm transition-colors hover:bg-gold/10">
     <span class="font-semibold text-gray-100">Unlock every premium test and practice set with the {{ ps.offer_name }}, {{ ps.offer_price | inr }}</span>
@@ -106,3 +112,4 @@
   </div>
 </section>
 {% endblock %}
+<!-- SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21) -->

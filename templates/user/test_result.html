@@ -1,56 +1,49 @@
 {% extends "shared/base.html" %}
-{% block title %}{{ test.title }} — Result{% endblock %}
+{% block title %}Result &amp; Analysis — {{ test.title }}{% endblock %}
 {% block content %}
-<section class="max-w-xl mx-auto px-6 pt-12 pb-24 font-body relative z-10">
+{% set base = {'slug': stream.slug, 'test_id': test.id} %}
+{% set start_url = url_for('user.test_start', **base) %}
+{% set parent_list_url = url_for('user.series_tests', slug=stream.slug, series_id=test.series_id) if test.series_id else url_for('user.tests_feed', slug=stream.slug) %}
+<section class="max-w-2xl mx-auto px-6 pt-12 pb-24 relative z-10 font-body">
+
+  <a href="{{ parent_list_url }}" data-back-url="{{ parent_list_url }}" class="text-sm font-bold text-gray-400 hover:text-gold mb-6 inline-flex items-center gap-2 transition-colors">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+    Back to Mock Tests
+  </a>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category_name, message in messages %}
+    <div class="mb-5 text-sm font-semibold rounded-xl px-4 py-3 border {{ 'bg-red-500/10 border-red-500/30 text-red-300' if category_name == 'error' else 'bg-green-500/10 border-green-500/30 text-green-300' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
   <div class="text-center mb-8">
-    <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full inline-block mb-4">Result Summary</span>
-    <h1 class="font-display text-2xl md:text-3xl font-semibold text-white mb-2 tracking-tight">{{ test.title }}</h1>
+    <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-3 py-1.5 rounded-full inline-block mb-4">Test Result &amp; Analysis</span>
+    <h1 class="font-display text-3xl font-bold text-white mb-1">{{ test.title }}</h1>
   </div>
 
-  <!-- Score Card -->
-  <div class="bg-scholar-card border border-gold/20 rounded-2xl p-8 text-center mb-6 backdrop-blur-xl shadow-[0_0_40px_rgba(212,160,23,0.08)] relative overflow-hidden">
-    <div class="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full blur-2xl"></div>
-    <div class="absolute bottom-0 left-0 w-24 h-24 bg-gold/10 rounded-tr-full blur-2xl"></div>
-
-    <p class="text-sm font-semibold text-gold-light mb-2 uppercase tracking-wider relative z-10">Your Score</p>
-    <p class="font-display text-5xl font-bold text-white relative z-10">
-      {{ attempt.score }} <span class="text-2xl text-gray-500 font-medium">/ {{ test.total_marks or attempt.total_questions }}</span>
-    </p>
+  <!-- Score card -->
+  <div class="bg-scholar-card border border-gold/20 rounded-2xl p-6 text-center mb-4 backdrop-blur-xl shadow-[0_0_40px_rgba(212,160,23,0.08)]">
+    <p class="text-xs font-semibold text-gold-light mb-1 uppercase tracking-wider">Score</p>
+    <p class="font-display text-4xl font-bold text-white">{{ attempt.score }} <span class="text-xl text-gray-500 font-medium">/ {{ test.total_marks or attempt.total_questions }}</span></p>
+  </div>
+  <div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-center"><p class="text-2xl font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Correct</p></div>
+    <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-center"><p class="text-2xl font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Wrong</p></div>
+    <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-center"><p class="text-2xl font-display font-bold text-gray-400">{{ attempt.skipped_count }}</p><p class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Not Attempted</p></div>
   </div>
 
-  <!-- Accuracy Stats -->
-  <div class="grid grid-cols-3 gap-4 mb-10">
-    <div class="bg-scholar-card border border-scholar-border rounded-xl p-5 text-center backdrop-blur-xl hover:border-white/20 transition-all shadow-2xl">
-      <p class="text-3xl font-display font-bold text-green-400 mb-1">{{ attempt.correct_count }}</p>
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Correct</p>
-    </div>
-    <div class="bg-scholar-card border border-scholar-border rounded-xl p-5 text-center backdrop-blur-xl hover:border-white/20 transition-all shadow-2xl">
-      <p class="text-3xl font-display font-bold text-red-400 mb-1">{{ attempt.wrong_count }}</p>
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Wrong</p>
-    </div>
-    <div class="bg-scholar-card border border-scholar-border rounded-xl p-5 text-center backdrop-blur-xl hover:border-white/20 transition-all shadow-2xl">
-      <p class="text-3xl font-display font-bold text-gray-500 mb-1">{{ attempt.skipped_count }}</p>
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Skipped</p>
-    </div>
-  </div>
-
-  <!-- MAIN ACTION: Analyze Test Button (Links to Review Mode) -->
-  <div class="mb-12">
-    <a href="{{ url_for('user.test_analyse', slug=stream.slug, test_id=test.id) }}"
-       class="flex items-center justify-center gap-3 w-full py-4 rounded-xl bg-gold text-ink font-display font-bold text-lg hover:bg-gold-light hover:-translate-y-1 transition-all duration-200 shadow-[0_0_30px_rgba(212,160,23,0.2)] focus:outline-none focus:ring-4 focus:ring-gold/30">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-      Analyze Your Test
+  <div class="mb-10">
+    <a href="{{ url_for('user.test_attempt_review', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}"
+       class="flex w-full items-center justify-center gap-2 rounded-xl bg-gold py-3.5 px-6 font-bold text-ink shadow-md hover:bg-gold-light transition-colors">
+      🔍 Review Question-by-Question in Exam View
     </a>
-    <p class="text-center text-xs text-gray-500 mt-3 font-medium">Review wrong and marked questions, write down your mistakes, and reattempt.</p>
   </div>
 
-  <!-- Time Spent by Subject -->
-  {% if time_by_subject %}
+  <!-- Time Spent -->
+  {% if time_by_question %}
   {% set total_seconds = time_by_subject.values() | sum %}
   <div class="mb-10">
-    <h2 class="font-display text-xl font-semibold text-white mb-4">Time Spent by Subject</h2>
     <div class="bg-scholar-card border border-scholar-border rounded-xl p-6 space-y-5 backdrop-blur-xl shadow-2xl">
       {% for subject, seconds in time_by_subject.items() %}
       <div>
@@ -67,20 +60,76 @@
         <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Duration</span>
         <span class="text-sm font-bold text-white tabular-nums">{{ (total_seconds // 60) }}m {{ (total_seconds % 60) }}s</span>
       </div>
+      <details class="pt-2">
+        <summary class="cursor-pointer text-xs font-semibold text-gold-light hover:text-gold select-none">Per-question time breakdown</summary>
+        <div class="mt-3 space-y-2">
+          {% for it in time_by_question %}
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-gray-400 truncate pr-3">Q{{ loop.index }} · {{ it.subject_name }} — {{ it.question_text | striptags | truncate(40) }}</span>
+            <span class="text-gray-300 font-medium tabular-nums shrink-0">{{ (it.time_taken_sec // 60) }}m {{ (it.time_taken_sec % 60) }}s</span>
+          </div>
+          {% endfor %}
+        </div>
+      </details>
     </div>
   </div>
   {% endif %}
 
-  <!-- Bottom Navigation -->
-  <div class="flex gap-4">
-    <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}"
-       class="flex-1 text-center py-3.5 rounded-xl border border-white/15 text-sm font-semibold hover:border-white/30 hover:bg-white/5 transition-all text-white">
-       Back to Tests
+  {% if counts %}
+  <!-- ANALYSE -->
+  <h2 class="font-display text-xl font-semibold text-white mb-3">📊 Analyse</h2>
+  <div class="space-y-3 mb-12">
+    {% for view, label, sub, n in [
+        ('wrong',  'Analyse Wrong Questions',  'Wrong + not-attempted questions of this attempt', counts.wrong),
+        ('marked', 'Analyse Marked Questions', 'Only questions you marked for review',    counts.marked),
+        ('full',   'Analyse Full Test',        'Every question with your answer and notes', counts.full) ] %}
+    {% if n > 0 %}
+    <a href="{{ url_for('user.test_analyse_view', view=view, **base) }}"
+       class="flex items-center justify-between gap-4 p-5 rounded-xl bg-[#161616]/90 border border-white/10 hover:border-gold/40 transition-all">
+      <div><p class="font-semibold text-white">{{ label }}</p><p class="text-xs text-gray-500 mt-0.5">{{ sub }}</p></div>
+      <span class="shrink-0 text-sm font-black text-gold bg-gold/10 border border-gold/30 rounded-full px-3 py-1">{{ n }}</span>
     </a>
-    <a href="{{ url_for('user.profile') }}"
-       class="flex-1 text-center py-3.5 rounded-xl bg-white text-ink text-sm font-semibold hover:bg-gray-200 transition-colors shadow-md">
-       View Dashboard
-    </a>
+    {% else %}
+    <div class="flex items-center justify-between gap-4 p-5 rounded-xl bg-[#161616]/50 border border-white/5 opacity-50 cursor-not-allowed">
+      <div><p class="font-semibold text-gray-400">{{ label }}</p><p class="text-xs text-gray-600 mt-0.5">Nothing here</p></div>
+      <span class="shrink-0 text-sm font-black text-gray-500 border border-white/10 rounded-full px-3 py-1">0</span>
+    </div>
+    {% endif %}
+    {% endfor %}
   </div>
+
+  <!-- REATTEMPT -->
+  <h2 id="reattempt" class="font-display text-xl font-semibold text-white mb-1 scroll-mt-6">🔁 Reattempt</h2>
+  <p class="text-xs text-gray-500 mb-3">Reattempts are timed like the real test. Reattempting never changes this attempt's Wrong Questions record.</p>
+  <div class="space-y-3">
+    {% set wm = counts.wrong_or_marked %}
+    {% for kind, label, sub, n, warn in [
+        ('wrong_only',            'Reattempt Wrong Questions', 'Replay your wrong + not-attempted questions',        counts.wrong, ''),
+        ('marked_and_wrong_only', 'Reattempt Wrong + Marked', 'Replay wrong questions and marked questions',    wm, ''),
+        ('full',                  'Attempt Full Test',        'Start a NEW full attempt (your earlier attempts stay saved)', counts.full, 'Start a new full attempt? Your earlier attempts stay saved in your history.') ] %}
+    {% if n > 0 %}
+    <form method="POST" action="{{ start_url }}" data-replace-form class="m-0"
+          {% if warn %}onsubmit="return confirm('{{ warn }}');"{% endif %}>
+      <input type="hidden" name="kind" value="{{ kind }}">
+      <button type="submit" class="w-full flex items-center justify-between gap-4 p-5 rounded-xl bg-[#161616]/90 border border-white/10 hover:border-gold/40 transition-all text-left">
+        <div><p class="font-semibold text-white">{{ label }}</p><p class="text-xs text-gray-500 mt-0.5">{{ sub }}</p></div>
+        <span class="shrink-0 text-sm font-black text-gold bg-gold/10 border border-gold/30 rounded-full px-3 py-1">{{ n }}</span>
+      </button>
+    </form>
+    {% else %}
+    <div class="flex items-center justify-between gap-4 p-5 rounded-xl bg-[#161616]/50 border border-white/5 opacity-50 cursor-not-allowed">
+      <div><p class="font-semibold text-gray-400">{{ label }}</p><p class="text-xs text-gray-600 mt-0.5">Nothing to reattempt</p></div>
+      <span class="shrink-0 text-sm font-black text-gray-500 border border-white/10 rounded-full px-3 py-1">0</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
 </section>
+<script>
+  if (window.sangamInstallBackTrap) {
+    window.sangamInstallBackTrap({{ parent_list_url | tojson }});
+  }
+</script>
 {% endblock %}
+<!-- SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21) -->

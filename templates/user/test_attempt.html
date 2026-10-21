@@ -104,7 +104,7 @@
     </template>
 
     <template x-if="isReviewMode">
-      <a :href="resultUrl"
+      <a :href="resultUrl" :data-back-url="resultUrl"
         class="shrink-0 py-1.5 px-4 md:px-6 rounded-md text-xs md:text-sm font-semibold bg-white/10 text-white hover:bg-white/20 transition-colors">
         Back to Result
       </a>
@@ -347,6 +347,7 @@ function testAttempt() {
     saveUrl: "{{ url_for('user.test_attempt_save_answer', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     submitUrl: "{{ url_for('user.test_attempt_submit', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     resultUrl: "{{ url_for('user.test_result', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
+    parentListUrl: "{{ url_for('user.series_tests', slug=stream.slug, series_id=test.series_id) if test.series_id else url_for('user.tests_feed', slug=stream.slug) }}",
 
     /* =============================================================
        BOOT
@@ -361,10 +362,16 @@ function testAttempt() {
       SangamQuiz.armClockSentinel(() => this.finished || this.isReviewMode);
 
       if (this.isReviewMode) {
+        if (window.sangamInstallBackTrap) {
+          window.sangamInstallBackTrap(this.resultUrl);
+        }
         this.finished = true;
         this.showQuestion();
         SangamQuiz.xray.set('mode', 'review');
         return;
+      }
+      if (window.sangamInstallBackTrap) {
+        window.sangamInstallBackTrap(this.parentListUrl);
       }
 
       const saved = {{ saved_progress | tojson if saved_progress else '{}' }};
@@ -835,7 +842,7 @@ function testAttempt() {
       }, 4, 800)
         .then(res => res.json())
         .then(data => {
-          window.location.href = data.redirect || this.resultUrl;
+          window.location.replace(data.redirect || this.resultUrl);
         })
         .catch(() => {
           this.submitting = false;
@@ -849,3 +856,4 @@ function testAttempt() {
 }
 </script>
 {% endblock %}
+<!-- SANGAM STUDY v2.1 — Final Fixed Build (2026-10-21) -->
