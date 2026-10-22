@@ -1,4 +1,4 @@
-# STUDY SANGAM HUB v3.0 — Shared Data Access & High-Speed Memoized Lookups
+# STUDY SANGAM HUB v4.0 — Shared Data Access, NTA Optional Pattern Engine & Zero-Empty-Test Filter
 import logging
 import re
 from app.extensions import supabase_public, supabase_admin, cache
@@ -11,6 +11,82 @@ DEFAULT_PRACTICE_FOLDER = "General / Uncategorized"
 def natural_sort_key(text):
     parts = re.split(r"(\d+)", str(text or "").strip())
     return [int(p) if p.isdigit() else p.lower() for p in parts]
+
+
+# ======================================================================
+# NTA NEET OPTIONAL QUESTION ENGINE (50 -> Attempt 45, 100 -> Attempt 90)
+# ======================================================================
+
+def compute_nta_subject_cap(question_count: int) -> int:
+    """
+    Official NTA NEET Pattern rule:
+      - Out of 50 questions in a subject (e.g. Physics 50, Chemistry 50, Biology 50),
+        a student only attempts at most 45 questions (5 questions are optional free skips
+        with zero negative marking).
+      - Out of 100 questions in Biology (Botany 50 + Zoology 50), a student only attempts
+        at most 90 questions (10 questions are optional free skips).
+      - For any 50-question block multiple (count >= 50 and count % 50 == 0),
+        attemptable count is (count // 50) * 45.
+      - For any other count (e.g. 45, 90, or smaller custom tests), all questions are attemptable.
+    """
+    c = max(0, int(question_count or 0))
+    if c >= 50 and c % 50 == 0:
+        return (c // 50) * 45
+    return c
+
+
+def compute_nta_test_meta(subject_counts: dict, stored_total_marks=None, default_mpq: float = 4.0) -> dict:
+    """
+    Computes complete NTA scoring & attempt metadata for a mock test given
+    `subject_counts` = {'Physics': 50, 'Chemistry': 50, 'Biology': 50 (or 100)}.
+    """
+    clean_counts = {str(k): max(0, int(v or 0)) for k, v in (subject_counts or {}).items() if int(v or 0) > 0}
+    total_uploaded = sum(clean_counts.values())
+    subject_caps = {subj: compute_nta_subject_cap(cnt) for subj, cnt in clean_counts.items()}
+    Subject_skips = {subj: max(0, clean_counts[subj] - subject_caps[subj]) for subj in clean_counts}
+    total_attemptable = sum(subject_caps.values())
+    optional_skips = max(0, total_uploaded - total_attemptable)
+
+    stored_marks = int(stored_total_marks or 0)
+    mpq = float(default_mpq or 4.0)
+
+    if total_attemptable > 0:
+        # If optional skips exist and stored_marks was naively set to total_uploaded * 4 (e.g. 600 for 150Q or 800 for 200Q)
+        # or stored_marks is 0, normalize to total_attemptable * 4 (e.g. 540 for 150Q->135, 720 for 200Q->180)
+        if stored_marks <= 0 or (optional_skips > 0 and stored_marks == total_uploaded * 4):
+            effective_marks = int(round(total_attemptable * mpq))
+        elif total_uploaded == 150 and total_attemptable == 135 and stored_marks == 720:
+            effective_marks = 540
+        else:
+            effective_marks = stored_marks
+        marks_per_question = round(float(effective_marks) / float(total_attemptable), 2)
+    else:
+        effective_marks = stored_marks if stored_marks > 0 else 720
+        marks_per_question = mpq
+
+    subjects_list = [
+        {
+            "subject": subj,
+            "uploaded": clean_counts[subj],
+            "attemptable": subject_caps[subj],
+            "optional_skips": Subject_skips[subj],
+        }
+        for subj in clean_counts
+    ]
+    return {
+        "total_uploaded": total_uploaded,
+        "total_attemptable": total_attemptable,
+        "optional_skips": optional_skips,
+        "total_optional_skips": optional_skips,
+        "has_optional_pattern": optional_skips > 0,
+        "has_optional": optional_skips > 0,
+        "effective_total_marks": effective_marks,
+        "marks_per_question": marks_per_question,
+        "subject_counts": clean_counts,
+        "subject_caps": subject_caps,
+        "subject_skips": Subject_skips,
+        "subjects": subjects_list,
+    }
 
 
 def _normalize_practice_row(row):
@@ -222,7 +298,6 @@ def get_difficulty_levels():
 def get_series_for_stream(stream_id: str, stream_slug: str = ""):
     """
     Fast cached lookup of Mock Test Series folders for a stream.
-    Eliminates slow repeated Supabase queries when opening or going back to Mock Test Series.
     """
     try:
         raw_series = (
@@ -265,18 +340,71 @@ def get_series_by_id(series_id: str):
         return None
 
 
-@cache.memoize(timeout=300)
-def get_tests_for_series(series_id: str, stream_id: str):
+def _attach_question_counts_and_filter(tests_list, hide_empty=True):
+    """
+    Counts mapped questions for each test in `tests_list` from `mock_test_questions`.
+    If `hide_empty=True`, filters out any test that has 0 uploaded questions so
+    students NEVER see an empty/un-uploaded test inside a Test Series folder!
+    """
+    if not tests_list:
+        return []
+    test_ids = [t["id"] for t in tests_list if t.get("id")]
+    if not test_ids:
+        return []
+
+    counts_by_tid = {tid: 0 for tid in test_ids}
     try:
-        return (
-            supabase_public.table("tests")
-            .select("*")
-            .eq("series_id", series_id)
-            .eq("stream_id", stream_id)
-            .order("created_at", desc=True)
-            .execute()
-            .data or []
-        )
+        for i in range(0, len(test_ids), 50):
+            chunk = test_ids[i:i + 50]
+            rows = (
+                supabase_public.table("mock_test_questions")
+                .select("test_id")
+                .in_("test_id", chunk)
+                .execute()
+                .data or []
+            )
+            for r in rows:
+                tid = r.get("test_id")
+                if tid in counts_by_tid:
+                    counts_by_tid[tid] += 1
+    except Exception as e:
+        logger.warning(f"Could not count mock_test_questions for tests: {e}")
+        return tests_list
+
+    filtered = []
+    for t in tests_list:
+        row = dict(t)
+        q_cnt = counts_by_tid.get(row.get("id"), 0)
+        row["question_count"] = q_cnt
+        if hide_empty and q_cnt <= 0:
+            continue
+        # Ensure total_marks reflects NTA attemptable marks if 0 or naive 150*4/200*4
+        if q_cnt == 200 and (not row.get("total_marks") or int(row.get("total_marks") or 0) in (0, 800)):
+            row["total_marks"] = 720
+            row["attemptable_questions"] = 180
+        elif q_cnt == 150 and (not row.get("total_marks") or int(row.get("total_marks") or 0) in (0, 600, 720)):
+            row["total_marks"] = 540
+            row["attemptable_questions"] = 135
+        elif q_cnt > 0 and not row.get("total_marks"):
+            row["total_marks"] = compute_nta_subject_cap(q_cnt) * 4
+            row["attemptable_questions"] = compute_nta_subject_cap(q_cnt)
+        else:
+            row["attemptable_questions"] = 180 if q_cnt == 200 else (135 if q_cnt == 150 else q_cnt)
+        row["total_uploaded"] = q_cnt
+        row["total_attemptable"] = row["attemptable_questions"]
+        row["has_optional"] = row["total_attemptable"] < q_cnt
+        filtered.append(row)
+    return filtered
+
+
+@cache.memoize(timeout=300)
+def get_tests_for_series(series_id: str, stream_id: str = None, include_empty: bool = False):
+    try:
+        q = supabase_public.table("tests").select("*").eq("series_id", series_id)
+        if stream_id:
+            q = q.eq("stream_id", stream_id)
+        raw = q.order("created_at", desc=True).execute().data or []
+        return _attach_question_counts_and_filter(raw, hide_empty=not include_empty)
     except Exception as e:
         logger.error(f"Error fetching tests for series {series_id}: {e}")
         return []
@@ -363,7 +491,7 @@ def get_all_tests_for_stream(stream_id):
             .order("created_at", desc=True)
             .execute()
         )
-        return res.data
+        return _attach_question_counts_and_filter(res.data or [], hide_empty=True)
     except Exception as e:
         logger.error(f"Error fetching tests for stream {stream_id}: {e}")
         return []
@@ -446,6 +574,18 @@ def get_mock_questions_for_test(test_id):
     except Exception as e:
         logger.error(f"Error fetching mock questions for test {test_id}: {e}")
         return {}
+
+
+def get_test_nta_meta(test_id, stored_total_marks=None):
+    """
+    Returns full NTA question/attempt/skip/marks metadata for `test_id`.
+    """
+    q_by_subj = get_mock_questions_for_test(test_id) or {}
+    subj_counts = {subj: len(qs) for subj, qs in q_by_subj.items()}
+    if stored_total_marks is None:
+        t = get_test_by_id(test_id) or {}
+        stored_total_marks = t.get("total_marks")
+    return compute_nta_test_meta(subj_counts, stored_total_marks=stored_total_marks)
 
 
 @cache.memoize(timeout=300)
@@ -604,6 +744,16 @@ def get_mock_questions_for_test_review(test_id, attempt_id):
 
 
 def submit_test_attempt(attempt_id, test_id, progress_map=None, valid_ids=None, answers=None, time_by_question=None):
+    """
+    Grades and submits a Mock Test Attempt using the Official NTA NEET Pattern:
+      * If a subject has 50 questions, up to 45 attempted questions are evaluated
+        (5 optional questions can be skipped with ZERO negative marking).
+      * If Biology has 100 questions, up to 90 attempted questions are evaluated
+        (10 optional questions can be skipped with ZERO negative marking).
+      * Marks per correct question = effective_total_marks / total_attemptable (4.0 by default),
+        NEVER diluted by optional questions (e.g., never 720/200 = 3.6).
+      * Skipped questions NEVER deduct marks.
+    """
     import datetime
 
     try:
@@ -613,78 +763,121 @@ def submit_test_attempt(attempt_id, test_id, progress_map=None, valid_ids=None, 
 
         mapped = (
             supabase_admin.table("mock_test_questions")
-            .select("mock_question_id, mock_questions(correct_option)")
+            .select("mock_question_id, question_order, mock_questions(correct_option, subjects(name))")
             .eq("test_id", test_id)
+            .order("question_order")
             .execute()
-            .data
+            .data or []
         )
-        if not mapped:
-            return None
 
+        is_partial_reattempt = valid_ids is not None and len(valid_ids) < len(mapped)
         if valid_ids is not None:
             mapped = [row for row in mapped if row["mock_question_id"] in valid_ids]
-            if not mapped:
-                return None
+
+        # Even if a test had 0 questions, mark submitted_at so /result never loops back to /attempt
+        if not mapped:
+            empty_summary = {
+                "submitted_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "score": 0,
+                "total_questions": 0,
+                "correct_count": 0,
+                "wrong_count": 0,
+                "skipped_count": 0,
+            }
+            supabase_admin.table("test_attempts").update(empty_summary).eq("id", attempt_id).execute()
+            empty_summary["attempt_id"] = attempt_id
+            return empty_summary
 
         if progress_map is None:
             progress_map = get_attempt_answers_map(attempt_id)
         answers = answers or {}
         time_by_question = time_by_question or {}
 
+        # Group mapped questions by subject to enforce NTA per-subject attempt caps
+        by_subject = {}
+        for row in mapped:
+            mq = row.get("mock_questions") or {}
+            subj_name = (mq.get("subjects") or {}).get("name") or "General"
+            by_subject.setdefault(subj_name, []).append(row)
+
+        subj_counts = {s: len(rows) for s, rows in by_subject.items()}
+        nta_meta = compute_nta_test_meta(subj_counts, stored_total_marks=test.get("total_marks"))
+
         total_questions = len(mapped)
-        total_marks = int(test.get("total_marks") or total_questions)
-        negative_marking = abs(float(test.get("negative_marking") or 0)) 
-        
-        marks_per_question = float(total_marks) / total_questions if total_questions > 0 else 1.0
+        negative_marking = abs(float(test.get("negative_marking") or 0))
+        marks_per_question = nta_meta["marks_per_question"]
+
+        # Sync corrected total_marks back to `tests` if it was 0 or naive 150*4 / 200*4
+        if not is_partial_reattempt and nta_meta["effective_total_marks"] != int(test.get("total_marks") or 0):
+            try:
+                supabase_admin.table("tests").update(
+                    {"total_marks": nta_meta["effective_total_marks"]}
+                ).eq("id", test_id).execute()
+                cache.delete_memoized(get_test_by_id, test_id)
+            except Exception:
+                pass
 
         correct_count = 0
         wrong_count = 0
         skipped_count = 0
         answer_rows = []
 
-        for row in mapped:
-            qid = row["mock_question_id"]
-            correct_option = (row.get("mock_questions") or {}).get("correct_option")
-            
-            student_data = progress_map.get(qid, {})
-            selected = student_data.get("selected_option") or answers.get(qid)
-            time_taken = student_data.get("time_taken_sec") or time_by_question.get(qid) or 0
-            existing_status = student_data.get("status") or "not_visited"
+        for subj_name, subj_rows in by_subject.items():
+            subj_cap = len(subj_rows) if is_partial_reattempt else nta_meta["subject_caps"].get(subj_name, len(subj_rows))
+            attempted_in_subj = 0
 
-            if not selected:
-                skipped_count += 1
-                if time_taken > 0 or existing_status != "not_visited":
-                    answer_rows.append({
-                        "attempt_id": attempt_id,
-                        "mock_question_id": qid,
-                        "selected_option": None,
-                        "is_correct": None,
-                        "time_taken_sec": time_taken,
-                        "status": existing_status
-                    })
-                continue
+            for row in subj_rows:
+                qid = row["mock_question_id"]
+                correct_option = (row.get("mock_questions") or {}).get("correct_option")
 
-            is_correct = (selected == correct_option)
-            if is_correct:
-                correct_count += 1
-            else:
-                wrong_count += 1
+                student_data = progress_map.get(qid, {})
+                selected = student_data.get("selected_option") or answers.get(qid)
+                if selected not in ("A", "B", "C", "D"):
+                    selected = None
+                time_taken = student_data.get("time_taken_sec") or time_by_question.get(qid) or 0
+                existing_status = student_data.get("status") or "not_visited"
 
-            answer_rows.append({
-                "attempt_id": attempt_id,
-                "mock_question_id": qid,
-                "selected_option": selected,
-                "is_correct": is_correct,
-                "time_taken_sec": time_taken,
-                "status": existing_status
-            })
+                # Enforce NTA per-subject cap: if more than subj_cap (e.g. >45 out of 50) were selected,
+                # only the first subj_cap answered questions count; excess are treated as unattempted skips
+                if selected and attempted_in_subj >= subj_cap:
+                    selected = None
+                    existing_status = "not_answered"
+
+                if not selected:
+                    skipped_count += 1
+                    if time_taken > 0 or existing_status != "not_visited":
+                        answer_rows.append({
+                            "attempt_id": attempt_id,
+                            "mock_question_id": qid,
+                            "selected_option": None,
+                            "is_correct": None,
+                            "time_taken_sec": time_taken,
+                            "status": existing_status,
+                        })
+                    continue
+
+                attempted_in_subj += 1
+                is_correct = (selected == correct_option)
+                if is_correct:
+                    correct_count += 1
+                else:
+                    wrong_count += 1
+
+                answer_rows.append({
+                    "attempt_id": attempt_id,
+                    "mock_question_id": qid,
+                    "selected_option": selected,
+                    "is_correct": is_correct,
+                    "time_taken_sec": time_taken,
+                    "status": existing_status,
+                })
 
         if answer_rows:
             supabase_admin.table("attempt_answers").upsert(
                 answer_rows, on_conflict="attempt_id,mock_question_id"
             ).execute()
 
-        score = (correct_count * marks_per_question) - (wrong_count * negative_marking)
+        score = round((correct_count * marks_per_question) - (wrong_count * negative_marking), 2)
 
         summary = {
             "submitted_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -697,6 +890,9 @@ def submit_test_attempt(attempt_id, test_id, progress_map=None, valid_ids=None, 
 
         supabase_admin.table("test_attempts").update(summary).eq("id", attempt_id).execute()
         summary["attempt_id"] = attempt_id
+        summary["attemptable_questions"] = nta_meta["total_attemptable"]
+        summary["optional_skips"] = nta_meta["optional_skips"]
+        summary["effective_total_marks"] = nta_meta["effective_total_marks"]
         return summary
     except Exception as e:
         logger.error(f"Error submitting test attempt {attempt_id} for test {test_id}: {e}")
