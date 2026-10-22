@@ -1,4 +1,4 @@
-# STUDY SANGAM HUB v3.0 — Mock Test Series (Free vs Paid Test Series Folders + Fast Cache Invalidation)
+# STUDY SANGAM HUB v4.0 — Mock Test Series Admin (Resilient Chunk Upload, Auto Subject Sync, NTA Pattern & Zero Empty Shells)
 import json
 import logging
 import re
@@ -12,6 +12,7 @@ from app.extensions import supabase_admin, cache
 from app.shared import payments_core as pay
 from app.shared.access import enrich_series_list, get_series_pricing, invalidate_series_plans_cache
 from app.shared.latex_lint import lint_question_payload
+from app.shared.models import compute_nta_subject_cap, compute_nta_test_meta
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,116 @@ def _parse_series_paid_and_price(form):
     return True, price_inr
 
 
+def _ensure_subjects_for_stream(stream_id, required_names=("Physics", "Chemistry", "Biology")):
+    """
+    Ensures standard subjects exist for `stream_id` in `subjects` so bulk question upload
+    never fails due to a missing subject row.
+    """
+    try:
+        rows = supabase_admin.table("subjects").select("id, name").eq("stream_id", stream_id).execute().data or []
+    except Exception as e:
+        logger.error(f"Could not read subjects for stream {stream_id}: {e}")
+        rows = []
+
+    name_to_id = {r["name"].strip().lower(): r["id"] for r in rows if r.get("name") and r.get("id")}
+    for idx, req_name in enumerate(required_names, start=1):
+        key = req_name.strip().lower()
+        if key not in name_to_id:
+            slug = re.sub(r"[^a-z0-9]+", "-", key).strip("-")
+            try:
+                created = supabase_admin.table("subjects").insert({
+                    "stream_id": stream_id,
+                    "name": req_name,
+                    "slug": slug,
+                    "display_order": idx,
+                    "is_active": True,
+                }).execute().data or []
+                if created and created[0].get("id"):
+                    name_to_id[key] = created[0]["id"]
+            except Exception:
+                # Re-query in case of slug conflict
+                try:
+                    existing = (
+                        supabase_admin.table("subjects")
+                        .select("id, name")
+                        .eq("stream_id", stream_id)
+                        .execute()
+                        .data or []
+                    )
+                    for r in existing:
+                        if r.get("name") and r.get("id"):
+                            name_to_id[r["name"].strip().lower()] = r["id"]
+                except Exception:
+                    pass
+    return name_to_id
+
+
+def _get_uploaded_subject_counts(test_id):
+    """Returns {'physics': int, 'chemistry': int, 'biology': int, 'total': int} for `test_id`."""
+    counts = {"physics": 0, "chemistry": 0, "biology": 0, "total": 0}
+    try:
+        rows = (
+            supabase_admin.table("mock_test_questions")
+            .select("mock_question_id, mock_questions(subjects(name))")
+            .eq("test_id", test_id)
+            .execute()
+            .data or []
+        )
+        for r in rows:
+            counts["total"] += 1
+            mq = r.get("mock_questions") or {}
+            s_name = ((mq.get("subjects") or {}).get("name") or "").strip().lower()
+            if "phys" in s_name:
+                counts["physics"] += 1
+            elif "chem" in s_name:
+                counts["chemistry"] += 1
+            elif "bio" in s_name or "botan" in s_name or "zool" in s_name:
+                counts["biology"] += 1
+    except Exception as e:
+        logger.warning(f"Error counting uploaded questions for test {test_id}: {e}")
+    return counts
+
+
+def _insert_mock_questions_resilient(payloads):
+    """
+    Inserts `payloads` into `mock_questions` with automatic fallback if the live DB
+    is missing optional columns or difficulty_levels rows.
+    """
+    if not payloads:
+        return []
+    try:
+        res = supabase_admin.table("mock_questions").insert(payloads).execute()
+        return [r["id"] for r in (res.data or []) if r.get("id")]
+    except Exception as first_exc:
+        err_str = str(first_exc).lower()
+        logger.warning(f"Primary mock_questions insert raised ({first_exc}); retrying with resilient fallback.")
+
+        # Strip optional columns that might not exist in an older DB schema or FK mismatch
+        optional_cols = ("is_premium", "has_image", "pyq_year", "is_pyq", "difficulty_id", "image_url")
+        cleaned = []
+        for p in payloads:
+            row = dict(p)
+            if "difficulty" in err_str or "foreign key" in err_str:
+                row["difficulty_id"] = None
+            for col in optional_cols:
+                if col in err_str:
+                    row.pop(col, None)
+            cleaned.append(row)
+
+        try:
+            res = supabase_admin.table("mock_questions").insert(cleaned).execute()
+            return [r["id"] for r in (res.data or []) if r.get("id")]
+        except Exception:
+            # Minimal core schema fallback
+            core_keys = (
+                "stream_id", "subject_id", "topic_name", "question_text",
+                "option_a", "option_b", "option_c", "option_d", "correct_option", "explanation",
+            )
+            minimal = [{k: p.get(k) for k in core_keys if k in p} for p in payloads]
+            res = supabase_admin.table("mock_questions").insert(minimal).execute()
+            return [r["id"] for r in (res.data or []) if r.get("id")]
+
+
 # ==========================================
 # LEVEL 1: TEST SERIES FOLDERS (FREE OR PAID + PRICE)
 # ==========================================
@@ -78,7 +189,6 @@ def test_series_list():
         else:
             created_row = None
             try:
-                # Try inserting with is_paid & price_inr columns first
                 try:
                     res = supabase_admin.table("mock_test_series").insert(
                         {"name": name, "stream_id": stream_id, "is_paid": is_paid, "price_inr": price_inr}
@@ -143,7 +253,6 @@ def test_series_edit(series_id):
                 price_inr=price_inr,
                 stream_id=folder_row.get("stream_id"),
             )
-            # Also sync all tests inside this series so their is_premium & price_inr match the folder
             try:
                 supabase_admin.table("tests").update(
                     {"is_premium": is_paid, "price_inr": price_inr}
@@ -287,7 +396,6 @@ def series_tests(series_id):
         negative_marking_raw = float(request.form.get("negative_marking") or 0)
         negative_marking = abs(negative_marking_raw)
 
-        # Inherits Free/Paid status & price directly from the parent Test Series Folder
         payload = {
             "series_id": series_id,
             "stream_id": stream_id,
@@ -295,7 +403,7 @@ def series_tests(series_id):
             "title": title,
             "description": request.form.get("description", "").strip() or None,
             "duration_minutes": int(request.form.get("duration_minutes") or 180),
-            "total_marks": 0, 
+            "total_marks": 0,
             "negative_marking": negative_marking,
             "is_premium": bool(pricing["is_paid"]),
             "price_inr": float(pricing["price_inr"] or 0),
@@ -305,7 +413,6 @@ def series_tests(series_id):
             result = supabase_admin.table("tests").insert(payload).execute()
             test_id = result.data[0]["id"]
             _invalidate_test_questions_cache(test_id=test_id, series_id=series_id)
-            flash("Test created — you can now set targets and start uploading questions.", "success")
             return redirect(url_for("admin.tests_upload", test_id=test_id, mpq=marks_per_question_raw))
         except Exception as exc:
             logger.error(f"Could not create test: {exc}")
@@ -326,14 +433,41 @@ def series_tests(series_id):
             seen_cats.add(key)
             categories.append(c)
 
-    tests = (
+    raw_tests = (
         supabase_admin.table("tests")
         .select("id, title, description, duration_minutes, total_marks, is_premium, is_active, streams(name)")
         .eq("series_id", series_id)
         .order("created_at", desc=True)
         .execute()
-        .data
+        .data or []
     )
+
+    # Auto-clean any abandoned 0-question test shells so empty tests never sit in the folder!
+    tests = []
+    discarded_empty = 0
+    for t in raw_tests:
+        q_counts = _get_uploaded_subject_counts(t["id"])
+        if q_counts["total"] <= 0:
+            try:
+                supabase_admin.table("tests").delete().eq("id", t["id"]).execute()
+                discarded_empty += 1
+            except Exception:
+                pass
+            continue
+        t_copy = dict(t)
+        t_copy["question_count"] = q_counts["total"]
+        t_copy["subject_counts"] = q_counts
+        nta_meta = compute_nta_test_meta(
+            {"Physics": q_counts["physics"], "Chemistry": q_counts["chemistry"], "Biology": q_counts["biology"]},
+            stored_total_marks=t_copy.get("total_marks"),
+        )
+        t_copy["total_marks"] = nta_meta["effective_total_marks"]
+        t_copy["attemptable_questions"] = nta_meta["total_attemptable"]
+        tests.append(t_copy)
+
+    if discarded_empty > 0:
+        _invalidate_test_questions_cache(series_id=series_id)
+
     return render_template("admin_tests.html", series=series_data, streams=streams, categories=categories, tests=tests)
 
 
@@ -350,22 +484,60 @@ def tests_upload(test_id):
         return redirect(url_for("admin.test_series_list"))
 
     mpq = request.args.get("mpq", 4)
-    return render_template("admin_test_upload.html", test=test, mpq=mpq)
+    uploaded_counts = _get_uploaded_subject_counts(test_id)
+    return render_template("admin_test_upload.html", test=test, mpq=mpq, uploaded_counts=uploaded_counts)
+
+
+@admin_bp.route("/tests/<test_id>/discard-empty", methods=["POST", "GET"])
+@admin_required
+def tests_discard_empty(test_id):
+    """
+    If an Admin cancels or leaves the Upload screen when 0 questions were uploaded,
+    deletes the empty test shell so it never appears in the Test Series folder.
+    """
+    test = supabase_admin.table("tests").select("id, series_id").eq("id", test_id).maybe_single().execute().data
+    series_id = test.get("series_id") if test else None
+    if test:
+        counts = _get_uploaded_subject_counts(test_id)
+        if counts["total"] <= 0:
+            try:
+                supabase_admin.table("tests").delete().eq("id", test_id).execute()
+                _invalidate_test_questions_cache(test_id=test_id, series_id=series_id)
+            except Exception as e:
+                logger.warning(f"Could not discard empty test {test_id}: {e}")
+    if request.is_json or request.args.get("ajax") == "1":
+        return jsonify({"ok": True})
+    if series_id:
+        return redirect(url_for("admin.series_tests", series_id=series_id))
+    return redirect(url_for("admin.test_series_list"))
 
 
 @admin_bp.route("/tests/<test_id>/lock-targets", methods=["POST"])
 @admin_required
 def tests_lock_targets(test_id):
-    data = request.json
+    data = request.get_json(silent=True) or {}
     total_marks = data.get("total_marks")
-    
+    targets = data.get("targets") or {}
+    mpq = float(data.get("mpq") or 4)
+
+    if targets and isinstance(targets, dict):
+        meta = compute_nta_test_meta(
+            {
+                "Physics": int(targets.get("physics") or 0),
+                "Chemistry": int(targets.get("chemistry") or 0),
+                "Biology": int(targets.get("biology") or 0),
+            },
+            default_mpq=mpq,
+        )
+        total_marks = meta["effective_total_marks"]
+
     if total_marks is None:
         return jsonify({"ok": False, "error": "total_marks calculation missing."}), 400
         
     try:
         supabase_admin.table("tests").update({"total_marks": int(total_marks)}).eq("id", test_id).execute()
         _invalidate_test_questions_cache(test_id=test_id)
-        return jsonify({"ok": True, "total_marks": total_marks})
+        return jsonify({"ok": True, "total_marks": int(total_marks)})
     except Exception as exc:
         logger.error(f"Target lock failed: {exc}")
         return jsonify({"ok": False, "error": "Database error locking targets."}), 500
@@ -390,15 +562,20 @@ def tests_manage(test_id):
         .eq("test_id", test_id)
         .order("question_order")
         .execute()
-        .data
+        .data or []
     )
+
+    # If 0 questions were uploaded and Admin clicked DONE, redirect back to upload screen with a clear notice
+    if len(mapped) == 0:
+        flash("Please upload at least 1 question chunk before opening the Question Manager.", "error")
+        return redirect(url_for("admin.tests_upload", test_id=test_id))
 
     edit_json_map = {}
     for m in mapped:
         mq = m.get("mock_questions") or {}
         edit_json_map[m["mock_question_id"]] = {
             "subject_name": (mq.get("subjects") or {}).get("name") or "",
-            "topic_name": mq.get("topic_name") or "",
+            "topic_name": mq.get("topic_name") or "General",
             "question_text": mq.get("question_text") or "",
             "option_a": mq.get("option_a") or "",
             "option_b": mq.get("option_b") or "",
@@ -420,105 +597,144 @@ def tests_manage(test_id):
 @admin_bp.route("/tests/<test_id>/questions/bulk-map", methods=["POST"])
 @admin_required
 def tests_bulk_map_questions(test_id):
-    is_ajax = request.args.get("ajax") == "1"
+    is_ajax = request.args.get("ajax") == "1" or request.is_json
     
     test = supabase_admin.table("tests").select("id, stream_id, total_marks, series_id").eq("id", test_id).maybe_single().execute().data
     if not test:
-        if is_ajax: return jsonify({"ok": False, "error": "Test not found."}), 404
+        if is_ajax:
+            return jsonify({"ok": False, "error": "Test not found."}), 404
         flash("Test not found.", "error")
         return redirect(url_for("admin.test_series_list"))
 
     stream_id = test["stream_id"]
+    default_subject = None
     
     if request.is_json:
-        raw_json_data = request.json.get("bulk_json")
-        raw_json = json.dumps(raw_json_data) if isinstance(raw_json_data, list) else str(raw_json_data or "").strip()
+        body = request.get_json(silent=True) or {}
+        raw_json_data = body.get("bulk_json")
+        default_subject = body.get("subject_name")
+        if isinstance(raw_json_data, (list, dict)):
+            parsed = raw_json_data
+            raw_json = None
+        else:
+            raw_json = str(raw_json_data or "").strip()
+            parsed = None
     else:
         raw_json = request.form.get("bulk_json", "").strip()
+        default_subject = request.form.get("subject_name")
+        parsed = None
 
-    if not raw_json:
-        if is_ajax: return jsonify({"ok": False, "error": "Paste a JSON array of questions."}), 400
-        return jsonify({"ok": False, "error": "No data"}), 400
+    if parsed is None:
+        if not raw_json:
+            return jsonify({"ok": False, "error": "Paste a JSON array of questions."}), 400
+        try:
+            parsed = json.loads(raw_json)
+        except json.JSONDecodeError as e:
+            return jsonify({"ok": False, "error": f"Invalid JSON format ({e.msg} at line {e.lineno}). Check brackets and commas."}), 400
 
-    try:
-        parsed = json.loads(raw_json)
-    except json.JSONDecodeError:
-        if is_ajax: return jsonify({"ok": False, "error": "Invalid JSON format. Check commas and quotes."}), 400
-        return jsonify({"ok": False, "error": "Invalid JSON"}), 400
+    # Support pasting a single JSON question object {...} or {"questions": [...]}
+    if isinstance(parsed, dict):
+        if isinstance(parsed.get("questions"), list):
+            parsed = parsed["questions"]
+        else:
+            parsed = [parsed]
 
     if not isinstance(parsed, list) or len(parsed) == 0:
-        if is_ajax: return jsonify({"ok": False, "error": "Empty or invalid array."}), 400
-        return jsonify({"ok": False, "error": "Empty array"}), 400
+        return jsonify({"ok": False, "error": "Empty or invalid JSON array."}), 400
 
-    subjects_for_stream = supabase_admin.table("subjects").select("id, name").eq("stream_id", stream_id).execute().data
-    subject_name_to_id = {s["name"].strip().lower(): s["id"] for s in subjects_for_stream}
-    id_to_subj = {s["id"]: s["name"].strip().lower() for s in subjects_for_stream}
-    
-    difficulty_ids = {d["id"] for d in supabase_admin.table("difficulty_levels").select("id").execute().data}
+    # Ensure standard subjects exist for this stream in Supabase
+    subject_name_to_id = _ensure_subjects_for_stream(stream_id)
+    try:
+        difficulty_ids = {d["id"] for d in (supabase_admin.table("difficulty_levels").select("id").execute().data or [])}
+    except Exception:
+        difficulty_ids = {1, 2, 3}
 
     valid_payloads, errors = [], []
     for i, raw in enumerate(parsed, start=1):
-        payload, error = _validate_mock_question(raw, subject_name_to_id, difficulty_ids, stream_id)
+        payload, error = _validate_mock_question(
+            raw, subject_name_to_id, difficulty_ids, stream_id, default_subject_name=default_subject
+        )
         if error:
-            errors.append(f"row {i}: {error}")
+            errors.append(f"Row {i}: {error}")
         else:
             valid_payloads.append(payload)
 
-    total_marks_val = int(test.get("total_marks") or 0)
-    if total_marks_val == 720 and not errors:
-        existing = supabase_admin.table("mock_test_questions").select("mock_questions(subjects(name))").eq("test_id", test_id).execute().data
-        
-        phys_count = chem_count = bio_count = 0
-        for row in existing:
-            q = row.get("mock_questions")
-            if q and q.get("subjects") and q["subjects"].get("name"):
-                s_name = q["subjects"]["name"].strip().lower()
-                if "physics" in s_name: phys_count += 1
-                elif "chem" in s_name: chem_count += 1
-                elif "bio" in s_name or "botan" in s_name or "zoolo" in s_name: bio_count += 1
-                
-        for p in valid_payloads:
-            s_name = id_to_subj.get(p.get("subject_id"), "")
-            if "physics" in s_name: phys_count += 1
-            elif "chem" in s_name: chem_count += 1
-            elif "bio" in s_name or "botan" in s_name or "zoolo" in s_name: bio_count += 1
-            
-        if phys_count > 45:
-            if is_ajax: return jsonify({"ok": False, "error": f"SANGAM STUDY HUB RULES: Uploading exceeds the 45 Physics limit. (Total would be {phys_count})"}), 400
-        if chem_count > 45:
-            if is_ajax: return jsonify({"ok": False, "error": f"SANGAM STUDY HUB RULES: Uploading exceeds the 45 Chemistry limit. (Total would be {chem_count})"}), 400
-        if bio_count > 90:
-            if is_ajax: return jsonify({"ok": False, "error": f"SANGAM STUDY HUB RULES: Uploading exceeds the 90 Biology limit. (Total would be {bio_count})"}), 400
+    if not valid_payloads:
+        err_summary = "; ".join(errors[:3]) if errors else "No valid questions found in pasted JSON."
+        return jsonify({
+            "ok": False,
+            "inserted": 0,
+            "inserted_ids": [],
+            "errors": errors,
+            "error": err_summary,
+        }), 400
 
     inserted_ids = []
-    if valid_payloads and not errors:
-        try:
-            result = supabase_admin.table("mock_questions").insert(valid_payloads).execute()
-            inserted_ids = [row["id"] for row in result.data]
-        except Exception as exc:
-            logger.error(f"Bulk Insert Error: {exc}")
-            if is_ajax: return jsonify({"ok": False, "error": "Database insert failed. Please try again."}), 500
-            return jsonify({"ok": False, "error": "DB Upload failed"}), 500
+    try:
+        inserted_ids = _insert_mock_questions_resilient(valid_payloads)
+    except Exception as exc:
+        logger.error(f"Bulk Insert Error: {exc}")
+        return jsonify({
+            "ok": False,
+            "error": f"Database insert error: {str(exc)[:160]}",
+            "errors": errors,
+        }), 500
 
     if inserted_ids:
         try:
-            existing_orders = supabase_admin.table("mock_test_questions").select("question_order").eq("test_id", test_id).execute().data
-            start_order = max([row["question_order"] for row in existing_orders], default=-1) + 1 if existing_orders else 0
+            existing_orders = (
+                supabase_admin.table("mock_test_questions")
+                .select("question_order")
+                .eq("test_id", test_id)
+                .execute()
+                .data or []
+            )
+            start_order = max([row.get("question_order", 0) for row in existing_orders], default=-1) + 1 if existing_orders else 0
             
             mapping_rows = [
                 {"test_id": test_id, "mock_question_id": qid, "question_order": start_order + i}
                 for i, qid in enumerate(inserted_ids)
             ]
-            supabase_admin.table("mock_test_questions").upsert(mapping_rows, on_conflict="test_id,mock_question_id").execute()
+            try:
+                supabase_admin.table("mock_test_questions").upsert(
+                    mapping_rows, on_conflict="test_id,mock_question_id"
+                ).execute()
+            except Exception:
+                supabase_admin.table("mock_test_questions").insert(mapping_rows).execute()
         except Exception as exc:
             logger.error(f"Test Mapping Error: {exc}")
-            if is_ajax: return jsonify({"ok": False, "error": "Mapping to test failed. Please try again."}), 500
+            return jsonify({"ok": False, "error": f"Mapping questions to test failed: {str(exc)[:140]}"}), 500
 
-    if inserted_ids:
+        # Auto-sync NTA total_marks based on uploaded subject counts
+        try:
+            counts = _get_uploaded_subject_counts(test_id)
+            nta_meta = compute_nta_test_meta(
+                {"Physics": counts["physics"], "Chemistry": counts["chemistry"], "Biology": counts["biology"]},
+                stored_total_marks=test.get("total_marks"),
+            )
+            if int(test.get("total_marks") or 0) <= 0 or nta_meta["optional_skips"] > 0:
+                supabase_admin.table("tests").update(
+                    {"total_marks": nta_meta["effective_total_marks"]}
+                ).eq("id", test_id).execute()
+        except Exception as e:
+            logger.warning(f"Could not auto-sync test total_marks: {e}")
+
         _invalidate_test_questions_cache(test_id=test_id, series_id=test.get("series_id"))
 
-    latex_warnings = [{"row": i + 1, "fields": w} for i, p in enumerate(valid_payloads) for w in [lint_question_payload(p)] if w]
-    return jsonify({"ok": True if inserted_ids else False, "inserted": len(inserted_ids), "inserted_ids": inserted_ids, "errors": errors, "latex_warnings": latex_warnings})
+    latex_warnings = [
+        {"row": i + 1, "fields": w}
+        for i, p in enumerate(valid_payloads)
+        for w in [lint_question_payload(p)]
+        if w
+    ]
+    return jsonify({
+        "ok": bool(inserted_ids),
+        "inserted": len(inserted_ids),
+        "inserted_ids": inserted_ids,
+        "errors": errors,
+        "error": ("; ".join(errors[:3]) if (errors and not inserted_ids) else None),
+        "latex_warnings": latex_warnings,
+    })
 
 
 @admin_bp.route("/tests/<test_id>/questions/undo-chunk", methods=["POST"])
@@ -597,9 +813,11 @@ def tests_edit_question(test_id, question_id):
         return jsonify({"ok": False, "error": "Test not found."}), 404
 
     stream_id = test["stream_id"]
-    subjects = supabase_admin.table("subjects").select("id, name").eq("stream_id", stream_id).execute().data
-    subject_name_to_id = {s["name"].strip().lower(): s["id"] for s in subjects}
-    difficulty_ids = {d["id"] for d in supabase_admin.table("difficulty_levels").select("id").execute().data}
+    subject_name_to_id = _ensure_subjects_for_stream(stream_id)
+    try:
+        difficulty_ids = {d["id"] for d in (supabase_admin.table("difficulty_levels").select("id").execute().data or [])}
+    except Exception:
+        difficulty_ids = {1, 2, 3}
 
     payload, error = _validate_mock_question(raw, subject_name_to_id, difficulty_ids, stream_id)
     if error:
