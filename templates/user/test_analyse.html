@@ -1,64 +1,69 @@
 {% extends "shared/base.html" %}
-{% block title %}Analyse — {{ test.title }}{% endblock %}
+{% block title %}Mistake Autopsy — {{ test.title }}{% endblock %}
 {% block content %}
 {% set base = {'slug': stream.slug, 'test_id': test.id} %}
 {% set start_url = url_for('user.test_start', **base) %}
 {% set parent_list_url = url_for('user.series_tests', slug=stream.slug, series_id=test.series_id) if test.series_id else url_for('user.tests_feed', slug=stream.slug) %}
-<section class="max-w-xl mx-auto px-4 pt-6 pb-20 relative z-10 font-body">
+<section class="max-w-xl mx-auto px-3.5 sm:px-5 pt-5 pb-16 relative z-10 font-body">
 
-  <div class="mb-5 flex flex-wrap items-center justify-between gap-2">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
     <a href="{{ parent_list_url }}" data-back-url="{{ parent_list_url }}" class="btn-cute-soft">
-      &larr; Back to Mock Tests
+      &larr; Back to Mocks
     </a>
     <a href="{{ parent_list_url }}" data-replace-link class="btn-cute">
-      🚀 Start Another Test &rarr;
+      🚀 Next Mock &rarr;
     </a>
   </div>
 
-  <div class="text-center mb-6">
-    <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-1 rounded-full inline-block mb-2">Your Last Test</span>
-    <h1 class="font-display text-2xl sm:text-3xl font-bold text-white">{{ test.title }}</h1>
+  <div class="text-center mb-4">
+    <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded-full inline-block mb-1.5">Last Attempt Autopsy</span>
+    <h1 class="font-display text-xl sm:text-2xl font-bold text-white">{{ test.title }}</h1>
   </div>
 
-  <div class="pw-tile rounded-2xl p-4 sm:p-5 text-center mb-3">
-    <p class="text-[10px] font-bold text-gold uppercase tracking-wider mb-0.5">Score</p>
-    <p class="font-display text-3xl sm:text-4xl font-bold text-white">{{ attempt.score }} <span class="text-base text-gray-400 font-medium">/ {{ test.total_marks or attempt.total_questions }}</span></p>
+  <div class="pw-tile rounded-2xl p-4 text-center mb-2.5">
+    <p class="text-[9px] font-extrabold text-gold uppercase tracking-widest mb-0.5">Score</p>
+    <p class="font-display text-3xl sm:text-4xl font-bold text-white">{{ attempt.score }} <span class="text-sm sm:text-base text-gray-400 font-medium">/ {{ test.total_marks or (nta_meta.total_attemptable * 4 if nta_meta else attempt.total_questions * 4) }}</span></p>
+    {% if nta_meta and nta_meta.has_optional %}
+    <p class="text-[10px] text-emerald-400 font-bold mt-1">
+      NTA Pattern: {{ nta_meta.total_attemptable }} of {{ nta_meta.total_uploaded }} Qs Attemptable · 0 Negative on Skips
+    </p>
+    {% endif %}
   </div>
-  <div class="grid grid-cols-3 gap-2.5 mb-6">
-    <div class="pw-tile rounded-xl p-3 text-center"><p class="text-xl font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[9px] font-bold text-gray-400 uppercase">Correct</p></div>
-    <div class="pw-tile rounded-xl p-3 text-center"><p class="text-xl font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[9px] font-bold text-gray-400 uppercase">Wrong</p></div>
-    <div class="pw-tile rounded-xl p-3 text-center"><p class="text-xl font-display font-bold text-gray-400">{{ attempt.skipped_count }}</p><p class="text-[9px] font-bold text-gray-400 uppercase">Skipped</p></div>
+  <div class="grid grid-cols-3 gap-2 mb-5">
+    <div class="pw-tile rounded-xl p-2.5 text-center"><p class="text-lg font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Correct (+4)</p></div>
+    <div class="pw-tile rounded-xl p-2.5 text-center"><p class="text-lg font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Wrong (-{{ test.negative_marking or 1 }})</p></div>
+    <div class="pw-tile rounded-xl p-2.5 text-center"><p class="text-lg font-display font-bold text-gray-300">{{ attempt.skipped_count }}</p><p class="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Skipped (0)</p></div>
   </div>
 
-  <h2 class="font-display text-sm sm:text-base font-bold text-white uppercase tracking-wider mb-2.5">📊 Analyse</h2>
-  <div class="space-y-2.5 mb-7">
+  <h2 class="font-display text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider mb-2">📊 Mistake Autopsy</h2>
+  <div class="space-y-2 mb-5">
     {% for view, label, sub, n in [
-        ('wrong',  'Analyse Wrong Questions',  'Wrong + not-attempted questions', counts.wrong),
-        ('marked', 'Analyse Marked Questions', 'Questions marked for review',    counts.marked),
-        ('full',   'Analyse Full Test',        'Every question with explanations & notes', counts.full) ] %}
+        ('wrong',  'Fix Mistakes & Skips',      'Wrong + unattempted questions with solutions', counts.wrong),
+        ('marked', 'Review Bookmarked Qs',      'Questions marked for review during test',      counts.marked),
+        ('full',   'Full Paper Breakdown',      'Every question with explanations & notes',     counts.full) ] %}
     {% if n > 0 %}
     <a href="{{ url_for('user.test_analyse_view', view=view, **base) }}"
-       class="pw-tile flex items-center justify-between gap-3 p-3.5 sm:p-4">
-      <div><p class="font-bold text-xs sm:text-sm text-white">{{ label }}</p><p class="text-[11px] text-gray-400 mt-0.5">{{ sub }}</p></div>
-      <span class="btn-cute !py-1 !px-2.5 !text-xs">{{ n }} &rsaquo;</span>
+       class="pw-tile flex items-center justify-between gap-3 p-3 sm:p-3.5">
+      <div><p class="font-bold text-xs sm:text-sm text-white">{{ label }}</p><p class="text-[10px] text-gray-400 mt-0.5">{{ sub }}</p></div>
+      <span class="btn-cute !py-1 !px-2.5 !text-[10px]">{{ n }} &rsaquo;</span>
     </a>
     {% endif %}
     {% endfor %}
   </div>
 
-  <h2 id="reattempt" class="font-display text-sm sm:text-base font-bold text-white uppercase tracking-wider mb-2">🔁 Reattempt</h2>
-  <div class="space-y-2.5">
+  <h2 id="reattempt" class="font-display text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider mb-2">🔁 Run It Back (Reattempt)</h2>
+  <div class="space-y-2">
     {% set wm = counts.wrong_or_marked %}
     {% for kind, label, sub, n in [
-        ('wrong_only',            'Reattempt Wrong Questions', 'Replay wrong + not-attempted questions',        counts.wrong),
-        ('marked_and_wrong_only', 'Reattempt Wrong + Marked', 'Replay wrong and marked questions',             wm),
-        ('full',                  'Attempt Full Test Again',  'Start a fresh full attempt',                    counts.full) ] %}
+        ('wrong_only',            'Redemption Round (Wrong Only)', 'Re-solve only wrong & skipped questions', counts.wrong),
+        ('marked_and_wrong_only', 'Replay Wrong + Bookmarked',     'Targeted drill on tricky questions',      wm),
+        ('full',                  'Fresh Full Mock Attempt',       'Reset clock and run the full test again', counts.full) ] %}
     {% if n > 0 %}
     <form method="POST" action="{{ start_url }}" data-replace-form class="m-0">
       <input type="hidden" name="kind" value="{{ kind }}">
-      <button type="submit" class="w-full pw-tile flex items-center justify-between gap-3 p-3.5 sm:p-4 text-left">
-        <div><p class="font-bold text-xs sm:text-sm text-white">{{ label }}</p><p class="text-[11px] text-gray-400 mt-0.5">{{ sub }}</p></div>
-        <span class="btn-cute !py-1 !px-2.5 !text-xs">{{ n }} &rsaquo;</span>
+      <button type="submit" class="w-full pw-tile flex items-center justify-between gap-3 p-3 sm:p-3.5 text-left">
+        <div><p class="font-bold text-xs sm:text-sm text-white">{{ label }}</p><p class="text-[10px] text-gray-400 mt-0.5">{{ sub }}</p></div>
+        <span class="btn-cute !py-1 !px-2.5 !text-[10px]">{{ n }} &rsaquo;</span>
       </button>
     </form>
     {% endif %}
@@ -71,4 +76,4 @@
   }
 </script>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->
+<!-- STUDY SANGAM HUB v4.0 -->

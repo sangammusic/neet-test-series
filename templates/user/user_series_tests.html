@@ -1,86 +1,92 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ series.name }} — {{ stream.name }}{% endblock %}
 {% block content %}
-<section class="max-w-4xl mx-auto px-3.5 sm:px-5 pt-6 pb-16 relative z-10">
-  
-  <div class="mb-5 border-b border-white/10 pb-3.5">
+<section class="max-w-4xl mx-auto px-3 sm:px-5 pt-4 pb-14 relative z-10">
+
+  <div class="mb-4 border-b border-white/10 pb-3">
     <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}" data-back-url="{{ url_for('user.tests_feed', slug=stream.slug) }}" class="btn-cute-soft mb-2">
-      &larr; All Test Series
+      &larr; All Test Packs
     </a>
     <div class="flex flex-wrap items-center gap-2">
-      <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ stream.name }}</span>
+      <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded-full">{{ stream.name }}</span>
       {% if series.is_paid %}
         {% if series.has_access %}
-          <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-400/35 px-2 py-0.5 rounded">✓ Unlocked</span>
+          <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-400/35 px-2 py-0.5 rounded-full">✓ Unlocked</span>
         {% else %}
-          <span class="text-[9px] font-black uppercase bg-gold/15 text-gold border border-gold/40 px-2 py-0.5 rounded">🔒 Paid · {{ series.price_inr | inr }}</span>
+          <span class="text-[9px] font-black uppercase bg-gold/15 text-gold border border-gold/40 px-2 py-0.5 rounded-full">🔒 Pro Pack · {{ series.price_inr | inr }}</span>
         {% endif %}
       {% else %}
-        <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-400/35 px-2 py-0.5 rounded">🟢 Free Series</span>
+        <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-400/35 px-2 py-0.5 rounded-full">⚡ Free Pack</span>
       {% endif %}
-      <h1 class="font-display text-lg sm:text-2xl font-bold text-white">{{ series.name }}</h1>
+      <h1 class="font-display text-base sm:text-xl font-bold text-white">{{ series.name }}</h1>
     </div>
   </div>
 
-  <!-- Single Unlock Banner if Series is Paid & Locked (Not repeated on every card) -->
+  <!-- Single Unlock Banner if Series is Paid & Locked -->
   {% if series.is_paid and not series.has_access %}
-  <div class="mb-5 pw-tile p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  <div class="mb-4 pw-tile p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
     <div>
-      <p class="font-display text-sm sm:text-base font-bold text-white">🔒 Unlock All Tests in {{ series.name }}</p>
-      <p class="text-xs text-gray-300 mt-0.5">
-        One-time purchase ({{ series.price_inr | inr }}) unlocks every mock test in this series after Telegram Bot approval.
+      <p class="font-display text-xs sm:text-sm font-bold text-white">🔒 Unlock All Mocks in {{ series.name }}</p>
+      <p class="text-[11px] text-gray-300 mt-0.5">
+        One-time pass ({{ series.price_inr | inr }}) unlocks every full-length NTA mock in this pack.
       </p>
     </div>
     {% if series.pending_order_id and series.pending_status == 'submitted' %}
       <a href="{{ url_for('payments.checkout', order_id=series.pending_order_id) }}" class="btn-cute shrink-0">
-        ⏳ Check Approval Status
+        ⏳ Check Pass Status
       </a>
     {% else %}
       <a href="{{ url_for('payments.buy_series', series_id=series.id) }}" class="btn-cute shrink-0">
-        Purchase Series · {{ series.price_inr | inr }} &rarr;
+        Unlock Pack · {{ series.price_inr | inr }} &rarr;
       </a>
     {% endif %}
   </div>
   {% endif %}
 
-  <!-- Test Cards inside Series -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
+  <!-- Cute Compact Test Cards inside Series -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
     {% for t in tests %}
-    <div class="pw-tile p-3.5 sm:p-4 flex items-center justify-between gap-3 group">
+    <div class="pw-tile p-3 sm:p-3.5 flex items-center justify-between gap-2.5 group">
       <div class="min-w-0 flex-1">
-        <p class="font-display text-sm sm:text-base font-bold text-white truncate">{{ t.title }}</p>
+        <p class="font-display text-xs sm:text-sm font-bold text-white truncate">{{ t.title }}</p>
         {% if t.description %}
-        <p class="text-[11px] text-gray-400 mt-0.5 font-medium line-clamp-1">{{ t.description }}</p>
+        <p class="text-[10px] text-gray-400 mt-0.5 font-medium line-clamp-1">{{ t.description }}</p>
         {% endif %}
-        <div class="flex flex-wrap items-center gap-1.5 mt-2">
-          <span class="text-[10px] font-semibold text-gray-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
-            ⏱ {{ t.duration_minutes }} min
+        <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
+          <span class="text-[9px] font-bold text-gray-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
+            ⏱ {{ t.duration_minutes }}m
           </span>
-          <span class="text-[10px] font-semibold text-gray-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
-            🎯 {{ t.total_marks or '720' }} marks
+          <span class="text-[9px] font-bold text-gold bg-gold/10 border border-gold/25 px-1.5 py-0.5 rounded">
+            🎯 {{ t.total_marks or '720' }} Marks
           </span>
+          {% if t.total_uploaded %}
+          <span class="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-400/25 px-1.5 py-0.5 rounded">
+            ⚡ {% if t.has_optional %}{{ t.total_attemptable }}/{{ t.total_uploaded }} Qs (NTA){% else %}{{ t.total_uploaded }} Qs{% endif %}
+          </span>
+          {% endif %}
         </div>
       </div>
-      
+
       <div class="shrink-0">
         {% if series.is_paid and not series.has_access %}
-          <span class="text-[11px] font-bold text-gray-400 border border-white/15 bg-white/5 px-2.5 py-1.5 rounded-lg inline-block">
+          <span class="text-[10px] font-bold text-gray-400 border border-white/15 bg-white/5 px-2.5 py-1 rounded-lg inline-block">
             🔒 Locked
           </span>
         {% else %}
-          <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}" data-replace-link class="btn-cute !py-1.5 !px-3 !text-[11px]">
-            <span>Attempt</span>
+          <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}" data-replace-link class="btn-cute !py-1.5 !px-3 !text-[10px]">
+            <span>Lock In</span>
             <span>&rsaquo;</span>
           </a>
         {% endif %}
       </div>
     </div>
     {% else %}
-    <div class="col-span-full text-center p-8 pw-tile rounded-xl">
-        <p class="text-white font-bold text-sm mb-1">No Mock Tests Uploaded Yet</p>
-        <p class="text-gray-400 text-xs font-medium">Tests for this series will appear here soon.</p>
+    <div class="col-span-full text-center p-6 pw-tile rounded-xl">
+      <p class="text-white font-bold text-xs sm:text-sm mb-1">Mocks Dropping Soon ⚡</p>
+      <p class="text-gray-400 text-[11px] font-medium">Full-length NTA mocks for this pack are being finalized with complete question sets.</p>
     </div>
     {% endfor %}
   </div>
 </section>
 {% endblock %}
+<!-- STUDY SANGAM HUB v4.0 -->

@@ -2,44 +2,40 @@
 {% block title %}Welcome — STUDY SANGAM HUB{% endblock %}
 
 {% block content %}
-<section class="max-w-lg mx-auto px-4 pt-10 sm:pt-14 pb-16 text-center relative z-10">
-    <div class="pw-tile p-6 sm:p-8 rounded-2xl relative overflow-hidden">
-        <div class="absolute -top-14 left-1/2 -translate-x-1/2 w-48 h-48 bg-gold/15 rounded-full blur-3xl pointer-events-none"></div>
+<section class="max-w-md mx-auto px-4 pt-8 sm:pt-12 pb-14 text-center relative z-10">
+  <div class="pw-tile p-5 sm:p-7 rounded-2xl relative overflow-hidden">
+    <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-40 bg-gold/15 rounded-full blur-3xl pointer-events-none"></div>
 
-        <!-- Main Brand Logo -->
-        <img src="{{ url_for('static', filename='img/logo.png') }}"
-             alt="STUDY SANGAM HUB — CONNECT • LEARN • GROW"
-             class="w-28 h-28 sm:w-32 sm:h-32 mx-auto mb-4 rounded-2xl object-cover border border-gold/40 shadow-[0_8px_28px_rgba(0,0,0,0.45)] relative z-10">
+    <!-- Single top navbar already displays the brand logo; no duplicate logo here -->
+    <span class="text-gold font-extrabold text-[9px] tracking-widest uppercase mb-2 border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded-full inline-block relative z-10">
+      LOCK IN • GRIND • CONQUER
+    </span>
 
-        <span class="text-gold font-extrabold text-[10px] tracking-widest uppercase mb-2 border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded-full inline-block relative z-10">
-            CONNECT • LEARN • GROW
-        </span>
+    <h1 class="font-display text-xl sm:text-2xl font-bold mb-2 text-white relative z-10">
+      Ready to Rank Up? ⚡
+    </h1>
 
-        <h1 class="font-display text-2xl sm:text-3xl font-bold mb-2 text-white relative z-10">
-            Welcome to Study Sangam Hub
-        </h1>
+    <p class="text-xs text-gray-300 mb-5 max-w-xs mx-auto leading-relaxed relative z-10">
+      High-yield Topic Drills, NTA-pattern Mock Arenas (45/50 section rules), and NCERT Vault notes built for serious NEET &amp; JEE aspirants.
+    </p>
 
-        <p class="text-xs sm:text-sm text-gray-300 mb-6 max-w-sm mx-auto leading-relaxed relative z-10">
-            Chapter-wise MCQs, PYQ archives, and full-length NTA mock test series for NEET &amp; JEE.
-        </p>
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-2 relative z-10">
+      <a href="{{ next_url or url_for('user.enter_workspace') }}"
+         data-replace-link
+         onclick="try { sessionStorage.setItem('sangam_welcomed', '1'); } catch(e) {}"
+         class="btn-cute !px-5 !py-2.5 !text-xs w-full sm:w-auto">
+        <span>Enter Command HQ</span>
+        <span>&rarr;</span>
+      </a>
 
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-2.5 relative z-10">
-            <a href="{{ next_url or url_for('user.enter_workspace') }}"
-               data-replace-link
-               onclick="try { sessionStorage.setItem('sangam_welcomed', '1'); } catch(e) {}"
-               class="btn-cute !px-6 !py-2.5 !text-xs sm:!text-sm w-full sm:w-auto">
-                <span>Start Learning</span>
-                <span>&rarr;</span>
-            </a>
-
-            {% if active_stream_slug %}
-            <a href="{{ url_for('user.switch_stream') }}"
-               class="btn-cute-soft !px-4 !py-2 !text-xs w-full sm:w-auto">
-                <span>🔄 Switch Stream ({{ active_stream_slug | upper }})</span>
-            </a>
-            {% endif %}
-        </div>
+      {% if active_stream_slug %}
+      <a href="{{ url_for('user.switch_stream') }}"
+         class="btn-cute-soft !px-3.5 !py-2 !text-xs w-full sm:w-auto">
+        <span>🔄 Switch Stream ({{ active_stream_slug | upper }})</span>
+      </a>
+      {% endif %}
     </div>
+  </div>
 </section>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->
+<!-- STUDY SANGAM HUB v4.0 -->

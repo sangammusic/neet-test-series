@@ -1,5 +1,5 @@
 {% extends "shared/base.html" %}
-{% block title %}{{ test.title }} — {{ 'Review' if is_review_mode else 'Attempt' }}{% endblock %}
+{% block title %}{{ test.title }} — {{ 'Review' if is_review_mode else 'Live Arena' }}{% endblock %}
 
 {% block nav %}{% endblock %}
 
@@ -7,9 +7,7 @@
 <!-- SANGAM CORE: x-ray + zombie-proof clock + offscreen prerender cache -->
 <script src="{{ url_for('static', filename='js/sangam-quiz-core.js') }}"></script>
 <style>
-  /* Palette status colors — matches NTA's exam-interface convention,
-     with the Marked/Answered-Marked pair reworked to a premium bronze/amber
-     tone in the app's own gold family instead of the clashing purple. */
+  /* Palette status colors — matches NTA's exam-interface convention */
   .status-not-visited   { background: #2A2A2A; color: #9CA3AF; }
   .status-not-answered  { background: #DC2626; color: #fff; }
   .status-answered      { background: #16A34A; color: #fff; }
@@ -18,19 +16,12 @@
     background: #8A6A1F; color: #F3E3B8;
     box-shadow: inset 0 0 0 2px #16A34A;
   }
-  .subject-tab.active { border-color: #D4A017; color: #fff; background: rgba(212,160,23,0.12); }
+  .subject-tab.active { border-color: #D4A017; color: #fff; background: rgba(212,160,23,0.14); }
   .subject-tab { border-color: transparent; color: #9CA3AF; }
 
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-  /* ---------------------------------------------------------------
-     BLACK-FLASH FIX
-     Pehle `.math-cloak { opacity:.3; filter:blur(2px) }` + fadeIn
-     animation lagti thi — dark theme par yahi black flash banti thi.
-     Ab content kabhi fade nahi hota; question already typeset hokar
-     inject hota hai, isliye swap instant hai.
-     --------------------------------------------------------------- */
   #nta-runner .q-card { position: relative; contain: layout paint; }
   #nta-runner .q-swapbar {
     position: absolute; top: 0; left: 0; right: 0; height: 2px;
@@ -54,8 +45,6 @@
     max-width: 100%; height: auto; display: block; margin: 1rem auto;
   }
 
-  /* This page is a distraction-free full-screen runner — the global
-     footer is still included by base.html, so hide it here with a scoped rule. */
   body:has(#nta-runner) > footer,
   body:has(#nta-runner) [data-footer] {
     display: none !important;
@@ -64,35 +53,34 @@
 {% endblock %}
 
 {% block content %}
-<!-- SANGAM FIX #1: x-init="init()" HATA DIYA.
-     Alpine 3 init() ko khud auto-call karta hai; x-init ke saath yeh DO
-     BAAR chal raha tha -> do countdown interval -> ek zombie bach jata
-     tha jo submit ke baad bhi chalta rehta tha. -->
 <div id="nta-runner" x-data="testAttempt()" class="min-h-screen bg-[#0a0a0a] text-gray-100 flex flex-col font-body">
 
   <!-- Top bar: timer (left) / subject tabs (center) / submit (right) -->
-  <div class="bg-[#111111] border-b border-white/10 px-3 md:px-6 py-2.5 flex items-center gap-3 sticky top-0 z-20 shadow-sm">
+  <div class="bg-[#111111] border-b border-white/10 px-2.5 sm:px-5 py-2 flex items-center gap-2 sticky top-0 z-20 shadow-sm">
     <template x-if="!isReviewMode">
-      <div class="flex items-center gap-2 px-3 py-1.5 rounded-md shrink-0"
-           :class="finished ? 'bg-white/5 opacity-60' : 'bg-white/5'">
-        <span class="text-[11px] text-gray-400 hidden sm:inline uppercase tracking-wider">Time Left</span>
-        <span class="font-display text-base md:text-lg font-semibold tabular-nums text-gold-light" x-text="formattedTime"></span>
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg shrink-0"
+           :class="finished ? 'bg-white/5 opacity-60' : 'bg-white/5 border border-white/10'">
+        <span class="text-[10px] text-gray-400 hidden sm:inline uppercase tracking-wider font-bold">Time</span>
+        <span class="font-display text-sm sm:text-base font-bold tabular-nums text-gold-light" x-text="formattedTime"></span>
       </div>
     </template>
 
     <template x-if="isReviewMode">
-      <div class="flex items-center gap-2 bg-gold/10 border border-gold/20 px-3 py-1.5 rounded-md shrink-0">
-        <span class="text-xs font-semibold text-gold-light uppercase tracking-wider">Review Mode</span>
+      <div class="flex items-center gap-1.5 bg-gold/10 border border-gold/25 px-2.5 py-1 rounded-lg shrink-0">
+        <span class="text-[10px] font-bold text-gold-light uppercase tracking-wider">Review Mode</span>
       </div>
     </template>
 
-    <div class="flex-1 flex justify-center gap-1.5 overflow-x-auto no-scrollbar">
+    <div class="flex-1 flex justify-center gap-1 overflow-x-auto no-scrollbar">
       <template x-for="subject in subjects" :key="subject">
         <button
           @click="switchSubject(subject)"
-          class="subject-tab px-3 md:px-5 py-1.5 text-xs md:text-sm font-semibold border rounded-md whitespace-nowrap transition-all duration-200"
-          :class="{ 'active': currentSubject === subject, 'hover:bg-white/5': currentSubject !== subject }"
-          x-text="subject"></button>
+          class="subject-tab px-2.5 sm:px-4 py-1 text-[11px] sm:text-xs font-bold border rounded-lg whitespace-nowrap transition-all duration-150 flex items-center gap-1.5"
+          :class="{ 'active': currentSubject === subject, 'hover:bg-white/5': currentSubject !== subject }">
+          <span x-text="subject"></span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-gray-200 tabular-nums"
+                x-text="subjectAnsweredCount(subject) + '/' + subjectCap(subject)"></span>
+        </button>
       </template>
     </div>
 
@@ -103,58 +91,83 @@
 
     <template x-if="!isReviewMode">
       <button @click="openSubmitConfirm()"
-        class="shrink-0 btn-cute !py-1.5 !px-3.5 !text-xs">
-        Submit Test
+        class="shrink-0 btn-cute !py-1.5 !px-3 !text-[11px]">
+        Submit
       </button>
     </template>
 
     <template x-if="isReviewMode">
       <a :href="resultUrl" :data-back-url="resultUrl"
-        class="shrink-0 py-1.5 px-4 md:px-6 rounded-md text-xs md:text-sm font-semibold bg-white/10 text-white hover:bg-white/20 transition-colors">
-        Back to Result
+        class="shrink-0 btn-cute-soft !py-1.5 !px-3 !text-[11px]">
+        &larr; Scorecard
       </a>
     </template>
   </div>
 
-  <!-- Horizontal question palette strip -->
-  <div class="bg-[#0f0f0f] border-b border-white/5 px-3 md:px-6 py-2.5 flex items-center gap-2 sticky top-[49px] md:top-[53px] z-10 shadow-sm">
-    <div class="flex-1 flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-      <template x-for="(q, idx) in currentSubjectQuestions" :key="'strip-' + q.id">
-        <button
-          @click="jumpTo(currentSubject, idx)"
-          class="w-8 h-8 shrink-0 rounded text-xs font-semibold flex items-center justify-center transition-transform hover:scale-105 shadow-sm"
-          :class="[paletteClass(q), currentIndexInSubject === idx ? 'ring-2 ring-gold ring-offset-1 ring-offset-[#0f0f0f]' : '']"
-          x-text="idx + 1"></button>
-      </template>
+  <!-- Horizontal question palette strip + NTA Section Cap Info -->
+  <div class="bg-[#0f0f0f] border-b border-white/5 px-2.5 sm:px-5 py-2 flex flex-col gap-1.5 sticky top-[45px] sm:top-[49px] z-10 shadow-sm">
+    <div class="flex items-center justify-between gap-2 text-[10px] sm:text-[11px]">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="font-extrabold text-gold uppercase tracking-wider" x-text="currentSubject"></span>
+        <span class="text-gray-300 font-semibold tabular-nums">
+          Attempted: <strong class="text-emerald-400" x-text="subjectAnsweredCount(currentSubject)"></strong> / <strong class="text-white" x-text="subjectCap(currentSubject)"></strong>
+        </span>
+        <template x-if="subjectOptionalSkips(currentSubject) > 0">
+          <span class="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-bold text-[9px] sm:text-[10px]">
+            NTA Rule: Attempt any <span x-text="subjectCap(currentSubject)"></span> of <span x-text="currentSubjectQuestions.length"></span> (<span x-text="subjectOptionalSkips(currentSubject)"></span> Free Skips · 0 Negative)
+          </span>
+        </template>
+      </div>
+      <span class="text-[10px] font-bold text-gray-400 shrink-0">+4 · -{{ test.negative_marking or 1 }} · Skip 0</span>
     </div>
-    <button @click="showGridModal = true"
-      class="shrink-0 w-8 h-8 rounded-md bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-      aria-label="Open full question grid">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-gray-200">
-        <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-        <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-        <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-        <rect x="14" y="14" width="7" height="7" rx="1"></rect>
-      </svg>
-    </button>
+
+    <div class="flex items-center gap-2">
+      <div class="flex-1 flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+        <template x-for="(q, idx) in currentSubjectQuestions" :key="'strip-' + q.id">
+          <button
+            @click="jumpTo(currentSubject, idx)"
+            class="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg text-[11px] font-bold flex items-center justify-center transition-transform hover:scale-105 shadow-sm"
+            :class="[paletteClass(q), currentIndexInSubject === idx ? 'ring-2 ring-gold ring-offset-1 ring-offset-[#0f0f0f]' : '']"
+            x-text="idx + 1"></button>
+        </template>
+      </div>
+      <button @click="showGridModal = true"
+        class="shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+        aria-label="Open full question grid">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-gray-200">
+          <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- NTA Subject Cap Warning Banner -->
+  <div x-show="capWarning" x-cloak class="max-w-4xl mx-auto w-full px-4 pt-3">
+    <div class="rounded-xl px-3.5 py-2.5 bg-amber-500/15 border border-amber-400/40 text-amber-200 text-xs font-bold flex items-center justify-between gap-2">
+      <span x-text="capWarning"></span>
+      <button type="button" @click="capWarning = null" class="text-amber-300 hover:text-white text-xs font-extrabold px-1.5">✕</button>
+    </div>
   </div>
 
   <!-- Main question area -->
-  <div class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
+  <div class="flex-1 w-full max-w-4xl mx-auto p-3.5 sm:p-6">
     <div x-show="currentQuestion" x-cloak class="w-full">
-      <div class="flex items-center justify-between mb-5">
-        <div class="flex items-center gap-3">
-          <p class="text-sm font-semibold text-gray-300">
-            Question <span x-text="currentIndexInSubject + 1"></span> of <span x-text="currentSubjectQuestions.length"></span>
-            <span class="text-gray-500 font-normal ml-1">· <span x-text="currentSubject"></span></span>
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2.5">
+          <p class="text-xs sm:text-sm font-bold text-gray-200">
+            Q<span x-text="currentIndexInSubject + 1"></span> <span class="text-gray-400 font-medium">/ <span x-text="currentSubjectQuestions.length"></span></span>
+            <span class="text-gold font-bold ml-1">· <span x-text="currentSubject"></span></span>
           </p>
-          <!-- Premium Bookmark Icon -->
+          <!-- Bookmark Icon -->
           <button x-show="!isReviewMode" type="button" @click="toggleMark(currentQuestion?.id)"
-            class="w-7 h-7 rounded flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gold/50"
-            :class="isMarked(currentQuestion?.id) ? 'text-gold bg-gold/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'"
+            class="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150 focus:outline-none"
+            :class="isMarked(currentQuestion?.id) ? 'text-gold bg-gold/15 border border-gold/40' : 'text-gray-400 hover:text-gray-200 bg-white/5 border border-white/10'"
             :aria-pressed="isMarked(currentQuestion?.id)"
             title="Mark for review">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="15" height="15"
               :fill="isMarked(currentQuestion?.id) ? 'currentColor' : 'none'"
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
@@ -163,50 +176,50 @@
         </div>
 
         <template x-if="!isReviewMode">
-          <p class="flex items-center gap-2 text-xs font-semibold text-gray-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
+          <p class="flex items-center gap-1.5 text-[11px] font-bold text-gray-300 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
             <span class="w-1.5 h-1.5 rounded-full bg-gold" :class="finished ? '' : 'animate-pulse'"></span>
             <span class="tabular-nums" x-text="formattedQuestionTime"></span>
           </p>
         </template>
 
         <template x-if="isReviewMode">
-          <p class="text-xs font-semibold text-gray-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
-            Time Spent: <span class="tabular-nums text-white ml-1" x-text="formatSeconds(currentQuestion?.time_taken_sec)"></span>
+          <p class="text-[11px] font-bold text-gray-300 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
+            Time: <span class="tabular-nums text-white ml-1" x-text="formatSeconds(currentQuestion?.time_taken_sec)"></span>
           </p>
         </template>
       </div>
 
-      <div class="q-card bg-[#161616] border border-white/10 rounded-xl p-5 md:p-7 mb-6 shadow-lg"
+      <div class="q-card bg-[#161616] border border-white/10 rounded-2xl p-4 sm:p-6 mb-5 shadow-lg"
            x-ref="questionCard" :style="cardStyle">
         <div class="q-swapbar" :class="swapping ? 'on' : ''"></div>
 
-        <div class="question-text text-base md:text-lg leading-relaxed mb-6 text-gray-100 font-medium"
+        <div class="question-text text-sm sm:text-base md:text-lg leading-relaxed mb-5 text-gray-100 font-medium"
              x-html="rendered.question_text"></div>
 
         <!-- Question Image rendering if exists -->
         <img :src="hasValidImage(currentQuestion) ? currentQuestion.image_url : ''"
              x-show="hasValidImage(currentQuestion)"
              decoding="async"
-             class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-md p-2 border border-gray-300 mx-auto my-6 shadow-sm" alt="Diagram"
+             class="max-h-[280px] w-auto max-w-full object-contain bg-white rounded-lg p-2 border border-gray-300 mx-auto my-5 shadow-sm" alt="Diagram"
              @load="onImageLoad($event, currentQuestion)"
              @error="onImageError($event, currentQuestion)">
         <p x-show="currentQuestion && imageErrorIds[currentQuestion.id]" x-cloak
-           class="text-xs font-semibold text-red-400 text-center -mt-4 mb-4">
+           class="text-xs font-semibold text-red-400 text-center -mt-3 mb-4">
           ⚠ Diagram failed to load — image link may be broken.
         </p>
 
-        <div class="space-y-3.5">
+        <div class="space-y-3">
           <template x-for="opt in ['A','B','C','D']" :key="opt">
             <button
               type="button"
               :disabled="isReviewMode"
               @click="selectOption(currentQuestion?.id, opt)"
-              class="w-full flex items-start gap-4 p-4 md:p-5 rounded-xl border text-left transition-all duration-200 group focus:outline-none"
+              class="w-full flex items-start gap-3.5 p-3.5 sm:p-4 rounded-xl border text-left transition-all duration-150 group focus:outline-none"
               :class="optionClass(opt)">
               <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
                 :class="optionBadgeClass(opt)"
                 x-text="opt"></span>
-              <span class="option-text text-sm md:text-base leading-relaxed mt-0.5"
+              <span class="option-text text-xs sm:text-sm md:text-base leading-relaxed mt-0.5"
                     x-html="rendered['option_' + opt.toLowerCase()]"></span>
             </button>
           </template>
@@ -214,23 +227,23 @@
       </div>
 
       <!-- Navigation Actions -->
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-2 gap-3">
         <button @click="goPrev()" :disabled="currentIndexInSubject === 0"
-          class="py-3.5 rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
-          ← Previous
+          class="btn-cute-soft !py-3 !text-xs sm:!text-sm disabled:opacity-30 disabled:cursor-not-allowed">
+          &larr; Previous
         </button>
 
         <template x-if="!isReviewMode">
           <button @click="saveAndNext(currentQuestion?.id)" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
-            class="py-3.5 rounded-xl text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-md focus:outline-none focus:ring-2 focus:ring-gold/50">
-            Save &amp; Next →
+            class="btn-cute !py-3 !text-xs sm:!text-sm disabled:opacity-30 disabled:cursor-not-allowed">
+            Save &amp; Next &rarr;
           </button>
         </template>
 
         <template x-if="isReviewMode">
           <button @click="goNext()" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
-            class="py-3.5 rounded-xl text-sm font-semibold bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
-            Next →
+            class="btn-cute !py-3 !text-xs sm:!text-sm disabled:opacity-30 disabled:cursor-not-allowed">
+            Next &rarr;
           </button>
         </template>
       </div>
@@ -239,22 +252,26 @@
 
   <!-- Full Question Grid Modal -->
   <div x-show="showGridModal" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" @click.self="showGridModal = false">
-    <div class="bg-[#161616] border border-white/10 rounded-xl p-6 max-w-xl w-full max-h-[85vh] overflow-y-auto shadow-2xl">
-      <div class="flex items-center justify-between mb-6">
-        <h3 class="font-display text-xl font-semibold text-white">Question Palette</h3>
+    <div class="bg-[#161616] border border-white/10 rounded-2xl p-5 sm:p-6 max-w-xl w-full max-h-[85vh] overflow-y-auto shadow-2xl">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="font-display text-lg font-bold text-white">Question Palette</h3>
         <button @click="showGridModal = false" class="text-gray-400 hover:text-white transition-colors p-1 focus:outline-none">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
 
       <template x-for="subject in subjects" :key="'grid-' + subject">
-        <div class="mb-6">
-          <p class="text-sm font-semibold text-gold mb-3" x-text="subject"></p>
-          <div class="grid grid-cols-7 sm:grid-cols-10 gap-2">
+        <div class="mb-5">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs sm:text-sm font-bold text-gold" x-text="subject"></p>
+            <span class="text-[11px] font-bold text-gray-300 tabular-nums"
+                  x-text="'Attempted: ' + subjectAnsweredCount(subject) + ' / ' + subjectCap(subject) + (subjectOptionalSkips(subject) > 0 ? ' (' + subjectOptionalSkips(subject) + ' optional)' : '')"></span>
+          </div>
+          <div class="grid grid-cols-7 sm:grid-cols-10 gap-1.5">
             <template x-for="(q, idx) in questionsBySubject[subject]" :key="q.id">
               <button
                 @click="jumpTo(subject, idx); showGridModal = false"
-                class="w-9 h-9 rounded text-xs font-bold flex items-center justify-center transition-transform hover:scale-110 shadow-sm"
+                class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg text-xs font-bold flex items-center justify-center transition-transform hover:scale-105 shadow-sm"
                 :class="paletteClass(q)"
                 x-text="idx + 1"></button>
             </template>
@@ -262,13 +279,13 @@
         </div>
       </template>
 
-      <div class="text-xs space-y-2 mt-6 pt-5 border-t border-white/10 text-gray-300 bg-white/5 rounded-lg p-4">
-        <div class="grid grid-cols-2 gap-3">
-          <p class="flex items-center gap-2"><span class="w-4 h-4 rounded status-not-visited inline-block border border-white/10"></span> Not Visited</p>
-          <p class="flex items-center gap-2"><span class="w-4 h-4 rounded status-not-answered inline-block border border-black/20"></span> Not Answered</p>
-          <p class="flex items-center gap-2"><span class="w-4 h-4 rounded status-answered inline-block border border-black/20"></span> Answered</p>
-          <p class="flex items-center gap-2"><span class="w-4 h-4 rounded status-marked inline-block border border-black/20"></span> Marked for Review</p>
-          <p class="flex items-center gap-2 col-span-2"><span class="w-4 h-4 rounded status-answered-marked inline-block"></span> Answered &amp; Marked for Review</p>
+      <div class="text-xs space-y-2 mt-5 pt-4 border-t border-white/10 text-gray-300 bg-white/5 rounded-xl p-3.5">
+        <div class="grid grid-cols-2 gap-2.5">
+          <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-not-visited inline-block border border-white/10"></span> Not Visited</p>
+          <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-not-answered inline-block border border-black/20"></span> Not Answered (0 Marks)</p>
+          <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-answered inline-block border border-black/20"></span> Answered</p>
+          <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-marked inline-block border border-black/20"></span> Marked for Review</p>
+          <p class="flex items-center gap-2 col-span-2"><span class="w-3.5 h-3.5 rounded status-answered-marked inline-block"></span> Answered &amp; Marked for Review</p>
         </div>
       </div>
     </div>
@@ -276,39 +293,48 @@
 
   <!-- Submit Confirmation Modal -->
   <div x-show="showSubmitConfirm" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-    <div class="bg-[#161616] border border-white/10 rounded-xl p-6 md:p-8 max-w-sm w-full shadow-2xl">
-      <h3 class="font-display text-xl font-semibold mb-4 text-white text-center">Ready to Submit?</h3>
+    <div class="bg-[#161616] border border-white/10 rounded-2xl p-5 sm:p-6 max-w-sm w-full shadow-2xl">
+      <h3 class="font-display text-lg sm:text-xl font-bold mb-1.5 text-white text-center">Lock In &amp; Submit?</h3>
+      <p class="text-[11px] text-gray-400 text-center mb-4">Skipped / unattempted questions carry <strong class="text-emerald-400">0 negative marks</strong>.</p>
 
-      <div class="bg-white/5 rounded-lg p-4 text-sm text-gray-300 space-y-2.5 mb-6 border border-white/5">
+      <div class="bg-white/5 rounded-xl p-3.5 text-xs sm:text-sm text-gray-300 space-y-2 mb-4 border border-white/10">
         <div class="flex justify-between items-center">
           <span>Answered:</span>
-          <span class="font-bold text-green-500 text-base" x-text="counts.answered"></span>
+          <span class="font-bold text-green-400 text-sm" x-text="counts.answered"></span>
         </div>
         <div class="flex justify-between items-center">
-          <span>Not Answered:</span>
-          <span class="font-bold text-red-500 text-base" x-text="counts.notAnswered"></span>
+          <span>Not Answered / Skipped:</span>
+          <span class="font-bold text-gray-200 text-sm" x-text="counts.notAnswered + counts.notVisited"></span>
         </div>
         <div class="flex justify-between items-center">
           <span>Marked for Review:</span>
-          <span class="font-bold text-gold text-base" x-text="counts.marked"></span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span>Not Visited:</span>
-          <span class="font-bold text-gray-400 text-base" x-text="counts.notVisited"></span>
+          <span class="font-bold text-gold text-sm" x-text="counts.marked"></span>
         </div>
       </div>
 
-      <p x-show="submitError" x-cloak class="text-xs text-red-400 mb-4 text-center bg-red-400/10 py-2 rounded-md" x-text="submitError"></p>
+      <!-- Per-Subject NTA Attempt Breakdown -->
+      <div class="bg-white/[0.03] rounded-xl p-3 text-[11px] text-gray-300 space-y-1.5 mb-5 border border-white/10">
+        <p class="text-[9px] font-extrabold uppercase tracking-widest text-gold mb-1">Subject Breakdown (NTA Pattern)</p>
+        <template x-for="subject in subjects" :key="'sub-cap-' + subject">
+          <div class="flex justify-between items-center">
+            <span class="font-semibold text-white" x-text="subject"></span>
+            <span class="font-bold tabular-nums text-emerald-300"
+                  x-text="subjectAnsweredCount(subject) + ' / ' + subjectCap(subject) + ' attempted'"></span>
+          </div>
+        </template>
+      </div>
 
-      <div class="flex gap-3">
+      <p x-show="submitError" x-cloak class="text-xs text-red-400 mb-3 text-center bg-red-400/10 py-2 rounded-lg" x-text="submitError"></p>
+
+      <div class="flex gap-2.5">
         <button @click="cancelSubmitConfirm()" :disabled="submitting"
-          class="flex-1 py-3 rounded-lg text-sm font-semibold border border-white/20 text-gray-200 hover:bg-white/5 disabled:opacity-50 transition-colors">
-          Cancel
+          class="flex-1 btn-cute-soft !py-2.5 !text-xs">
+          Keep Solving
         </button>
         <button @click="submitTest()" :disabled="submitting"
-          class="flex-1 py-3 rounded-lg text-sm font-semibold bg-gold text-ink hover:bg-gold-light disabled:opacity-60 transition-colors flex justify-center items-center">
+          class="flex-1 btn-cute !py-2.5 !text-xs">
           <template x-if="submitting">
-            <svg class="animate-spin h-4 w-4 text-ink" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
           </template>
           <span x-show="!submitting">Yes, Submit</span>
         </button>
@@ -321,6 +347,7 @@
 function testAttempt() {
   return {
     questionsBySubject: {{ questions_by_subject | tojson }},
+    subjectCaps: {{ (subject_caps if subject_caps is defined else {}) | tojson }},
     subjects: Object.keys({{ questions_by_subject | tojson }}),
     isReviewMode: {{ 'true' if is_review_mode else 'false' }},
     currentSubject: null,
@@ -336,6 +363,7 @@ function testAttempt() {
     showGridModal: false,
     submitting: false,
     submitError: null,
+    capWarning: null,
     finished: false,
 
     // --- render state ---
@@ -354,9 +382,6 @@ function testAttempt() {
     resultUrl: "{{ url_for('user.test_result', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}",
     parentListUrl: "{{ url_for('user.series_tests', slug=stream.slug, series_id=test.series_id) if test.series_id else url_for('user.tests_feed', slug=stream.slug) }}",
 
-    /* =============================================================
-       BOOT
-       ============================================================= */
     init() {
       if (this._booted) { SangamQuiz.xray.warn('double init blocked'); return; }
       this._booted = true;
@@ -399,9 +424,41 @@ function testAttempt() {
 
     destroy() { this.stopTimers(); },
 
-    /* =============================================================
-       CLOCK  —  ek hi interval countdown + per-question dono chalata hai
-       ============================================================= */
+    /* NTA Per-Subject Attempt Cap Helpers */
+    subjectCap(subject) {
+      if (!subject) return 0;
+      const list = this.questionsBySubject[subject] || [];
+      const total = list.length;
+      if (this.subjectCaps && this.subjectCaps[subject]) {
+        return this.subjectCaps[subject];
+      }
+      if (total === 50) return 45;
+      if (total === 100) return 90;
+      if (total === 30) return 25;
+      return total;
+    },
+
+    subjectOptionalSkips(subject) {
+      if (!subject) return 0;
+      const list = this.questionsBySubject[subject] || [];
+      return Math.max(0, list.length - this.subjectCap(subject));
+    },
+
+    subjectAnsweredCount(subject) {
+      if (!subject) return 0;
+      const list = this.questionsBySubject[subject] || [];
+      let count = 0;
+      for (const q of list) {
+        if (this.isReviewMode) {
+          if (q.selected_option) count++;
+        } else {
+          const entry = this.progress[q.id];
+          if (entry && entry.selected_option) count++;
+        }
+      }
+      return count;
+    },
+
     _startClock() {
       if (this.finished || this.isReviewMode) return;
       if (this._clock) this._clock.kill();
@@ -422,20 +479,13 @@ function testAttempt() {
         this.activeQuestionSeconds++;
         this.timeSpent[this.activeQuestionId] = this.activeQuestionSeconds;
       }
-
-      if (SangamQuiz.debug) {
-        SangamQuiz.xray.set('left', this.secondsLeft + 's');
-        SangamQuiz.xray.set('live clocks', SangamQuiz.liveClockCount());
-      }
     },
 
-    /* SANGAM FIX #1: sab kuch nuke — zombie interval bacha hi nahi sakta */
     stopTimers() {
       this.finished = true;
       this.activeQuestionId = null;
       if (this._clock) { this._clock.kill(); this._clock = null; }
       SangamQuiz.stopAllClocks();
-      SangamQuiz.xray.set('clocks after stop', SangamQuiz.liveClockCount());
     },
 
     _resumeTimers() {
@@ -455,9 +505,6 @@ function testAttempt() {
       this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
     },
 
-    /* =============================================================
-       RENDER  —  black flash killer
-       ============================================================= */
     _rawFor(q) {
       if (!q) return { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '' };
       return {
@@ -477,7 +524,6 @@ function testAttempt() {
 
       const token = ++this._swapToken;
       const key = this._keyFor(q);
-      const t0 = performance.now();
 
       const apply = (map, hit) => {
         if (token !== this._swapToken) return;
@@ -485,20 +531,12 @@ function testAttempt() {
         this._hasContent = true;
         this._clearSwapBar();
         this._unlockHeight();
-        if (hit) SangamQuiz.xray.stats.cacheHits++; else SangamQuiz.xray.stats.cacheMisses++;
-        SangamQuiz.xray.afterPaint(() => {
-          if (token !== this._swapToken) return;
-          const ms = Math.round(performance.now() - t0);
-          SangamQuiz.xray.set('swap', ms + 'ms ' + (hit ? 'HIT' : 'MISS'));
-          SangamQuiz.xray.set('cache', SangamQuiz.xray.stats.cacheHits + ' hit / ' + SangamQuiz.xray.stats.cacheMisses + ' miss');
-        });
         this._warmNeighbours();
       };
 
       const cached = this._renderer.get(key);
       if (cached) { apply(cached, true); return; }
 
-      // Pehli render: card khaali mat rakho, raw turant dikha do
       if (!this._hasContent) this.rendered = this._rawFor(q);
 
       this._lockHeight();
@@ -552,9 +590,6 @@ function testAttempt() {
       this.swapping = false;
     },
 
-    /* =============================================================
-       GETTERS
-       ============================================================= */
     get currentSubjectQuestions() {
       return this.questionsBySubject[this.currentSubject] || [];
     },
@@ -563,13 +598,6 @@ function testAttempt() {
       return this.currentSubjectQuestions[this.currentIndexInSubject] || null;
     },
 
-    /* SANGAM FIX: same root cause as practice_runner.html — a raw
-       truthiness check on image_url treats whitespace/junk DB values
-       as "has an image", so a pure-text question with a stray
-       non-empty image_url shows a diagram box, the browser tries to
-       load the junk string as a URL, and "failed to load" fires even
-       though no image was ever uploaded for that question. Only a
-       real http(s) URL counts as having an image now. */
     hasValidImage(q) {
       const url = q && q.image_url;
       if (typeof url !== 'string') return false;
@@ -608,9 +636,6 @@ function testAttempt() {
       return { answered, notAnswered, marked, notVisited };
     },
 
-    /* =============================================================
-       NAVIGATION
-       ============================================================= */
     autoSubmit() {
       const q = this.currentQuestion;
       if (q) this.persist(q.id);
@@ -619,6 +644,7 @@ function testAttempt() {
 
     switchSubject(subject) {
       if (subject === this.currentSubject) return;
+      this.capWarning = null;
       this.currentSubject = subject;
       this.currentIndexInSubject = 0;
       this.markVisited();
@@ -628,6 +654,7 @@ function testAttempt() {
 
     jumpTo(subject, idx) {
       if (subject === this.currentSubject && idx === this.currentIndexInSubject) return;
+      this.capWarning = null;
       this.currentSubject = subject;
       this.currentIndexInSubject = idx;
       this.markVisited();
@@ -637,6 +664,7 @@ function testAttempt() {
 
     goNext() {
       if (this.currentIndexInSubject < this.currentSubjectQuestions.length - 1) {
+        this.capWarning = null;
         this.currentIndexInSubject++;
         this.markVisited();
         this._resetQuestionTimer();
@@ -646,6 +674,7 @@ function testAttempt() {
 
     goPrev() {
       if (this.currentIndexInSubject > 0) {
+        this.capWarning = null;
         this.currentIndexInSubject--;
         this.markVisited();
         this._resetQuestionTimer();
@@ -662,9 +691,6 @@ function testAttempt() {
       }
     },
 
-    /* =============================================================
-       ANSWERS
-       ============================================================= */
     selectedOption(questionId) {
       return this.progress[questionId]?.selected_option || null;
     },
@@ -681,11 +707,23 @@ function testAttempt() {
       const alreadySelected = entry.selected_option === opt;
 
       if (alreadySelected) {
+        this.capWarning = null;
         this.progress[questionId] = {
           selected_option: null,
           status: wasMarked ? 'marked' : 'not_answered',
         };
       } else {
+        // Enforce NTA per-subject attempt cap when selecting a fresh question
+        if (!entry.selected_option) {
+          const cap = this.subjectCap(this.currentSubject);
+          const currentAns = this.subjectAnsweredCount(this.currentSubject);
+          const totalInSubj = this.currentSubjectQuestions.length;
+          if (currentAns >= cap && cap < totalInSubj) {
+            this.capWarning = `⚡ NTA Rule: Max ${cap} of ${totalInSubj} questions can be attempted in ${this.currentSubject}. Deselect an answered question in ${this.currentSubject} if you want to attempt this one instead.`;
+            return;
+          }
+        }
+        this.capWarning = null;
         this.progress[questionId] = {
           selected_option: opt,
           status: wasMarked ? 'answered_marked' : 'answered',
@@ -699,14 +737,11 @@ function testAttempt() {
       if (this.imageErrorIds[q.id]) delete this.imageErrorIds[q.id];
       const img = evt.target;
       if (img.naturalWidth === 0) { this.onImageError(evt, q); return; }
-      SangamQuiz.xray.set('image', 'loaded ' + img.naturalWidth + 'x' + img.naturalHeight);
     },
 
     onImageError(evt, q) {
       if (!q) return;
       this.imageErrorIds[q.id] = true;
-      SangamQuiz.xray.warn('IMAGE FAILED for question', { id: q.id, url: q.image_url });
-      SangamQuiz.xray.set('image', 'BROKEN ✗ ' + (q.image_url || 'no url'));
     },
 
     toggleMark(questionId) {
@@ -761,9 +796,6 @@ function testAttempt() {
       }, 3, 500).catch(() => {});
     },
 
-    /* =============================================================
-       PALETTE / OPTION STYLING
-       ============================================================= */
     paletteClass(question) {
       if (this.isReviewMode) {
         if (question.selected_option == null) return 'status-not-visited';
@@ -805,9 +837,6 @@ function testAttempt() {
         : 'border-white/30 text-gray-400 group-hover:border-white/50 group-hover:text-gray-200';
     },
 
-    /* =============================================================
-       SUBMIT
-       ============================================================= */
     openSubmitConfirm() {
       const q = this.currentQuestion;
       if (q) this.persist(q.id);
@@ -825,7 +854,6 @@ function testAttempt() {
       this.submitting = true;
       this.submitError = null;
 
-      // Timer turant band — submit ke baad background me kuch nahi chalega
       this.stopTimers();
 
       const answers = {};
@@ -851,8 +879,6 @@ function testAttempt() {
         })
         .catch(() => {
           this.submitting = false;
-          // Submission fail hui to hi timer wapas chalega — ek hi clock,
-          // duplicate banne ka koi chance nahi.
           this._resumeTimers();
           this.submitError = "Couldn't submit — check your connection and try again. Your answers are saved, so it's safe to retry.";
         });
@@ -861,4 +887,4 @@ function testAttempt() {
 }
 </script>
 {% endblock %}
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
+<!-- STUDY SANGAM HUB v4.0 -->
