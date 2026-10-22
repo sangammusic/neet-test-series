@@ -1,10 +1,10 @@
-# STUDY SANGAM HUB v3.0 — Handcrafted Responsive & Dual-Theme Build (2026-10-22)
+# STUDY SANGAM HUB v4.0 — Ultra-Light Gen-Z Dual-Theme Build (2026-10-22)
 import logging
 import os
 import threading
 from datetime import timedelta
 
-from flask import Flask, request
+from flask import Flask, Response, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -12,6 +12,17 @@ from app.extensions import cache
 
 logger = logging.getLogger(__name__)
 _WEBHOOK_BOOTSTRAPPED = False
+
+_FALLBACK_LOGO_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">'
+    '<rect width="114" height="114" x="3" y="3" rx="26" fill="#0D1326" stroke="#F59E0B" stroke-width="4"/>'
+    '<path d="M60 20L18 39L60 58L102 39L60 20Z" fill="#FACC15"/>'
+    '<path d="M94 43V65" stroke="#FDE047" stroke-width="4.5" stroke-linecap="round"/>'
+    '<circle cx="94" cy="68" r="4.5" fill="#F59E0B"/>'
+    '<path d="M28 62C38 59 50 62 60 68C70 62 82 59 92 62V90C82 87 70 90 60 96C50 90 38 87 28 90V62Z" fill="#38BDF8"/>'
+    '<path d="M60 68V96" stroke="#0D1326" stroke-width="3.5" stroke-linecap="round"/>'
+    '</svg>'
+)
 
 
 def _env_flag(name, default):
@@ -44,6 +55,7 @@ def create_app():
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=_env_flag("SESSION_COOKIE_SECURE", default=not is_dev),
+        SEND_FILE_MAX_AGE_DEFAULT=86400,
     )
 
     app.permanent_session_lifetime = timedelta(days=7)
@@ -84,8 +96,23 @@ def create_app():
             "support_url": os.environ.get("SUPPORT_URL", "https://t.me/s_u_k_oo_n_143"),
         }
 
-    # Auto-register Telegram Bot webhook on Render so /setqr and Approve/Disapprove
-    # work automatically without needing any web admin payment panel
+    # Zero-404 Logo & Favicon Guard for Render Free Tier
+    @app.route("/favicon.ico")
+    def favicon():
+        img_dir = os.path.join(app.static_folder, "img")
+        if os.path.isfile(os.path.join(img_dir, "logo-mark.png")):
+            return send_from_directory(img_dir, "logo-mark.png", mimetype="image/png")
+        return Response(_FALLBACK_LOGO_SVG, mimetype="image/svg+xml")
+
+    @app.route("/static/img/<path:filename>")
+    def serve_static_img(filename):
+        img_dir = os.path.join(app.static_folder, "img")
+        target = os.path.join(img_dir, filename)
+        if os.path.isfile(target):
+            return send_from_directory(img_dir, filename)
+        return Response(_FALLBACK_LOGO_SVG, mimetype="image/svg+xml")
+
+    # Auto-register Telegram Bot webhook on Render
     @app.before_request
     def _auto_bootstrap_tg_webhook():
         global _WEBHOOK_BOOTSTRAPPED
@@ -138,7 +165,9 @@ def create_app():
 
     @app.after_request
     def _headers_for_every_response(response):
-        if not request.path.startswith("/static/"):
+        if request.path.startswith("/static/") or request.path == "/favicon.ico":
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        else:
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
         return apply_security_headers(response)
