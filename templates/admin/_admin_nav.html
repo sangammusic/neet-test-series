@@ -1,21 +1,22 @@
 <nav class="sangam-admin-topnav sticky top-0 z-50 bg-[#0d1017]/90 backdrop-blur-xl border-b border-white/10 transition-all duration-200">
-    <div class="max-w-5xl mx-auto px-3.5 sm:px-5 py-2.5 flex items-center justify-between gap-2">
+    <div class="max-w-4xl mx-auto px-3 sm:px-5 py-2 flex items-center justify-between gap-2">
         
-        <!-- Brand Logo + Admin Badge -->
-        <a href="{{ url_for('admin.dashboard') }}" data-replace-link class="flex items-center gap-2.5 hover:opacity-90 transition-opacity min-w-0">
-            <svg class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg shrink-0 shadow-sm" aria-label="Study Sangam Hub Logo">
-                <use href="#sangam-logo-crest"></use>
-            </svg>
-            <div class="flex items-center gap-2 truncate">
-                <span class="font-display font-bold text-sm sm:text-lg tracking-tight text-white truncate">
+        <!-- Single Brand Logo + Admin Badge -->
+        <a href="{{ url_for('admin.dashboard') }}" data-replace-link class="flex items-center gap-2 hover:opacity-90 transition-opacity min-w-0">
+            <img src="{{ url_for('static', filename='img/logo-mark.png') }}"
+                 onerror="this.onerror=null;this.src=window.SANGAM_LOGO_URI"
+                 alt="Study Sangam Hub"
+                 class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-contain shrink-0 shadow-sm">
+            <div class="flex items-center gap-1.5 truncate">
+                <span class="font-display font-bold text-xs sm:text-base tracking-tight text-white truncate">
                     STUDY <span class="text-gold">SANGAM</span> HUB
                 </span>
-                <span class="text-[9px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/15 border border-emerald-400/30 px-2 py-0.5 rounded shrink-0">Admin</span>
+                <span class="text-[8px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/15 border border-emerald-400/30 px-1.5 py-0.5 rounded shrink-0">Admin</span>
             </div>
         </a>
 
-        <!-- Right Controls in Strict Sequence: 1. Theme Switch | 2. Admin Home (if on subpage) | 3. Student View -->
-        <div class="flex items-center gap-2 text-xs font-semibold shrink-0">
+        <!-- Right Controls: Theme Switch | Admin Home | Student View -->
+        <div class="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold shrink-0">
             <button type="button"
                     data-theme-switch
                     onclick="window.toggleSangamTheme()"

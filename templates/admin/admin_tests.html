@@ -4,28 +4,24 @@
 
 {% block nav %}{% include "admin/_admin_nav.html" %}{% endblock %}
 {% block content %}
-<div class="max-w-5xl mx-auto px-5 py-8">
+<div class="max-w-5xl mx-auto px-4 sm:px-5 py-7">
   
   <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
     <div>
       <div class="flex items-center gap-2">
-        <span class="text-[11px] font-bold bg-indigo-100 text-indigo-800 px-2.5 py-0.5 rounded uppercase tracking-wider">STUDY SANGAM HUB</span>
+        <span class="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2.5 py-0.5 rounded uppercase tracking-wider">STUDY SANGAM HUB</span>
         {% if series.is_paid %}
-          <span class="text-[11px] font-black bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-0.5 rounded uppercase">💎 PAID SERIES · ₹{{ series.price_inr | int if (series.price_inr == (series.price_inr | int)) else series.price_inr }}</span>
+          <span class="text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-0.5 rounded uppercase">💎 PAID SERIES · ₹{{ series.price_inr | int if (series.price_inr == (series.price_inr | int)) else series.price_inr }}</span>
         {% else %}
-          <span class="text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded uppercase">🟢 FREE SERIES</span>
+          <span class="text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded uppercase">🟢 FREE SERIES</span>
         {% endif %}
       </div>
       <h1 class="font-display text-2xl sm:text-3xl font-bold text-ink mt-1.5">📂 {{ series.name }}</h1>
       <p class="text-ink/60 text-xs sm:text-sm font-medium mt-0.5">
-        {% if series.is_paid %}
-          All tests inside this series are part of <strong>{{ series.name }} (₹{{ series.price_inr }})</strong> and unlock once the student's payment is approved on your Telegram Bot.
-        {% else %}
-          All tests inside this series are <strong>Free</strong> for every student.
-        {% endif %}
+        Only tests with uploaded questions appear here and to students. Empty un-uploaded drafts are cleaned up automatically.
       </p>
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2.5">
       <a href="{{ url_for('admin.test_series_list') }}" data-back-url="{{ url_for('admin.test_series_list') }}" class="text-xs font-bold text-ink bg-white hover:bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm">
         &larr; Back to Folders
       </a>
@@ -80,12 +76,12 @@
 
         <div class="md:col-span-2">
           <label class="block text-xs font-bold text-ink mb-1">Test Name <span class="text-red-500">*</span></label>
-          <input type="text" name="title" required placeholder="e.g. Mock Test #1" class="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm bg-gray-50 font-medium">
+          <input type="text" name="title" required placeholder="e.g. NEET Full Syllabus Mock #1" class="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm bg-gray-50 font-medium">
         </div>
         
         <div class="md:col-span-2">
           <label class="block text-xs font-bold text-ink mb-1">Test Syllabus (Topics covered) <span class="text-red-500">*</span></label>
-          <textarea name="description" rows="2" required placeholder="e.g. Full syllabus — Physics, Chemistry, Biology" class="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm bg-gray-50 font-medium"></textarea>
+          <textarea name="description" rows="2" required placeholder="e.g. Full syllabus — Physics (50->45), Chemistry (50->45), Biology (50->45 or 100->90)" class="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm bg-gray-50 font-medium"></textarea>
         </div>
         
         <div>
@@ -105,33 +101,34 @@
       </fieldset>
 
       <button type="submit" id="submit-test-btn" class="w-full bg-indigo-600 text-white font-bold text-sm py-3.5 mt-3 rounded-xl hover:bg-indigo-700 shadow-md">
-        Create Test &amp; Continue &rarr;
+        Continue to Question Upload &rarr;
       </button>
     </form>
   </div>
 
   <!-- LIST OF EXISTING TESTS IN FOLDER -->
-  <h3 class="font-display text-xl font-bold text-ink mb-4">Existing Tests in "{{ series.name }}"</h3>
+  <h3 class="font-display text-xl font-bold text-ink mb-4">Published Tests in "{{ series.name }}"</h3>
   
   <div class="bg-white border-2 border-gray-100 rounded-2xl shadow-sm">
     {% for t in tests %}
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors last:border-0 relative">
+    <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors last:border-0 relative">
       <div class="w-3/4">
         <h4 class="font-bold text-ink text-base sm:text-lg mb-1">{{ t.title }}</h4>
         {% if t.description %}
-          <p class="text-xs text-gray-500 font-medium mb-2.5 truncate">{{ t.description }}</p>
+          <p class="text-xs text-gray-500 font-medium mb-2 truncate">{{ t.description }}</p>
         {% endif %}
         <div class="flex flex-wrap items-center gap-2 text-xs font-bold">
             <span class="bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-1 rounded-md">{{ t.streams.name if t.streams else 'Stream' }}</span>
+            <span class="text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-md bg-emerald-50">
+              📝 {{ t.question_count or 0 }} Qs
+              {% if t.attemptable_questions and t.attemptable_questions < (t.question_count or 0) %}
+                (Attempt {{ t.attemptable_questions }})
+              {% endif %}
+            </span>
             <span class="text-gray-600 border border-gray-200 px-2.5 py-1 rounded-md bg-white">⏱️ {{ t.duration_minutes }} min</span>
             <span class="text-gray-600 border border-gray-200 px-2.5 py-1 rounded-md bg-white">
-              🎯 {% if t.total_marks and t.total_marks > 0 %}{{ t.total_marks }} marks{% else %}Draft (Needs Upload){% endif %}
+              🎯 {{ t.total_marks }} marks
             </span>
-            {% if series.is_paid %}
-                <span class="bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-1 rounded-md">💎 PAID SERIES (₹{{ series.price_inr }})</span>
-            {% else %}
-                <span class="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-md">🟢 FREE</span>
-            {% endif %}
         </div>
       </div>
       
@@ -146,6 +143,9 @@
             <a href="{{ url_for('admin.tests_manage', test_id=t.id) }}" class="flex items-center gap-2 px-4 py-3 text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 border-b border-gray-100">
                 ✏️ Manage Questions
             </a>
+            <a href="{{ url_for('admin.tests_upload', test_id=t.id) }}" class="flex items-center gap-2 px-4 py-3 text-xs font-bold text-indigo-700 hover:bg-indigo-50 border-b border-gray-100">
+                📥 Upload More Qs
+            </a>
             <form method="POST" action="{{ url_for('admin.tests_delete', test_id=t.id) }}" class="m-0" onsubmit="return confirm('Delete &quot;{{ t.title }}&quot; and all its questions?');">
               <button type="submit" class="flex items-center gap-2 w-full text-left px-4 py-3 text-xs font-bold text-red-600 hover:bg-red-50">
                   🗑️ Delete Test
@@ -156,8 +156,8 @@
     </div>
     {% else %}
     <div class="px-6 py-12 text-center bg-gray-50 rounded-2xl">
-        <p class="text-ink font-bold text-base mb-1">No tests exist in this folder yet.</p>
-        <p class="text-gray-500 text-xs font-medium">Click '+ Add New Test' above to upload your first test.</p>
+        <p class="text-ink font-bold text-base mb-1">No published tests in this folder yet.</p>
+        <p class="text-gray-500 text-xs font-medium">Click '+ Add New Test' above and upload your questions to publish a test.</p>
     </div>
     {% endfor %}
   </div>
@@ -176,7 +176,7 @@
         const btn = document.getElementById('submit-test-btn');
         if (btn.disabled) return false;
         btn.disabled = true;
-        btn.textContent = 'Creating Test...';
+        btn.textContent = 'Opening Uploader...';
         return true; 
     }
     function toggleDropdown(menuId) {
@@ -192,4 +192,3 @@
     });
 </script>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->
