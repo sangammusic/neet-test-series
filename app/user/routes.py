@@ -1,4 +1,4 @@
-# STUDY SANGAM HUB v3.0 — User Routes (Welcome Page on Every Session, Per-Series Unlock, Fast Mock Tests)
+# STUDY SANGAM HUB v4.0 — User Routes (NTA Optional Pattern Meta, Empty-Test Guard & Fast Navigation)
 import re
 from flask import render_template, render_template_string, request, redirect, url_for, session, jsonify, abort, flash
 from jinja2 import TemplateNotFound
@@ -25,6 +25,7 @@ from app.shared.models import (
     get_latest_practice_reattempt_session, _visible_image,
     practice_set_is_premium, PRACTICE_RUNNER_COLUMNS,
     get_practice_folders_for_chapter, get_practice_sets_for_folder,
+    get_test_nta_meta, compute_nta_subject_cap,
 )
 from app.shared.access import (
     enrich_series_list, get_series_pricing, user_has_premium, user_has_series_access,
@@ -46,11 +47,6 @@ def _resolve_active_stream_slug(existing):
 
 @user_bp.route("/")
 def landing():
-    """
-    Root entry point when a user opens the website in Chrome or after login.
-    Always opens the Welcome Page (`start_learning.html`) first before proceeding
-    to the 3-tab Main Workspace, even if the user already has a saved stream!
-    """
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     return redirect(url_for("user.start_learning"))
@@ -58,12 +54,6 @@ def landing():
 
 @user_bp.route("/start")
 def start_learning():
-    """
-    Welcome Screen ("Welcome to Study Sangam Hub — Start Learning ->").
-    Opens on registration, on login, and whenever a user opens the site root (`/`).
-    Clicking "Start Learning ->" goes straight to the 3-tab Main Workspace if the
-    user already picked a stream, or to `stream_select` if they are brand new.
-    """
     if not is_logged_in():
         return redirect(url_for("auth.login"))
 
@@ -75,7 +65,6 @@ def start_learning():
 
 @user_bp.route("/workspace")
 def enter_workspace():
-    """Proceeds from the Welcome Page into the 3-tab Main Workspace (or stream selection if first time)."""
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     existing = get_streams_for_user(user_id=current_user_id())
@@ -569,7 +558,7 @@ def practice_analyse_view(slug, chapter_id, mode, category, folder, set_name, vi
 
 
 # ==========================================
-# MENU 2: MOCK TEST SERIES (FAST CACHED + PER-SERIES FREE/PAID)
+# MENU 2: MOCK TEST SERIES (FAST CACHED + PER-SERIES FREE/PAID + NTA PATTERN)
 # ==========================================
 
 @user_bp.route("/streams/<slug>/tests")
@@ -609,6 +598,10 @@ def test_overview(slug, test_id):
     test = get_test_by_id(test_id)
     if not test:
         abort(404)
+    test = dict(test)
+    nta_meta = get_test_nta_meta(test_id, stored_total_marks=test.get("total_marks"))
+    test["total_marks"] = nta_meta["effective_total_marks"]
+
     syllabus = get_test_syllabus(test_id)
     has_access = user_has_access_to_test(test, current_user_id())
     series_pricing = get_series_pricing(test.get("series_id")) if test.get("series_id") else {"is_paid": False, "price_inr": 0}
@@ -629,6 +622,7 @@ def test_overview(slug, test_id):
         "test_overview.html", stream=stream, test=test, syllabus=syllabus, has_access=has_access,
         series_price=series_pricing.get("price_inr"),
         attempt=attempt, attempt_state=attempt_state,
+        nta_meta=nta_meta,
     )
 
 
@@ -646,6 +640,15 @@ def test_start(slug, test_id):
         if test.get("series_id"):
             return redirect(url_for("payments.buy_series", series_id=test["series_id"]))
         return redirect(url_for("user.test_overview", slug=slug, test_id=test_id))
+
+    # Guard against starting a test with 0 uploaded questions
+    qids = get_mock_question_ids_for_test(test_id) or []
+    if not qids:
+        flash("Questions for this test are still being uploaded. Please try another test.", "error")
+        fallback_url = url_for("user.series_tests", slug=slug, series_id=test["series_id"]) if test.get("series_id") else url_for("user.tests_feed", slug=slug)
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"ok": False, "redirect": fallback_url})
+        return redirect(fallback_url)
 
     kind = (request.form.get("kind") or "full").strip()
     if kind == "full":
@@ -696,6 +699,9 @@ def test_attempt(slug, test_id, attempt_id):
         }
         questions_by_subject = {subj: qs for subj, qs in questions_by_subject.items() if qs}
         saved_progress = {qid: v for qid, v in saved_progress.items() if qid in keep}
+        subject_caps = {subj: len(qs) for subj, qs in questions_by_subject.items()}
+    else:
+        subject_caps = {subj: compute_nta_subject_cap(len(qs)) for subj, qs in questions_by_subject.items()}
 
     full_seconds = int((test.get("duration_minutes") or 60) * 60)
     if replay_ids is not None:
@@ -710,6 +716,7 @@ def test_attempt(slug, test_id, attempt_id):
         test=test,
         attempt=attempt,
         questions_by_subject=questions_by_subject,
+        subject_caps=subject_caps,
         saved_progress=saved_progress,
         duration_seconds=duration_seconds,
     )
@@ -807,6 +814,10 @@ def test_result(slug, test_id, attempt_id):
     test = get_test_by_id(test_id)
     if not stream or not test:
         abort(404)
+    test = dict(test)
+    nta_meta = get_test_nta_meta(test_id, stored_total_marks=test.get("total_marks"))
+    test["total_marks"] = nta_meta["effective_total_marks"]
+
     counts = get_mock_analyse_counts(attempt_id, test_id)
     pending = get_latest_mock_reattempt_session(attempt_id)
     time_breakdown = get_attempt_time_breakdown(attempt_id, test_id)
@@ -815,6 +826,7 @@ def test_result(slug, test_id, attempt_id):
         stream=stream, test=test, attempt=attempt, counts=counts, reattempt_session=pending,
         time_by_subject=time_breakdown["by_subject"],
         time_by_question=time_breakdown["by_question"],
+        nta_meta=nta_meta,
     )
 
 
@@ -831,6 +843,7 @@ def test_attempt_review(slug, test_id, attempt_id):
     stream = get_stream_by_slug(slug)
     test = get_test_by_id(test_id)
     questions_by_subject = get_mock_questions_for_test_review(test_id, attempt_id)
+    subject_caps = {subj: compute_nta_subject_cap(len(qs)) for subj, qs in questions_by_subject.items()}
 
     return render_template(
         "test_attempt.html",
@@ -838,6 +851,7 @@ def test_attempt_review(slug, test_id, attempt_id):
         test=test,
         attempt=attempt,
         questions_by_subject=questions_by_subject,
+        subject_caps=subject_caps,
         saved_progress={},
         is_review_mode=True,
     )
@@ -860,6 +874,9 @@ def test_analyse(slug, test_id):
     test = get_test_by_id(test_id)
     if not stream or not test:
         abort(404)
+    test = dict(test)
+    nta_meta = get_test_nta_meta(test_id, stored_total_marks=test.get("total_marks"))
+    test["total_marks"] = nta_meta["effective_total_marks"]
 
     attempt = _latest_mock_attempt(test_id)
     if not attempt:
@@ -876,6 +893,7 @@ def test_analyse(slug, test_id):
     return render_template(
         "test_analyse.html", stream=stream, test=test, attempt=attempt, counts=counts, reattempt_session=pending,
         time_by_subject=time_breakdown["by_subject"], time_by_question=time_breakdown["by_question"],
+        nta_meta=nta_meta,
     )
 
 
