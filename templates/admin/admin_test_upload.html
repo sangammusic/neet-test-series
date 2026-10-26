@@ -143,9 +143,53 @@
                     </label>
                     <span class="text-xs font-medium text-gray-500 ml-1">(Up to 90 questions per chunk · topic_name optional)</span>
                 </div>
-                <button type="button" @click="showGuide = !showGuide" class="text-xs font-bold text-indigo-600 hover:underline">
-                    <span x-text="showGuide ? 'Hide JSON Format' : 'Show JSON Format'"></span>
-                </button>
+                <div class="flex items-center gap-3">
+                    <button type="button" @click="showPrompt = !showPrompt" class="text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-100">
+                        <span x-text="showPrompt ? 'Hide AI Upload Prompt' : '🤖 Copy AI Question Prompt'"></span>
+                    </button>
+                    <button type="button" @click="showGuide = !showGuide" class="text-xs font-bold text-indigo-600 hover:underline">
+                        <span x-text="showGuide ? 'Hide JSON Format' : 'Show JSON Format'"></span>
+                    </button>
+                </div>
+            </div>
+
+            
+            <div x-show="showPrompt" x-cloak class="mb-4 p-4 rounded-xl bg-indigo-950 text-indigo-100 text-xs border border-indigo-700 space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="font-bold text-amber-300 uppercase tracking-wider">🤖 Ready-to-Copy AI Prompt (ChatGPT / Gemini / Claude)</span>
+                    <button type="button"
+                            @click="navigator.clipboard.writeText($refs.aiPromptText.innerText); promptCopied = true; setTimeout(() => promptCopied = false, 2000)"
+                            class="bg-amber-400 text-slate-950 font-extrabold px-3 py-1 rounded-lg hover:bg-amber-300 text-xs">
+                        <span x-text="promptCopied ? '✓ Copied!' : '📋 Copy Prompt'"></span>
+                    </button>
+                </div>
+                <pre x-ref="aiPromptText" class="whitespace-pre-wrap font-mono text-[11px] bg-black/40 p-3 rounded-lg text-gray-100 leading-relaxed overflow-x-auto">Convert the following NEET UG questions into a strict JSON array for Study Sangam Hub.
+Return ONLY valid raw JSON (no markdown commentary outside the JSON array).
+Every object in the JSON array MUST follow this exact schema:
+[
+  {
+    "subject_name": "Physics",
+    "topic_name": "Laws of Motion",
+    "question_text": "Full question statement here. Use \\( ... \\) for inline LaTeX math and chemical formulas.",
+    "option_a": "First option text",
+    "option_b": "Second option text",
+    "option_c": "Third option text",
+    "option_d": "Fourth option text",
+    "correct_option": "A",
+    "difficulty_id": 2,
+    "is_pyq": false,
+    "pyq_year": null,
+    "has_image": false,
+    "image_url": null,
+    "explanation": "Step-by-step NCERT-aligned solution and formula used."
+  }
+]
+Strict Rules:
+1. "subject_name" must be "Physics", "Chemistry", or "Biology" (both Botany and Zoology go under "Biology").
+2. "correct_option" must be a single uppercase letter: "A", "B", "C", or "D".
+3. Escape all backslashes inside JSON strings (use \\( and \\), \\frac{}{}, \\sqrt{}, etc.).
+4. Never include [span_0], (start_span), or question numbers like "Q1." inside "question_text".
+5. If generating a 200-question full mock test, generate 50 Physics, 50 Chemistry, and 100 Biology questions (or in chunks of 45-50 per subject). If generating a 180-question mock test, generate 45 Physics, 45 Chemistry, and 90 Biology questions.</pre>
             </div>
 
             <div x-show="showGuide" x-cloak class="mb-4 p-3.5 rounded-xl bg-gray-900 text-green-400 font-mono text-xs overflow-x-auto">
@@ -255,6 +299,8 @@
             targetsLocked: hasExisting,
             isLocking: false,
             showGuide: false,
+            showPrompt: false,
+            promptCopied: false,
             activeTab: 'physics',
             isProcessing: false,
             
