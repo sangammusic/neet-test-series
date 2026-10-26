@@ -867,20 +867,30 @@ def test_attempt_submit(slug, test_id, attempt_id):
 
     payload = request.get_json(silent=True) or {}
     final_answers = payload.get("answers") or {}
-    
-    bulk_entries = [
-        {
-            "mock_question_id": qid,
-            "selected_option": entry.get("selected_option"),
-            "status": entry.get("status"),
-            "time_taken_sec": entry.get("time_taken_sec"),
-        }
-        for qid, entry in final_answers.items()
-        if qid in writable_ids and isinstance(entry, dict)
-    ]
-    bulk_save_attempt_progress(attempt_id, bulk_entries)
 
-    progress = get_attempt_answers_map(attempt_id)
+    progress_from_client = {}
+    for qid, entry in final_answers.items():
+        if qid in writable_ids and isinstance(entry, dict):
+            sel = entry.get("selected_option")
+            if sel not in ("A", "B", "C", "D"):
+                sel = None
+            st = entry.get("status")
+            if st not in ("answered", "marked", "answered_marked", "not_answered", "not_visited"):
+                st = "answered" if sel else "not_visited"
+            progress_from_client[qid] = {
+                "mock_question_id": qid,
+                "selected_option": sel,
+                "status": st,
+                "time_taken_sec": max(0, int(entry.get("time_taken_sec") or 0)),
+            }
+
+    if replay_ids is not None or not progress_from_client:
+        existing_map = get_attempt_answers_map(attempt_id)
+        existing_map.update(progress_from_client)
+        progress = existing_map
+    else:
+        progress = progress_from_client
+
     submit_test_attempt(attempt_id, test_id, progress_map=progress, valid_ids=valid_ids, exam_pattern=exam_pattern)
 
     return jsonify({
