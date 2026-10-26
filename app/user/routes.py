@@ -1,4 +1,4 @@
-# STUDY SANGAM HUB v5.0 — User Routes (Contextual My Attempts, NTA 180Q/720M Pattern, Clean Navigation)
+# STUDY SANGAM HUB v5.0 — User Routes (Contextual My Attempts, NTA 180Q Compulsory Lock & 200Q Optional Pattern)
 import re
 from flask import render_template, render_template_string, request, redirect, url_for, session, jsonify, abort, flash
 from jinja2 import TemplateNotFound
@@ -27,6 +27,8 @@ from app.shared.models import (
     practice_set_is_premium, PRACTICE_RUNNER_COLUMNS,
     get_practice_folders_for_chapter, get_practice_sets_for_folder,
     get_test_nta_meta, compute_nta_subject_cap,
+    lock_compulsory_questions_by_subject, get_locked_compulsory_question_ids,
+    set_attempt_exam_pattern, get_attempt_exam_pattern,
 )
 from app.shared.access import (
     enrich_series_list, get_series_pricing, user_has_premium, user_has_series_access,
@@ -586,7 +588,7 @@ def practice_analyse_view(slug, chapter_id, mode, category, folder, set_name, vi
 
 
 # ==========================================
-# MENU 2: MOCK TEST SERIES (WITH FOLDER-SCOPED MY ATTEMPTS & 720-MARK NTA ENGINE)
+# MENU 2: MOCK TEST SERIES (WITH FOLDER-SCOPED MY ATTEMPTS & DUAL EXAM PATTERN ENGINE)
 # ==========================================
 
 @user_bp.route("/streams/<slug>/tests")
@@ -615,9 +617,8 @@ def series_tests(slug, series_id):
 
     uid = current_user_id()
     series = enrich_series_list([raw_series], uid)[0]
-    tests = get_tests_for_series(series_id, stream["id"])
+    tests = get_tests_for_series(series_id, stream["id"], include_empty=True)
 
-    # Fetch ONLY this logged-in user's attempts for tests belonging to THIS series folder
     series_attempts = get_series_attempts_for_user(uid, series_id, tests_in_series=tests)
     latest_attempt_by_tid = {}
     for a in series_attempts:
@@ -701,12 +702,15 @@ def test_start(slug, test_id):
             return jsonify({"ok": False, "redirect": fallback_url})
         return redirect(fallback_url)
 
+    raw_pattern = (request.form.get("exam_pattern") or request.args.get("exam_pattern") or "compulsory_45").strip().lower()
+    exam_pattern = "optional_50" if raw_pattern in ("optional_50", "optional", "200", "50") else "compulsory_45"
+
     kind = (request.form.get("kind") or "full").strip()
     if kind == "full":
-        attempt_id = create_test_attempt(test_id, user_id=current_user_id())
+        attempt_id = create_test_attempt(test_id, user_id=current_user_id(), exam_pattern=exam_pattern)
         result = None
     else:
-        attempt_id, result = start_mock_reattempt(test_id, current_user_id(), kind)
+        attempt_id, result = start_mock_reattempt(test_id, current_user_id(), kind, exam_pattern=exam_pattern)
 
     if not attempt_id:
         if result:
@@ -717,6 +721,9 @@ def test_start(slug, test_id):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"ok": False, "redirect": target})
         return redirect(target)
+
+    session[f"exam_pattern_{attempt_id}"] = exam_pattern
+    set_attempt_exam_pattern(attempt_id, exam_pattern)
 
     attempt_url = url_for("user.test_attempt", slug=slug, test_id=test_id, attempt_id=attempt_id)
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -746,6 +753,9 @@ def test_attempt(slug, test_id, attempt_id):
     nta_meta = get_test_nta_meta(test_id, stored_total_marks=test.get("total_marks"))
     test["total_marks"] = nta_meta["effective_total_marks"]
 
+    exam_pattern = session.get(f"exam_pattern_{attempt_id}") or get_attempt_exam_pattern(attempt_id, default="compulsory_45")
+    set_attempt_exam_pattern(attempt_id, exam_pattern)
+
     questions_by_subject = get_mock_questions_for_test(test_id)
     saved_progress = get_attempt_answers_map(attempt_id)
 
@@ -759,7 +769,15 @@ def test_attempt(slug, test_id, attempt_id):
         saved_progress = {qid: v for qid, v in saved_progress.items() if qid in keep}
         subject_caps = {subj: len(qs) for subj, qs in questions_by_subject.items()}
     else:
-        subject_caps = {subj: compute_nta_subject_cap(len(qs)) for subj, qs in questions_by_subject.items()}
+        if exam_pattern == "compulsory_45":
+            # Randomly lock 45 Physics, 45 Chemistry, 90 Biology (180 compulsory questions total)
+            questions_by_subject = lock_compulsory_questions_by_subject(questions_by_subject, attempt_id)
+            locked_set = {q["id"] for qs in questions_by_subject.values() for q in qs}
+            saved_progress = {qid: v for qid, v in saved_progress.items() if qid in locked_set}
+            subject_caps = {subj: len(qs) for subj, qs in questions_by_subject.items()}
+        else:
+            # 200Q Optional Pattern: Show all uploaded questions (50P, 50C, 100B) with 45/45/90 attempt caps
+            subject_caps = {subj: compute_nta_subject_cap(len(qs)) for subj, qs in questions_by_subject.items()}
 
     full_seconds = int((test.get("duration_minutes") or 180) * 60)
     if replay_ids is not None:
@@ -778,6 +796,7 @@ def test_attempt(slug, test_id, attempt_id):
         saved_progress=saved_progress,
         duration_seconds=duration_seconds,
         nta_meta=nta_meta,
+        exam_pattern=exam_pattern,
     )
 
 
@@ -830,10 +849,21 @@ def test_attempt_submit(slug, test_id, attempt_id):
             "redirect": url_for("user.test_result", slug=slug, test_id=test_id, attempt_id=attempt_id)
         })
 
+    exam_pattern = session.get(f"exam_pattern_{attempt_id}") or get_attempt_exam_pattern(attempt_id, default="compulsory_45")
+    set_attempt_exam_pattern(attempt_id, exam_pattern)
+
     all_valid_ids = set(get_mock_question_ids_for_test(test_id))
     replay_ids = _mock_replay_ids(attempt)
-    writable_ids = set(replay_ids) if replay_ids is not None else all_valid_ids
-    valid_ids = all_valid_ids
+    if replay_ids is not None:
+        writable_ids = set(replay_ids)
+        valid_ids = all_valid_ids
+    elif exam_pattern == "compulsory_45":
+        locked_ids = set(get_locked_compulsory_question_ids(test_id, attempt_id)) or all_valid_ids
+        writable_ids = locked_ids
+        valid_ids = locked_ids
+    else:
+        writable_ids = all_valid_ids
+        valid_ids = all_valid_ids
 
     payload = request.get_json(silent=True) or {}
     final_answers = payload.get("answers") or {}
@@ -851,7 +881,7 @@ def test_attempt_submit(slug, test_id, attempt_id):
     bulk_save_attempt_progress(attempt_id, bulk_entries)
 
     progress = get_attempt_answers_map(attempt_id)
-    submit_test_attempt(attempt_id, test_id, progress_map=progress, valid_ids=valid_ids)
+    submit_test_attempt(attempt_id, test_id, progress_map=progress, valid_ids=valid_ids, exam_pattern=exam_pattern)
 
     return jsonify({
         "ok": True,
@@ -908,7 +938,8 @@ def test_attempt_review(slug, test_id, attempt_id):
     nta_meta = get_test_nta_meta(test_id, stored_total_marks=test.get("total_marks"))
     test["total_marks"] = nta_meta["effective_total_marks"]
 
-    questions_by_subject = get_mock_questions_for_test_review(test_id, attempt_id)
+    exam_pattern = session.get(f"exam_pattern_{attempt_id}") or get_attempt_exam_pattern(attempt_id, default="compulsory_45")
+    questions_by_subject = get_mock_questions_for_test_review(test_id, attempt_id, exam_pattern=exam_pattern)
     subject_caps = {subj: compute_nta_subject_cap(len(qs)) for subj, qs in questions_by_subject.items()}
 
     return render_template(
@@ -921,6 +952,7 @@ def test_attempt_review(slug, test_id, attempt_id):
         saved_progress={},
         is_review_mode=True,
         nta_meta=nta_meta,
+        exam_pattern=exam_pattern,
     )
 
 
@@ -1006,7 +1038,7 @@ def _latest_mock_attempt(test_id):
     return get_latest_full_mock_attempt(test_id, current_user_id())
 
 
-# ---------- Profile (Redirects to contextual dashboard or shows account overview) ----------
+# ---------- Profile ----------
 
 @user_bp.route("/profile")
 def profile():
