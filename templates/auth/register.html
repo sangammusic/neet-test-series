@@ -1,12 +1,17 @@
 {% extends "shared/base.html" %}
-{% block title %}Join Squad — STUDY SANGAM HUB{% endblock %}
+{% block title %}Create Account — STUDY SANGAM HUB{% endblock %}
 {% block content %}
 <div class="max-w-sm mx-auto mt-6 mb-14 px-4 relative z-10">
   <div class="pw-tile rounded-2xl p-5 sm:p-6 relative overflow-hidden">
-    <!-- Top navbar already displays the single brand logo -->
-    <div class="mb-4">
-      <p class="text-gold font-extrabold text-[9px] tracking-widest uppercase">STUDY SANGAM HUB</p>
-      <h1 class="font-display text-lg sm:text-xl font-bold text-white">Create Aspirant Account 🚀</h1>
+    <div class="flex items-center gap-3 mb-4">
+      <img src="{{ url_for('static', filename='img/logo-mark.png') }}"
+           onerror="this.onerror=null;this.src=window.SANGAM_LOGO_URI"
+           alt="Study Sangam Hub"
+           class="w-10 h-10 shrink-0 rounded-xl object-contain shadow-md">
+      <div>
+        <p class="text-gold font-extrabold text-[9px] tracking-widest uppercase">STUDY SANGAM HUB</p>
+        <h1 class="font-display text-lg sm:text-xl font-bold text-white">Create Student Account</h1>
+      </div>
     </div>
 
     <form method="POST" class="space-y-3 relative z-10">
@@ -46,7 +51,7 @@
     </form>
 
     <p class="text-xs text-gray-400 mt-4 text-center relative z-10">
-      Already in the squad? <a href="{{ url_for('auth.login') }}" class="text-gold font-bold hover:underline">Log In</a>
+      Already have an account? <a href="{{ url_for('auth.login') }}" class="text-gold font-bold hover:underline">Log In</a>
     </p>
   </div>
 </div>
@@ -81,4 +86,3 @@
 {% block extra_scripts %}
 {% if turnstile_site_key %}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>{% endif %}
 {% endblock %}
-<!-- STUDY SANGAM HUB v4.0 -->

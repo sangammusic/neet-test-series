@@ -14,15 +14,16 @@
     </div>
   </div>
 
-  <!-- Single-Logo Compact Login Card -->
+  <!-- Branded Login Card -->
   <div class="w-full max-w-sm pw-tile p-5 sm:p-7 rounded-2xl">
-    <div class="flex items-center gap-2.5 mb-5">
-      <svg class="w-10 h-10 shrink-0 rounded-xl shadow-md" viewBox="0 0 64 64" aria-hidden="true">
-        <use href="#sangam-logo-crest"></use>
-      </svg>
+    <div class="flex items-center gap-3 mb-5">
+      <img src="{{ url_for('static', filename='img/logo-mark.png') }}"
+           onerror="this.onerror=null;this.src=window.SANGAM_LOGO_URI"
+           alt="Study Sangam Hub"
+           class="w-11 h-11 shrink-0 rounded-xl object-contain shadow-md">
       <div>
         <p class="text-gold font-extrabold text-[9px] tracking-widest uppercase">STUDY SANGAM HUB</p>
-        <h1 class="font-display text-lg sm:text-xl font-bold text-white">Aspirant Login ⚡</h1>
+        <h1 class="font-display text-lg sm:text-xl font-bold text-white">Student Login</h1>
       </div>
     </div>
 
@@ -47,13 +48,13 @@
       <div class="cf-turnstile mt-2" data-sitekey="{{ turnstile_site_key }}" data-theme="dark"></div>
       {% endif %}
       <button type="submit" class="btn-cute !w-full !py-2.5 !text-xs sm:!text-sm mt-1">
-        <span>Lock In &amp; Log In</span>
+        <span>Log In</span>
         <span>&rarr;</span>
       </button>
     </form>
 
     <p class="text-xs text-gray-400 mt-4 text-center">
-      New aspirant? <a href="{{ url_for('auth.register') }}" class="text-gold font-bold hover:underline">Create an account</a>
+      New to Study Sangam Hub? <a href="{{ url_for('auth.register') }}" class="text-gold font-bold hover:underline">Create an account</a>
     </p>
   </div>
 </div>
@@ -62,4 +63,3 @@
 {% block extra_scripts %}
 {% if turnstile_site_key %}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>{% endif %}
 {% endblock %}
-<!-- STUDY SANGAM HUB v4.0 -->
