@@ -2,7 +2,11 @@
 {% block title %}{{ test.title }} — STUDY SANGAM HUB{% endblock %}
 {% block content %}
 {% set parent_list_url = url_for('user.series_tests', slug=stream.slug, series_id=test.series_id) if test.series_id else url_for('user.tests_feed', slug=stream.slug) %}
-<section class="max-w-xl mx-auto px-3.5 sm:px-5 pt-5 pb-16 relative z-10">
+<section class="max-w-xl mx-auto px-3.5 sm:px-5 pt-5 pb-16 relative z-10"
+         x-data="{
+           selectedPattern: '{{ 'optional_50' if (nta_meta and nta_meta.has_optional) else 'compulsory_45' }}',
+           showPatternConfirm: false
+         }">
 
   <div class="mb-3.5 flex items-center justify-between gap-2">
     <a href="{{ parent_list_url }}" data-back-url="{{ parent_list_url }}" class="btn-cute-soft">
@@ -30,7 +34,8 @@
         <p class="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">Duration</p>
       </div>
       <div class="bg-white/[0.04] border border-white/10 rounded-xl p-3 text-center">
-        <p class="text-base sm:text-xl font-display font-bold text-emerald-400">
+        <p class="text-base sm:text-xl font-display font-bold text-emerald-400"
+           x-text="selectedPattern === 'optional_50' ? '180 / 200' : '{{ nta_meta.total_attemptable if (nta_meta and nta_meta.total_uploaded > 0) else 180 }}'">
           {% if nta_meta and nta_meta.total_uploaded > 0 %}
             {% if nta_meta.has_optional %}{{ nta_meta.total_attemptable }}/{{ nta_meta.total_uploaded }}{% else %}{{ nta_meta.total_uploaded }}{% endif %}
           {% else %}180{% endif %}
@@ -89,6 +94,52 @@
       </div>
     </div>
 
+    {% if has_access %}
+    <!-- =================================================================
+         CHOOSE EXAM PATTERN BEFORE STARTING TEST
+         ("How do you want to attempt this test? Compulsory 45 Qs vs 50 Qs Attempt Any 45")
+         ================================================================= -->
+    <div class="mb-5 bg-white/[0.03] border border-white/15 rounded-xl p-4 text-left">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="font-display text-xs font-extrabold text-gold uppercase tracking-wider">How Do You Want to Attempt This Test?</h2>
+        <span class="text-[9px] font-bold text-gray-400 uppercase">Select Pattern</span>
+      </div>
+      <div class="space-y-2.5">
+        <!-- Pattern 1: Compulsory 45 Questions Pattern -->
+        <label @click="selectedPattern = 'compulsory_45'"
+               class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all"
+               :class="selectedPattern === 'compulsory_45' ? 'border-gold bg-gold/15 ring-1 ring-gold' : 'border-white/10 bg-white/[0.02] hover:border-white/25'">
+          <input type="radio" name="pattern_choice" value="compulsory_45" x-model="selectedPattern" class="mt-1 accent-amber-400">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-white">Compulsory 45 Questions Pattern</span>
+              <span class="text-[9px] font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-1.5 py-0.5 rounded">180 Qs · 720M</span>
+            </div>
+            <p class="text-[11px] text-gray-300 mt-0.5">
+              Physics 45 Qs + Chemistry 45 Qs + Biology 90 Qs (All 180 questions compulsory).
+            </p>
+          </div>
+        </label>
+
+        <!-- Pattern 2: 50 Questions Pattern — Attempt Any 45 of 50 -->
+        <label @click="selectedPattern = 'optional_50'"
+               class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all"
+               :class="selectedPattern === 'optional_50' ? 'border-gold bg-gold/15 ring-1 ring-gold' : 'border-white/10 bg-white/[0.02] hover:border-white/25'">
+          <input type="radio" name="pattern_choice" value="optional_50" x-model="selectedPattern" class="mt-1 accent-amber-400">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-white">50 Questions — Attempt Any 45 of 50</span>
+              <span class="text-[9px] font-extrabold uppercase bg-gold/20 text-gold border border-gold/30 px-1.5 py-0.5 rounded">200 Qs · 720M</span>
+            </div>
+            <p class="text-[11px] text-gray-300 mt-0.5">
+              Attempt any 45 out of 50 in Physics &amp; Chemistry, and any 90 out of 100 in Biology (180 evaluated).
+            </p>
+          </div>
+        </label>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Call to Action -->
     <div class="text-center">
       {% if has_access %}
@@ -102,9 +153,12 @@
           <a href="{{ url_for('user.test_analyse', slug=stream.slug, test_id=test.id) }}" data-replace-link class="btn-cute !w-full !py-2.5 !text-xs">
             📊 View Result &amp; Review Answers
           </a>
-          <a href="{{ url_for('user.test_analyse', slug=stream.slug, test_id=test.id) }}#reattempt" data-replace-link class="btn-cute-soft !w-full !py-2 !text-xs">
-            🔁 Reattempt Test
-          </a>
+          <form action="{{ url_for('user.test_start', slug=stream.slug, test_id=test.id) }}" method="POST" data-replace-form class="m-0">
+            <input type="hidden" name="exam_pattern" :value="selectedPattern">
+            <button type="submit" class="btn-cute-soft !w-full !py-2 !text-xs">
+              🔁 Reattempt Full Test with Selected Pattern
+            </button>
+          </form>
         </div>
 
         {% elif attempt_state == 'in_progress' %}
@@ -113,11 +167,13 @@
         </a>
         <form action="{{ url_for('user.test_start', slug=stream.slug, test_id=test.id) }}" method="POST" data-replace-form class="m-0 mt-2"
               onsubmit="return confirm('Start a fresh attempt? Your unfinished progress in this test will be reset.');">
+          <input type="hidden" name="exam_pattern" :value="selectedPattern">
           <button type="submit" class="btn-cute-soft !w-full !py-2 !text-xs">Start Fresh Attempt</button>
         </form>
 
         {% else %}
         <form action="{{ url_for('user.test_start', slug=stream.slug, test_id=test.id) }}" method="POST" data-replace-form>
+          <input type="hidden" name="exam_pattern" :value="selectedPattern">
           <button type="submit" class="btn-cute !w-full !py-3 !text-xs sm:!text-sm">
             <span>Start Test</span>
             <span>&rarr;</span>

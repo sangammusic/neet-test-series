@@ -130,7 +130,14 @@
            alt="Sangam Study"
            class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-contain shrink-0">
       <div class="min-w-0">
-        <p class="text-[9px] font-black uppercase tracking-widest text-gold truncate">{{ stream.name }} · NTA CBT Interface</p>
+        <p class="text-[9px] font-black uppercase tracking-widest text-gold truncate">
+          {{ stream.name }} ·
+          {% if exam_pattern == 'optional_50' %}
+            200Q Optional Pattern (Attempt 45/50 Phy, 45/50 Chem, 90/100 Bio)
+          {% else %}
+            180 Compulsory Pattern (45P + 45C + 90B Locked)
+          {% endif %}
+        </p>
         <h1 class="font-display text-xs sm:text-base font-bold text-white truncate">{{ test.title }}</h1>
       </div>
     </div>

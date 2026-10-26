@@ -1,8 +1,23 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ series.name }} — {{ stream.name }}{% endblock %}
 {% block content %}
+{% set init_tab = 'attempts' if active_tab == 'attempts' else 'tests' %}
 <section class="max-w-4xl mx-auto px-3 sm:px-5 pt-4 pb-16 relative z-10"
-         x-data="{ activeTab: {{ (active_tab or 'tests') | tojson }} }">
+         x-data="{
+           activeTab: '{{ init_tab }}',
+           patternModalOpen: false,
+           selectedTestId: null,
+           selectedTestTitle: '',
+           selectedTestAction: '',
+           selectedPattern: 'compulsory_45',
+           openPatternModal(testId, testTitle, startUrl) {
+             this.selectedTestId = testId;
+             this.selectedTestTitle = testTitle;
+             this.selectedTestAction = startUrl;
+             this.selectedPattern = 'compulsory_45';
+             this.patternModalOpen = true;
+           }
+         }">
 
   <div class="mb-4 border-b border-white/10 pb-3.5">
     <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}" data-back-url="{{ url_for('user.tests_feed', slug=stream.slug) }}" class="btn-cute-soft mb-2.5">
@@ -28,18 +43,22 @@
       <!-- Contextual Tabs inside this Test Series Folder: Available Tests | My Attempts -->
       <div class="inline-flex items-center p-1 rounded-xl bg-white/5 border border-white/15 gap-1">
         <button type="button"
-                @click="activeTab = 'tests'"
+                id="btn-series-tab-tests"
+                @click="activeTab = 'tests'; window.switchSeriesTab && window.switchSeriesTab('tests')"
+                onclick="window.switchSeriesTab && window.switchSeriesTab('tests')"
                 :class="activeTab === 'tests' ? 'bg-gold text-ink font-extrabold shadow-sm' : 'text-gray-300 hover:text-white font-semibold'"
-                class="px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5">
+                class="px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 {% if init_tab == 'tests' %}bg-gold text-ink font-extrabold shadow-sm{% else %}text-gray-300 hover:text-white font-semibold{% endif %}">
           <span>📋 Available Tests</span>
-          <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20" x-text="{{ tests|length }}"></span>
+          <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20">{{ tests|length }}</span>
         </button>
         <button type="button"
-                @click="activeTab = 'attempts'"
+                id="btn-series-tab-attempts"
+                @click="activeTab = 'attempts'; window.switchSeriesTab && window.switchSeriesTab('attempts')"
+                onclick="window.switchSeriesTab && window.switchSeriesTab('attempts')"
                 :class="activeTab === 'attempts' ? 'bg-gold text-ink font-extrabold shadow-sm' : 'text-gray-300 hover:text-white font-semibold'"
-                class="px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5">
+                class="px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 {% if init_tab == 'attempts' %}bg-gold text-ink font-extrabold shadow-sm{% else %}text-gray-300 hover:text-white font-semibold{% endif %}">
           <span>📊 My Attempts</span>
-          <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20" x-text="{{ series_attempts|length if series_attempts is defined else 0 }}"></span>
+          <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20">{{ series_attempts|length if series_attempts is defined else 0 }}</span>
         </button>
       </div>
     </div>
@@ -55,8 +74,8 @@
       </p>
     </div>
     {% if series.pending_order_id and series.pending_status == 'submitted' %}
-      <a href="{{ url_for('payments.checkout', order_id=series.pending_order_id) }}" class="btn-cute shrink-0">
-        ⏳ Check Payment Status
+      <a href="{{ url_for('payments.history') }}" class="btn-cute shrink-0">
+        ⏳ Pending Approval (View in My Purchases)
       </a>
     {% else %}
       <a href="{{ url_for('payments.buy_series', series_id=series.id) }}" class="btn-cute shrink-0">
@@ -69,13 +88,17 @@
   <!-- =================================================================
        TAB 1: AVAILABLE TESTS IN THIS SERIES FOLDER
        ================================================================= -->
-  <div x-show="activeTab === 'tests'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  <div id="panel-series-tab-tests"
+       x-show="activeTab === 'tests'"
+       style="{% if init_tab == 'attempts' %}display: none;{% endif %}"
+       class="grid grid-cols-1 sm:grid-cols-2 gap-3">
     {% for t in tests %}
     {% set my_latest = (latest_attempt_by_tid or {}).get(t.id) %}
-    <div class="pw-tile p-4 flex items-center justify-between gap-3 group">
-      <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2">
-          <p class="font-display text-sm sm:text-base font-bold text-white truncate">{{ t.title }}</p>
+    {% set start_url = url_for('user.test_start', slug=stream.slug, test_id=t.id) %}
+    <div class="pw-tile p-4 flex flex-col justify-between gap-3 group">
+      <div class="min-w-0">
+        <div class="flex items-start justify-between gap-2">
+          <p class="font-display text-sm sm:text-base font-bold text-white leading-snug">{{ t.title }}</p>
           {% if my_latest %}
             {% if my_latest.submitted_at %}
               <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded shrink-0">
@@ -89,7 +112,7 @@
           {% endif %}
         </div>
 
-        <div class="flex flex-wrap items-center gap-1.5 mt-2">
+        <div class="flex flex-wrap items-center gap-1.5 mt-2.5">
           <span class="text-[10px] font-bold text-gray-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
             ⏱ {{ t.duration_minutes }} min
           </span>
@@ -104,16 +127,24 @@
         </div>
       </div>
 
-      <div class="shrink-0">
+      <div class="pt-2.5 border-t border-white/10 flex items-center justify-between gap-2">
         {% if series.is_paid and not series.has_access %}
           <span class="text-[10px] font-bold text-gray-400 border border-white/15 bg-white/5 px-2.5 py-1.5 rounded-lg inline-block">
             🔒 Locked
           </span>
+          <a href="{{ url_for('payments.buy_series', series_id=series.id) }}" class="btn-cute-soft !py-1.5 !px-3 !text-xs">
+            Unlock &rarr;
+          </a>
         {% else %}
-          <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}" data-replace-link class="btn-cute !py-2 !px-3.5 !text-xs">
+          <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}" data-replace-link class="btn-cute-soft !py-2 !px-3 !text-xs">
+            <span>📋 Syllabus &amp; Details</span>
+          </a>
+          <button type="button"
+                  @click="openPatternModal({{ t.id | tojson | forceescape }}, {{ t.title | tojson | forceescape }}, '{{ start_url }}')"
+                  class="btn-cute !py-2 !px-3.5 !text-xs">
             <span>Open Test</span>
             <span>&rsaquo;</span>
-          </a>
+          </button>
         {% endif %}
       </div>
     </div>
@@ -128,7 +159,9 @@
   <!-- =================================================================
        TAB 2: MY ATTEMPTS (STRICTLY SCOPED TO THIS TEST SERIES FOLDER)
        ================================================================= -->
-  <div x-show="activeTab === 'attempts'" x-cloak>
+  <div id="panel-series-tab-attempts"
+       x-show="activeTab === 'attempts'"
+       style="{% if init_tab != 'attempts' %}display: none;{% endif %}">
     {% if series_attempts and series_attempts|length > 0 %}
       <div class="grid grid-cols-3 gap-2.5 mb-4">
         <div class="pw-tile p-3 text-center">
@@ -208,12 +241,116 @@
       <div class="pw-tile p-8 text-center rounded-xl">
         <p class="font-display text-base font-bold text-white mb-1">No Attempts in {{ series.name }} Yet</p>
         <p class="text-gray-400 text-xs mb-4">When you attempt any test inside {{ series.name }}, your attempt history, scores, and answer reviews will appear here.</p>
-        <button type="button" @click="activeTab = 'tests'" class="btn-cute !py-2 !px-4 !text-xs">
+        <button type="button"
+                @click="activeTab = 'tests'; window.switchSeriesTab && window.switchSeriesTab('tests')"
+                onclick="window.switchSeriesTab && window.switchSeriesTab('tests')"
+                class="btn-cute !py-2 !px-4 !text-xs">
           Browse Available Tests &rarr;
         </button>
       </div>
     {% endif %}
   </div>
 
+  <!-- =================================================================
+       PRE-TEST EXAM PATTERN SELECTION MODAL
+       ("How do you want to attempt this test? Compulsory 45 Qs vs 50 Qs Attempt Any 45")
+       ================================================================= -->
+  <div x-show="patternModalOpen" x-cloak
+       class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+       @click.self="patternModalOpen = false">
+    <div class="pw-tile bg-[#121622] border border-white/20 rounded-2xl p-5 sm:p-6 max-w-md w-full shadow-2xl">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <span class="text-[9px] font-black uppercase tracking-widest text-gold bg-gold/10 border border-gold/30 px-2 py-0.5 rounded">Select Exam Pattern</span>
+          <h3 class="font-display text-base sm:text-lg font-bold text-white mt-1" x-text="selectedTestTitle || 'Start Mock Test'"></h3>
+        </div>
+        <button type="button" @click="patternModalOpen = false" class="text-gray-400 hover:text-white text-sm font-bold px-2 py-0.5">✕</button>
+      </div>
+
+      <p class="text-xs text-gray-300 mb-3.5">
+        How do you want to attempt this test? Choose your preferred NEET UG question pattern below:
+      </p>
+
+      <form :action="selectedTestAction" method="POST" data-replace-form class="space-y-3">
+        <input type="hidden" name="exam_pattern" :value="selectedPattern">
+
+        <!-- Option 1: Compulsory 45 Questions Pattern -->
+        <label @click="selectedPattern = 'compulsory_45'"
+               class="block cursor-pointer rounded-xl border p-3.5 transition-all"
+               :class="selectedPattern === 'compulsory_45' ? 'border-gold bg-gold/15 ring-1 ring-gold' : 'border-white/15 bg-white/[0.03] hover:border-white/30'">
+          <div class="flex items-start gap-3">
+            <input type="radio" name="_pattern_radio" value="compulsory_45" x-model="selectedPattern" class="mt-1 accent-amber-400">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs sm:text-sm font-bold text-white">Compulsory 45 Questions Pattern</span>
+                <span class="text-[9px] font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-1.5 py-0.5 rounded">180 Qs · 720M</span>
+              </div>
+              <p class="text-[11px] text-gray-300 mt-1 leading-relaxed">
+                <strong>Physics:</strong> 45 Qs &nbsp;|&nbsp; <strong>Chemistry:</strong> 45 Qs &nbsp;|&nbsp; <strong>Biology:</strong> 90 Qs<br>
+                Randomly locks 45 Physics + 45 Chemistry + 90 Biology = 180 compulsory questions (+4 / -1 / 0).
+              </p>
+            </div>
+          </div>
+        </label>
+
+        <!-- Option 2: 50 Questions Pattern (Attempt Any 45 out of 50) -->
+        <label @click="selectedPattern = 'optional_50'"
+               class="block cursor-pointer rounded-xl border p-3.5 transition-all"
+               :class="selectedPattern === 'optional_50' ? 'border-gold bg-gold/15 ring-1 ring-gold' : 'border-white/15 bg-white/[0.03] hover:border-white/30'">
+          <div class="flex items-start gap-3">
+            <input type="radio" name="_pattern_radio" value="optional_50" x-model="selectedPattern" class="mt-1 accent-amber-400">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs sm:text-sm font-bold text-white">50 Questions — Attempt Any 45/50</span>
+                <span class="text-[9px] font-extrabold uppercase bg-gold/20 text-gold border border-gold/30 px-1.5 py-0.5 rounded">200 Qs · 720M</span>
+              </div>
+              <p class="text-[11px] text-gray-300 mt-1 leading-relaxed">
+                <strong>Physics:</strong> 45 of 50 &nbsp;|&nbsp; <strong>Chemistry:</strong> 45 of 50 &nbsp;|&nbsp; <strong>Biology:</strong> 90 of 100<br>
+                Shows all 200 Qs — skip any 5 in Physics, 5 in Chemistry & 10 in Biology (180 evaluated for 720 Marks).
+              </p>
+            </div>
+          </div>
+        </label>
+
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" @click="patternModalOpen = false" class="btn-cute-soft !py-2.5 !px-3.5 !text-xs">
+            Cancel
+          </button>
+          <button type="submit" class="btn-cute !py-2.5 !px-5 !text-xs sm:!text-sm">
+            <span>Start Test</span>
+            <span>&rarr;</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </section>
+
+<script>
+  window.switchSeriesTab = function (tab) {
+    var pTests = document.getElementById('panel-series-tab-tests');
+    var pAtt = document.getElementById('panel-series-tab-attempts');
+    var bTests = document.getElementById('btn-series-tab-tests');
+    var bAtt = document.getElementById('btn-series-tab-attempts');
+    if (pTests && pAtt) {
+      if (tab === 'attempts') {
+        pTests.style.display = 'none';
+        pAtt.style.display = 'block';
+      } else {
+        pTests.style.display = 'grid';
+        pAtt.style.display = 'none';
+      }
+    }
+    if (bTests && bAtt) {
+      if (tab === 'attempts') {
+        bAtt.className = 'px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 bg-gold text-ink font-extrabold shadow-sm';
+        bTests.className = 'px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 text-gray-300 hover:text-white font-semibold';
+      } else {
+        bTests.className = 'px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 bg-gold text-ink font-extrabold shadow-sm';
+        bAtt.className = 'px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 text-gray-300 hover:text-white font-semibold';
+      }
+    }
+  };
+</script>
 {% endblock %}
