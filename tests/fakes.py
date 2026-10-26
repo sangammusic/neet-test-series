@@ -37,6 +37,12 @@ EMBED_FK = {
     ("orders", "plans"): ("plan_id", "plans"),
     ("orders", "profiles"): ("user_id", "profiles"),
     ("subscriptions", "plans"): ("plan_id", "plans"),
+    ("tests", "streams"): ("stream_id", "streams"),
+    ("test_attempts", "tests"): ("test_id", "tests"),
+    ("mock_test_questions", "mock_questions"): ("mock_question_id", "mock_questions"),
+    ("mock_questions", "subjects"): ("subject_id", "subjects"),
+    ("chapters", "subjects"): ("subject_id", "subjects"),
+    ("subjects", "streams"): ("stream_id", "streams"),
 }
 
 
