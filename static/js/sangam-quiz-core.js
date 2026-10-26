@@ -1,17 +1,13 @@
 /* =====================================================================
-   SANGAM QUIZ CORE
+   SANGAM QUIZ CORE v5.0
    ---------------------------------------------------------------------
-   Ek hi jagah par teen cheezein:
-
-   1. X-RAY  : ?debug=1 lagao to screen pe live HUD aayega — kaunsa
-               transition kitna laga, cache hit hua ya miss, clock zinda
-               hai ya nahi, main thread kab block hua.
-   2. CLOCK  : Pure page ka SINGLE timer registry. Chahe component do
-               baar init ho jaye, zombie interval possible hi nahi —
-               stopAll() har ek ko maar deta hai.
-   3. RENDER : Questions ko offscreen pehle se MathJax-typeset karke
-               cache karta hai. Next dabate hi ready HTML inject hota
-               hai — koi black flash nahi, koi re-typeset nahi.
+   1. X-RAY  : ?debug=1 live diagnostic HUD.
+   2. CLOCK  : Zombie-proof single timer registry with automatic cleanup.
+   3. RENDER : Offscreen MathJax prerender & cache with automatic
+               citation-artifact stripping ([span_0](start_span) etc.),
+               bare-LaTeX normalization, and post-DOM-injection fallback
+               typeset so equations, chemical formulas, and SVGs always
+               render cleanly without raw backslashes.
    ===================================================================== */
 
 window.SangamQuiz = (function () {
@@ -23,7 +19,7 @@ window.SangamQuiz = (function () {
   } catch (e) { DEBUG = false; }
 
   /* ===================================================================
-     1. X-RAY  —  CCTV + diagnostics
+     1. X-RAY  —  Diagnostics
      =================================================================== */
 
   var XRay = {
@@ -53,7 +49,6 @@ window.SangamQuiz = (function () {
       console.warn('[xray] ' + label, data === undefined ? '' : data);
     },
 
-    /* Kisi bhi async/sync block ka duration naapta hai */
     span: function (label, fn) {
       if (!this.enabled) return fn();
       var t0 = performance.now();
@@ -68,7 +63,6 @@ window.SangamQuiz = (function () {
       return out;
     },
 
-    /* Actual paint-complete time — black screen ka asli end point */
     afterPaint: function (cb) {
       requestAnimationFrame(function () {
         requestAnimationFrame(function () { cb(performance.now()); });
@@ -108,7 +102,6 @@ window.SangamQuiz = (function () {
 
     init: function () {
       if (!this.enabled) return;
-      // Long-task sensor: main thread 50ms+ block hua to pakdo
       try {
         var po = new PerformanceObserver(function (list) {
           list.getEntries().forEach(function (entry) {
@@ -120,7 +113,7 @@ window.SangamQuiz = (function () {
           });
         });
         po.observe({ entryTypes: ['longtask'] });
-      } catch (e) { /* browser support nahi hai, koi baat nahi */ }
+      } catch (e) {}
 
       this.set('status', 'armed');
       this.log('x-ray online. ?debug=1 active.');
@@ -143,10 +136,10 @@ window.SangamQuiz = (function () {
 
   Clock.prototype.start = function () {
     var self = this;
-    this.stop();               // restart hone par purana hamesha marta hai
+    this.stop();
     if (this._dead) return this;
     this._handle = setInterval(function () {
-      if (self._dead) { self.stop(); return; }   // self-destruct guard
+      if (self._dead) { self.stop(); return; }
       try { self._onTick(); } catch (e) { XRay.warn('clock tick error', e); }
     }, this._interval);
     XRay.set('clock', 'running (' + _clocks.length + ' registered)');
@@ -170,8 +163,6 @@ window.SangamQuiz = (function () {
     return new Clock(onTick, intervalMs);
   }
 
-  /* NUKE: page par jo bhi clock kabhi bana tha, sab marega.
-     Double-init se bacha hua zombie bhi yahin dafan hoga. */
   function stopAllClocks() {
     for (var i = 0; i < _clocks.length; i++) _clocks[i].kill();
     XRay.set('clock', 'STOPPED (' + _clocks.length + ' killed)');
@@ -184,8 +175,6 @@ window.SangamQuiz = (function () {
     return n;
   }
 
-  /* Sentinel: agar quiz finish ho chuka hai par koi clock abhi bhi
-     zinda hai, to debug mode me chillayega aur use maar dega. */
   function armClockSentinel(isFinishedFn) {
     var cleanChecks = 0;
     var handle = setInterval(function () {
@@ -199,26 +188,55 @@ window.SangamQuiz = (function () {
         cleanChecks = 0;
         return;
       }
-      // Do baar lagataar saaf mila — sentinel ka kaam khatam,
-      // khud bhi band ho jao (warna yeh khud ek leak ban jata).
       if (++cleanChecks >= 2) clearInterval(handle);
     }, 2000);
     window.addEventListener('pagehide', function () { clearInterval(handle); });
     return handle;
   }
 
-  /* Tab band / navigate — har haal me sab band */
   window.addEventListener('pagehide', stopAllClocks);
   window.addEventListener('beforeunload', stopAllClocks);
 
   /* ===================================================================
-     3. RENDERER  —  offscreen prerender + cache (black flash killer)
+     3. RENDERER  —  Text Sanitizer + Offscreen MathJax Prerender + Live Fallback
      =================================================================== */
 
-  var MATH_RE = /(\\\(|\\\[|\$\$|\$[^$]+\$)/;
+  var SPAN_ARTIFACT_RE = /\[span_\d+\]\((?:start_span|end_span)\)|\[cite_start\]|\[cite_end\]|\[cite:\s*[\d,\s\-]+\]/gi;
+  var MATH_DELIM_RE = /(\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
+  var BARE_LATEX_RE = /\\(frac\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|sqrt(?:\[[^\]]*\])?\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|overrightarrow\s*\{[^{}]+\}|vec\s*\{[^{}]+\}|hat\s*\{[^{}]+\}|bar\s*\{[^{}]+\}|text\s*\{[^{}]+\}|mathrm\s*\{[^{}]+\}|alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega|times|div|pm|mp|cdot|leq|geq|neq|approx|equiv|propto|infty|partial|nabla|int|sum|prod|rightarrow|leftarrow|leftrightarrow|Rightarrow|Leftarrow|Leftrightarrow|rightleftharpoons|uparrow|downarrow|circ|degree|angle|triangle|perp|parallel)(?:\s*[\^_]\s*(?:\{[^{}]+\}|[A-Za-z0-9+\-]+))*/g;
+
+  function sanitizeMathString(raw) {
+    if (raw == null) return '';
+    var s = String(raw);
+    if (!s) return '';
+
+    // 1. Strip AI citation / span markers
+    s = s.replace(SPAN_ARTIFACT_RE, '');
+
+    // 2. Fix double-escaped backslashes before delimiters and common LaTeX commands
+    s = s.replace(/\\\\([()\[\]])/g, '\\$1');
+    s = s.replace(/\\\\(frac|sqrt|times|div|pm|cdot|alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|omega|Delta|Omega|rightarrow|rightleftharpoons|leq|geq|neq|approx|infty|int|sum|vec|hat|mathrm|text)\b/g, '\\$1');
+
+    // 3. Wrap bare LaTeX commands that sit outside math delimiters into \( ... \)
+    if (s.indexOf('\\') !== -1) {
+      var parts = s.split(MATH_DELIM_RE);
+      for (var i = 0; i < parts.length; i++) {
+        // Odd indices are matched math delimiters; even indices are outside math mode
+        if (i % 2 === 0 && parts[i].indexOf('\\') !== -1) {
+          parts[i] = parts[i].replace(BARE_LATEX_RE, function (m) {
+            return '\\(' + m + '\\)';
+          });
+        }
+      }
+      s = parts.join('');
+    }
+    return s;
+  }
+
+  var NEEDS_MATH_RE = /(\\\(|\\\[|\$\$|\$[^$]+\$|\\frac|\\sqrt|\\times|\\alpha|\\beta|\\gamma|\\delta|\\theta|\\lambda|\\mu|\\pi|\\sigma|\\omega|\\rightarrow|\\rightleftharpoons)/;
 
   function needsMath(str) {
-    return typeof str === 'string' && MATH_RE.test(str);
+    return typeof str === 'string' && NEEDS_MATH_RE.test(str);
   }
 
   function mapNeedsMath(map) {
@@ -232,14 +250,22 @@ window.SangamQuiz = (function () {
     if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
       return window.MathJax.startup.promise;
     }
-    // MathJax abhi load ho raha hai — thoda wait, phir bhi na aaye to aage badho
     return new Promise(function (resolve) {
       var tries = 0;
       (function poll() {
         if (window.MathJax && window.MathJax.typesetPromise) return resolve();
-        if (++tries > 60) return resolve();          // ~3s baad haar maan lo
+        if (++tries > 80) return resolve();
         setTimeout(poll, 50);
       })();
+    });
+  }
+
+  function typesetElement(el) {
+    if (!el) return Promise.resolve();
+    return mathjaxReady().then(function () {
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        return window.MathJax.typesetPromise([el]).catch(function () {});
+      }
     });
   }
 
@@ -247,7 +273,7 @@ window.SangamQuiz = (function () {
     var host = null;
     var cache = Object.create(null);
     var inflight = Object.create(null);
-    var queue = Promise.resolve();      // MathJax ko serialize karna zaroori hai
+    var queue = Promise.resolve();
 
     function getHost() {
       if (host) return host;
@@ -267,7 +293,6 @@ window.SangamQuiz = (function () {
     function get(key) { return cache[key] || null; }
     function has(key) { return !!cache[key]; }
 
-    /* Ek question ka poora field-set offscreen typeset karke cache karo */
     function prepare(key, rawMap) {
       if (cache[key]) return Promise.resolve(cache[key]);
       if (inflight[key]) return inflight[key];
@@ -279,22 +304,23 @@ window.SangamQuiz = (function () {
 
         var wrap = document.createElement('div');
         var fields = [];
+        var cleanedMap = {};
 
         for (var f in rawMap) {
           if (!Object.prototype.hasOwnProperty.call(rawMap, f)) continue;
+          var cleaned = sanitizeMathString(rawMap[f]);
+          cleanedMap[f] = cleaned;
           var slot = document.createElement('div');
           slot.setAttribute('data-field', f);
-          slot.innerHTML = rawMap[f] == null ? '' : String(rawMap[f]);
+          slot.innerHTML = cleaned;
           wrap.appendChild(slot);
           fields.push(f);
         }
 
         getHost().appendChild(wrap);
 
-        /* Agar math hai hi nahi to MathJax ko bilkul mat chhedo.
-           Lekin wrap phir bhi DOM me gaya — iska fayda: browser ne
-           SVG parse kar liya aur <img> fetch shuru kar diya. Warm. */
-        var typesetStep = mapNeedsMath(rawMap)
+        var hasMathContent = mapNeedsMath(cleanedMap);
+        var typesetStep = hasMathContent
           ? mathjaxReady().then(function () {
               if (!(window.MathJax && window.MathJax.typesetPromise)) return null;
               return window.MathJax.typesetPromise([wrap]);
@@ -303,18 +329,21 @@ window.SangamQuiz = (function () {
 
         return typesetStep.then(function () {
           var out = {};
+          var mathReadyNow = !!(window.MathJax && window.MathJax.typesetPromise);
           for (var i = 0; i < fields.length; i++) {
             var node = wrap.querySelector('[data-field="' + fields[i] + '"]');
             out[fields[i]] = node ? node.innerHTML : '';
           }
-          cache[key] = out;
+          // Only cache permanently if there was no math OR MathJax had finished loading
+          if (!hasMathContent || mathReadyNow) {
+            cache[key] = out;
+          }
 
-          /* MathJax ka internal reference chhod do, phir node hatao */
           try {
             if (window.MathJax && window.MathJax.typesetClear) {
               window.MathJax.typesetClear([wrap]);
             }
-          } catch (e) { /* ignore */ }
+          } catch (e) {}
           if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
 
           XRay.stats.lastPrepareMs = Math.round(performance.now() - t0);
@@ -330,7 +359,6 @@ window.SangamQuiz = (function () {
       return job;
     }
 
-    /* Idle time me aage ke questions warm kar do */
     function warm(items) {
       if (!items || !items.length) return;
       var idle = window.requestIdleCallback || function (cb) { return setTimeout(cb, 120); };
@@ -357,13 +385,11 @@ window.SangamQuiz = (function () {
       prepare: prepare,
       warm: warm,
       stats: stats,
-      needsMath: needsMath
+      needsMath: needsMath,
+      sanitize: sanitizeMathString,
+      typesetElement: typesetElement
     };
   }
-
-  /* ===================================================================
-     Public API
-     =================================================================== */
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () { XRay.init(); });
@@ -378,6 +404,8 @@ window.SangamQuiz = (function () {
     stopAllClocks: stopAllClocks,
     liveClockCount: liveClockCount,
     armClockSentinel: armClockSentinel,
-    createRenderer: createRenderer
+    createRenderer: createRenderer,
+    sanitizeMathString: sanitizeMathString,
+    typesetElement: typesetElement
   };
 })();
