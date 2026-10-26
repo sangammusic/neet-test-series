@@ -24,7 +24,8 @@ _SPAN_ARTIFACT_RE = re.compile(
     r"\[span_\d+\]\((?:start_span|end_span)\)"
     r"|\[cite_start\]"
     r"|\[cite_end\]"
-    r"|\[cite:\s*[\d,\s\-]+\]",
+    r"|\[cite:\s*[\d,\s\-]+\]"
+    r"|\[(?:UPLOAD_IMAGE_HERE|IMAGE_HERE|INSERT_IMAGE_HERE)[^\]]*\]",
     re.IGNORECASE,
 )
 

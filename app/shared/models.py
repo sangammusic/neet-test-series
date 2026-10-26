@@ -1298,40 +1298,23 @@ def delete_all_attempts_for_user(user_id):
 
 def get_attempt_time_breakdown(attempt_id, test_id):
     try:
-        order_res = (
-            supabase_admin.table("mock_test_questions")
-            .select("mock_question_id, question_order")
-            .eq("test_id", test_id)
-            .order("question_order")
-            .execute()
-        )
-        order_by_qid = {row["mock_question_id"]: row.get("question_order", 0) for row in order_res.data} if order_res.data else {}
-
-        questions_res = None
-        if order_by_qid:
-            questions_res = (
-                supabase_admin.table("mock_questions")
-                .select("id, question_text, subjects(name)")
-                .in_("id", list(order_by_qid.keys()))
-                .execute()
-            )
-        
+        grouped = get_mock_questions_for_test(test_id) or {}
+        order_by_qid = {}
         question_lookup = {}
-        if questions_res and questions_res.data:
-            for q in questions_res.data:
-                subj_name = q["subjects"]["name"] if q.get("subjects") else "General"
-                question_lookup[q["id"]] = {
+        idx_counter = 0
+        for subj_name, qs in grouped.items():
+            for q in qs:
+                qid = q.get("id")
+                if not qid:
+                    continue
+                idx_counter += 1
+                order_by_qid[qid] = q.get("question_order") if q.get("question_order") is not None else idx_counter
+                question_lookup[qid] = {
                     "question_text": clean_question_text(q.get("question_text") or ""),
                     "subject_name": subj_name,
                 }
 
-        answers_res = (
-            supabase_admin.table("attempt_answers")
-            .select("mock_question_id, selected_option, is_correct, time_taken_sec")
-            .eq("attempt_id", attempt_id)
-            .execute()
-        )
-        answers_by_qid = {row["mock_question_id"]: row for row in answers_res.data if row.get("mock_question_id")} if answers_res.data else {}
+        answers_by_qid = get_attempt_answers_map(attempt_id)
 
         by_subject = {}
         by_question = []
