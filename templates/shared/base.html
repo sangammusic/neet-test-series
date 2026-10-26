@@ -6,17 +6,23 @@
     <title>{% block title %}STUDY SANGAM HUB{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo-mark.png') }}">
 
-    <!-- Instant Theme Engine (Dark Mode & White Mode without FOUC) + Solid SVG Logo Fallback -->
+    <!-- Instant Theme Engine (Dark Mode & White Mode without FOUC) + Sangam Crest SVG Logo Fallback -->
     <script>
         (function () {
             var SVG_LOGO = "data:image/svg+xml;utf8," + encodeURIComponent(
                 '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">' +
-                '<rect width="114" height="114" x="3" y="3" rx="26" fill="#0D1326" stroke="#F59E0B" stroke-width="4"/>' +
-                '<path d="M60 20L18 39L60 58L102 39L60 20Z" fill="#FACC15"/>' +
-                '<path d="M94 43V65" stroke="#FDE047" stroke-width="4.5" stroke-linecap="round"/>' +
-                '<circle cx="94" cy="68" r="4.5" fill="#F59E0B"/>' +
-                '<path d="M28 62C38 59 50 62 60 68C70 62 82 59 92 62V90C82 87 70 90 60 96C50 90 38 87 28 90V62Z" fill="#38BDF8"/>' +
-                '<path d="M60 68V96" stroke="#0D1326" stroke-width="3.5" stroke-linecap="round"/>' +
+                '<defs>' +
+                '<linearGradient id="sgBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#09111E"/><stop offset="100%" stop-color="#0D1B2E"/></linearGradient>' +
+                '<linearGradient id="sgTeal" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#0284C7"/><stop offset="50%" stop-color="#06B6D4"/><stop offset="100%" stop-color="#67E8F9"/></linearGradient>' +
+                '<linearGradient id="sgGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FDE047"/><stop offset="100%" stop-color="#D4A017"/></linearGradient>' +
+                '</defs>' +
+                '<rect width="114" height="114" x="3" y="3" rx="24" fill="url(#sgBg)" stroke="url(#sgGold)" stroke-width="3.5"/>' +
+                '<path d="M60 15L74 36L60 56L46 36Z" fill="url(#sgGold)" opacity="0.22"/>' +
+                '<polygon points="60,21 63.5,31 74,34.5 63.5,38 60,48 56.5,38 46,34.5 56.5,31" fill="url(#sgGold)"/>' +
+                '<path d="M24 52C38 48 50 53 58 63V92C48 84 36 81 24 85Z" fill="#1E3A8A" stroke="#60A5FA" stroke-width="2"/>' +
+                '<path d="M96 52C82 48 70 53 62 63V92C72 84 84 81 96 85Z" fill="#0F766E" stroke="#2DD4BF" stroke-width="2"/>' +
+                '<path d="M28 88C42 74 56 54 68 25C74 48 64 74 44 94C38 92 32 90 28 88Z" fill="url(#sgTeal)"/>' +
+                '<polygon points="60,72 67,85 60,98 53,85" fill="#38BDF8" stroke="#BAE6FD" stroke-width="1.5"/>' +
                 '</svg>'
             );
             window.SANGAM_LOGO_URI = SVG_LOGO;
@@ -108,12 +114,16 @@
         }
     </script>
 
-    <!-- MathJax for LaTeX -->
+    <!-- MathJax for LaTeX & Chemical Equations -->
     <script>
         window.MathJax = {
             tex: {
                 inlineMath: [['\\(', '\\)'], ['$', '$']],
-                displayMath: [['\\[', '\\]'], ['$$', '$$']]
+                displayMath: [['\\[', '\\]'], ['$$', '$$']],
+                processEscapes: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
             }
         };
     </script>
@@ -287,7 +297,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
 
     <!-- =========================================================================
-         MASTER THEME & CUTE PW-STYLE COMPONENT ENGINE (Dark Mode & White Mode)
+         MASTER THEME & COMPONENT ENGINE (Dark Mode & White Mode)
          ========================================================================= -->
     <style id="sangam-core-styles">
         [x-cloak] { display: none !important; }
@@ -297,27 +307,26 @@
         main > .sangam-admin-topnav { display: none !important; }
 
         /* -------------------------------------------------------------------
-           1. STUDY DESK BACKGROUND VIBE (Dark Mode vs White Mode)
-              In White Mode, the warm wooden study desk + open notebook photo
-              stays clearly visible (like 17913.jpg) with slightly dimmed
-              brightness so cute soft-black buttons pop!
+           1. STUDY DESK ILLUSTRATION BACKGROUND (Person writing on notebook with pen & bread)
+              Balanced contrast so the illustration is clearly visible in BOTH
+              Dark Mode and White Mode without being crushed to pitch black!
            ------------------------------------------------------------------- */
         html[data-theme="dark"] body {
-            background-color: #090b10 !important;
+            background-color: #0b0f17 !important;
             color: #F8FAFC !important;
         }
         html[data-theme="dark"] .sangam-bg-base {
-            background-color: #090b10;
+            background-color: #0b0f17;
         }
         html[data-theme="dark"] .sangam-bg-photo {
-            opacity: 0.24;
-            filter: brightness(0.44) contrast(1.06) saturate(0.88);
+            opacity: 0.56 !important;
+            filter: brightness(0.74) contrast(1.06) saturate(0.95) !important;
         }
         html[data-theme="dark"] .sangam-bg-veil {
-            background: radial-gradient(circle at 50% 18%, rgba(13, 17, 26, 0.70) 0%, rgba(9, 11, 16, 0.88) 70%, rgba(9, 11, 16, 0.95) 100%);
+            background: linear-gradient(180deg, rgba(10, 14, 22, 0.55) 0%, rgba(10, 14, 22, 0.45) 50%, rgba(10, 14, 22, 0.65) 100%) !important;
         }
 
-        /* WHITE MODE: Keep study desk & notebook photo visible with slightly dimmed brightness! */
+        /* WHITE MODE: Study desk & notebook photo visible with balanced contrast */
         html[data-theme="light"] body {
             background-color: #1c1814 !important;
             color: #0F172A !important;
@@ -327,14 +336,14 @@
         }
         html[data-theme="light"] .sangam-bg-photo {
             opacity: 1 !important;
-            filter: brightness(0.80) contrast(1.03) saturate(0.95) !important;
+            filter: brightness(0.82) contrast(1.03) saturate(0.96) !important;
         }
         html[data-theme="light"] .sangam-bg-veil {
-            background: linear-gradient(180deg, rgba(15, 20, 30, 0.28) 0%, rgba(15, 20, 30, 0.18) 45%, rgba(15, 20, 30, 0.28) 100%) !important;
+            background: linear-gradient(180deg, rgba(15, 20, 30, 0.26) 0%, rgba(15, 20, 30, 0.16) 45%, rgba(15, 20, 30, 0.26) 100%) !important;
         }
 
         /* -------------------------------------------------------------------
-           2. CUTE COMPACT PW-STYLE TILES (.pw-tile & .sangam-card)
+           2. COMPACT TILES (.pw-tile & .sangam-card)
            ------------------------------------------------------------------- */
         .pw-tile, .sangam-card {
             border-radius: 0.85rem;
@@ -342,8 +351,8 @@
         }
         html[data-theme="dark"] .pw-tile,
         html[data-theme="dark"] .sangam-card {
-            background: rgba(16, 20, 30, 0.86) !important;
-            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+            background: rgba(15, 20, 30, 0.84) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
             box-shadow: 0 8px 22px -6px rgba(0, 0, 0, 0.55);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
@@ -355,10 +364,10 @@
             transform: translateY(-1.5px);
         }
 
-        /* WHITE MODE CARDS: Translucent glass over the study desk photo so background stays visible */
+        /* WHITE MODE CARDS: Translucent glass over the study desk photo */
         html[data-theme="light"] .pw-tile,
         html[data-theme="light"] .sangam-card {
-            background: rgba(255, 255, 255, 0.66) !important;
+            background: rgba(255, 255, 255, 0.72) !important;
             border: 1px solid rgba(15, 23, 42, 0.18) !important;
             box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.16);
             backdrop-filter: blur(10px);
@@ -367,17 +376,14 @@
         }
         html[data-theme="light"] a.pw-tile:hover,
         html[data-theme="light"] button.pw-tile:hover {
-            background: rgba(255, 255, 255, 0.78) !important;
+            background: rgba(255, 255, 255, 0.84) !important;
             border-color: #141824 !important;
             box-shadow: 0 10px 24px -4px rgba(0, 0, 0, 0.22);
             transform: translateY(-1.5px);
         }
 
         /* -------------------------------------------------------------------
-           3. CUTE COMPACT BUTTONS (.btn-cute & .btn-cute-soft):
-              - Dark Mode: Crisp compact buttons on Dark background
-              - White Mode: Cute soft-black buttons (#141824) with crisp white
-                text so every button is 100% visible over the desk/notebook!
+           3. COMPACT BUTTONS (.btn-cute & .btn-cute-soft)
            ------------------------------------------------------------------- */
         .btn-cute, .btn-cute-soft {
             display: inline-flex;
@@ -385,7 +391,7 @@
             justify-content: center;
             gap: 0.3rem;
             padding: 0.36rem 0.72rem;
-            font-size: 0.7rem;
+            font-size: 0.72rem;
             line-height: 1.15;
             font-weight: 800;
             border-radius: 0.55rem;
@@ -426,7 +432,7 @@
             color: #090D16 !important;
         }
 
-        /* WHITE MODE BUTTONS: Cute Soft-Black Buttons (#141824) with White Text everywhere! */
+        /* WHITE MODE BUTTONS */
         html[data-theme="light"] .btn-cute,
         html[data-theme="light"] .btn-cute-soft {
             background-color: #141824 !important;
@@ -446,7 +452,7 @@
         }
 
         /* -------------------------------------------------------------------
-           4. CUTE THEME SWITCH PILL (.sangam-theme-switch)
+           4. THEME SWITCH PILL (.sangam-theme-switch)
            ------------------------------------------------------------------- */
         .sangam-theme-switch {
             display: inline-flex;
@@ -542,7 +548,7 @@
         }
 
         /* -------------------------------------------------------------------
-           5. WHITE MODE TEXT, NAVBAR, RUNNER & ADMIN CONTRAST
+           5. WHITE & DARK MODE TEXT, NAVBAR, RUNNER & ADMIN CONTRAST
            ------------------------------------------------------------------- */
         html[data-theme="light"] .sangam-topnav,
         html[data-theme="light"] .sangam-admin-topnav,
@@ -560,7 +566,6 @@
         html[data-theme="light"] .sangam-card .text-white {
             color: #0F172A !important;
         }
-        /* Section headings sitting directly over the study desk photo in White Mode */
         html[data-theme="light"] .sangam-sec-title {
             color: #FFFFFF !important;
             text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.95);
@@ -602,22 +607,29 @@
             border-color: #64748B !important;
         }
 
-        /* Quiz & Test Runners in White Mode */
+        /* Quiz & Test Runners in Dark Mode & White Mode:
+           Translucent backdrop so the study desk illustration remains subtly visible in both modes! */
+        html[data-theme="dark"] #practice-runner,
+        html[data-theme="dark"] #nta-runner {
+            background-color: rgba(10, 14, 22, 0.72) !important;
+            color: #F8FAFC !important;
+        }
         html[data-theme="light"] #practice-runner,
         html[data-theme="light"] #nta-runner {
-            background-color: rgba(248, 250, 252, 0.90) !important;
+            background-color: rgba(248, 250, 252, 0.76) !important;
             color: #0F172A !important;
         }
-        html[data-theme="light"] #practice-runner > div:first-child,
-        html[data-theme="light"] #nta-runner > div:first-child,
-        html[data-theme="light"] #practice-runner .bg-\[\#0f0f0f\],
-        html[data-theme="light"] #nta-runner .bg-\[\#0f0f0f\] {
-            background-color: rgba(255, 255, 255, 0.94) !important;
+        html[data-theme="light"] #practice-runner > header,
+        html[data-theme="light"] #nta-runner > header,
+        html[data-theme="light"] #practice-runner .nta-panel,
+        html[data-theme="light"] #nta-runner .nta-panel {
+            background-color: rgba(255, 255, 255, 0.92) !important;
             border-color: #CBD5E1 !important;
+            color: #0F172A !important;
         }
         html[data-theme="light"] #practice-runner .q-card,
         html[data-theme="light"] #nta-runner .q-card {
-            background-color: #FFFFFF !important;
+            background-color: rgba(255, 255, 255, 0.95) !important;
             border-color: #CBD5E1 !important;
             color: #0F172A !important;
             box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08) !important;
@@ -628,15 +640,22 @@
         html[data-theme="light"] #nta-runner .text-white,
         html[data-theme="light"] #practice-runner .text-gray-100,
         html[data-theme="light"] #nta-runner .text-gray-100,
+        html[data-theme="light"] #practice-runner .text-gray-200,
+        html[data-theme="light"] #nta-runner .text-gray-200,
         html[data-theme="light"] #practice-runner .text-gray-300,
         html[data-theme="light"] #nta-runner .text-gray-300 {
             color: #0F172A !important;
         }
-        html[data-theme="light"] #practice-runner .bg-\[\#1a1a1a\],
-        html[data-theme="light"] #nta-runner .bg-\[\#1a1a1a\] {
+        html[data-theme="light"] #practice-runner .nta-opt-unselected,
+        html[data-theme="light"] #nta-runner .nta-opt-unselected {
             background-color: #F8FAFC !important;
             color: #0F172A !important;
             border-color: #CBD5E1 !important;
+        }
+        html[data-theme="light"] #practice-runner .nta-opt-unselected:hover,
+        html[data-theme="light"] #nta-runner .nta-opt-unselected:hover {
+            background-color: #F1F5F9 !important;
+            border-color: #94A3B8 !important;
         }
 
         /* Admin Subpages in Dark Mode */
@@ -673,21 +692,27 @@
 
 <body class="{% if request.path.startswith('/admin') %}admin-body{% endif %} antialiased relative min-h-screen flex flex-col font-body">
 
-    <!-- MASTER INLINE SVG LOGO SYMBOL (Uses position:absolute instead of display:none so Chrome renders all fills!) -->
+    <!-- MASTER INLINE SVG LOGO SYMBOL (Matches the Sangam Study Crystal Lotus-Book Crest) -->
     <svg style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none" aria-hidden="true">
         <defs>
             <symbol id="sangam-logo-crest" viewBox="0 0 120 120">
-                <rect width="114" height="114" x="3" y="3" rx="26" fill="#0D1326" stroke="#F59E0B" stroke-width="4"/>
-                <path d="M60 20L18 39L60 58L102 39L60 20Z" fill="#FACC15"/>
-                <path d="M94 43V65" stroke="#FDE047" stroke-width="4.5" stroke-linecap="round"/>
-                <circle cx="94" cy="68" r="4.5" fill="#F59E0B"/>
-                <path d="M28 62C38 59 50 62 60 68C70 62 82 59 92 62V90C82 87 70 90 60 96C50 90 38 87 28 90V62Z" fill="#38BDF8"/>
-                <path d="M60 68V96" stroke="#0D1326" stroke-width="3.5" stroke-linecap="round"/>
+                <defs>
+                    <linearGradient id="sgSymBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#09111E"/><stop offset="100%" stop-color="#0D1B2E"/></linearGradient>
+                    <linearGradient id="sgSymTeal" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#0284C7"/><stop offset="50%" stop-color="#06B6D4"/><stop offset="100%" stop-color="#67E8F9"/></linearGradient>
+                    <linearGradient id="sgSymGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FDE047"/><stop offset="100%" stop-color="#D4A017"/></linearGradient>
+                </defs>
+                <rect width="114" height="114" x="3" y="3" rx="24" fill="url(#sgSymBg)" stroke="url(#sgSymGold)" stroke-width="3.5"/>
+                <path d="M60 15L74 36L60 56L46 36Z" fill="url(#sgSymGold)" opacity="0.22"/>
+                <polygon points="60,21 63.5,31 74,34.5 63.5,38 60,48 56.5,38 46,34.5 56.5,31" fill="url(#sgSymGold)"/>
+                <path d="M24 52C38 48 50 53 58 63V92C48 84 36 81 24 85Z" fill="#1E3A8A" stroke="#60A5FA" stroke-width="2"/>
+                <path d="M96 52C82 48 70 53 62 63V92C72 84 84 81 96 85Z" fill="#0F766E" stroke="#2DD4BF" stroke-width="2"/>
+                <path d="M28 88C42 74 56 54 68 25C74 48 64 74 44 94C38 92 32 90 28 88Z" fill="url(#sgSymTeal)"/>
+                <polygon points="60,72 67,85 60,98 53,85" fill="#38BDF8" stroke="#BAE6FD" stroke-width="1.5"/>
             </symbol>
         </defs>
     </svg>
 
-    <!-- BALANCED STUDY DESK BACKGROUND (Visible in Both Dark Mode & White Mode!) -->
+    <!-- BALANCED STUDY DESK BACKGROUND (Clearly Visible in Both Dark Mode & White Mode!) -->
     <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none select-none" aria-hidden="true">
         <div class="absolute inset-0 sangam-bg-base"></div>
         <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1456324504439-367cee3b3c32?q=80&w=1600&auto=format&fit=crop')] bg-cover bg-center sangam-bg-photo"></div>
