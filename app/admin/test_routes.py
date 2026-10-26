@@ -1,4 +1,4 @@
-# STUDY SANGAM HUB v5.0 — Mock Test Series Admin (720-Mark Default, Structured Syllabus, Strict Validation & Clean Cache)
+# STUDY SANGAM HUB v5.0 — Mock Test Series Admin (720-Mark Default, Structured Syllabus, Zero Silent Auto-Deletion)
 import json
 import logging
 import re
@@ -133,7 +133,18 @@ def _get_uploaded_subject_counts(test_id):
             elif "bio" in s_name or "botan" in s_name or "zool" in s_name:
                 counts["biology"] += 1
     except Exception as e:
-        logger.warning(f"Error counting uploaded questions for test {test_id}: {e}")
+        logger.warning(f"Error counting uploaded questions with join for test {test_id}: {e}")
+        try:
+            basic = (
+                supabase_admin.table("mock_test_questions")
+                .select("mock_question_id")
+                .eq("test_id", test_id)
+                .execute()
+                .data or []
+            )
+            counts["total"] = len(basic)
+        except Exception:
+            pass
     return counts
 
 
@@ -406,7 +417,6 @@ def series_tests(series_id):
         except (TypeError, ValueError):
             selected_total_marks = 720
 
-        # Build structured subject-wise syllabus from Physics / Chemistry / Biology fields or description
         structured_desc = format_syllabus_description(
             general_desc=request.form.get("description", ""),
             physics_Syl=request.form.get("syllabus_physics", ""),
@@ -461,16 +471,8 @@ def series_tests(series_id):
     )
 
     tests = []
-    discarded_empty = 0
     for t in raw_tests:
         q_counts = _get_uploaded_subject_counts(t["id"])
-        if q_counts["total"] <= 0:
-            try:
-                supabase_admin.table("tests").delete().eq("id", t["id"]).execute()
-                discarded_empty += 1
-            except Exception:
-                pass
-            continue
         t_copy = dict(t)
         t_copy["question_count"] = q_counts["total"]
         t_copy["subject_counts"] = q_counts
@@ -479,11 +481,8 @@ def series_tests(series_id):
             stored_total_marks=t_copy.get("total_marks"),
         )
         t_copy["total_marks"] = nta_meta["effective_total_marks"]
-        t_copy["attemptable_questions"] = nta_meta["total_attemptable"]
+        t_copy["attemptable_questions"] = nta_meta["total_attemptable"] or (int(t_copy["total_marks"] or 720) // 4)
         tests.append(t_copy)
-
-    if discarded_empty > 0:
-        _invalidate_test_questions_cache(series_id=series_id)
 
     return render_template("admin_tests.html", series=series_data, streams=streams, categories=categories, tests=tests)
 
@@ -516,8 +515,8 @@ def tests_upload(test_id):
 @admin_required
 def tests_discard_empty(test_id):
     """
-    If an Admin cancels or leaves the Upload screen when 0 questions were uploaded,
-    deletes the empty test shell so it never appears in the Test Series folder.
+    If an Admin explicitly cancels the Upload screen when 0 questions were uploaded,
+    deletes the empty test shell so it never clutters the Test Series folder.
     """
     test = supabase_admin.table("tests").select("id, series_id").eq("id", test_id).maybe_single().execute().data
     series_id = test.get("series_id") if test else None
@@ -595,7 +594,6 @@ def tests_manage(test_id):
         flash("Please upload at least 1 question chunk before opening the Question Manager.", "error")
         return redirect(url_for("admin.tests_upload", test_id=test_id))
 
-    # Check if configured total_marks (e.g. 720 for 180 Qs) matches actual uploaded count
     counts = _get_uploaded_subject_counts(test_id)
     configured_marks = int(test.get("total_marks") or 720)
     expected_qs = configured_marks // 4 if configured_marks > 0 else 180
@@ -745,7 +743,6 @@ def tests_bulk_map_questions(test_id):
             logger.error(f"Test Mapping Error: {exc}")
             return jsonify({"ok": False, "error": f"Mapping questions to test failed: {str(exc)[:140]}"}), 500
 
-        # Auto-sync NTA total_marks when upload reaches standard count or when unset
         try:
             counts = _get_uploaded_subject_counts(test_id)
             nta_meta = compute_nta_test_meta(
@@ -963,7 +960,6 @@ def tests_delete(test_id):
                 except Exception as e:
                     logger.error(f"Bucket batch delete raised an exception: {e}")
 
-        # Clean up any attempts and attempt_answers referencing this deleted test so stale references never persist
         try:
             att_rows = supabase_admin.table("test_attempts").select("id").eq("test_id", test_id).execute().data or []
             att_ids = [r["id"] for r in att_rows if r.get("id")]
