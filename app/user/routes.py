@@ -1,4 +1,4 @@
-# STUDY SANGAM HUB v4.0 — User Routes (NTA Optional Pattern Meta, Empty-Test Guard & Fast Navigation)
+# STUDY SANGAM HUB v5.0 — User Routes (Contextual My Attempts, NTA 180Q/720M Pattern, Clean Navigation)
 import re
 from flask import render_template, render_template_string, request, redirect, url_for, session, jsonify, abort, flash
 from jinja2 import TemplateNotFound
@@ -13,7 +13,8 @@ from app.shared.models import (
     get_series_for_stream, get_series_by_id, get_tests_for_series,
     user_has_access_to_test, get_mock_questions_for_test,
     get_mock_question_ids_for_test, create_test_attempt, get_attempt_by_id,
-    submit_test_attempt, get_attempts_for_user, get_attempt_time_breakdown,
+    submit_test_attempt, get_attempts_for_user, get_series_attempts_for_user,
+    get_chapter_practice_attempts_for_user, get_attempt_time_breakdown,
     save_attempt_progress, bulk_save_attempt_progress, get_attempt_answers_map,
     get_mock_questions_for_test_review, delete_all_attempts_for_user,
     PRACTICE_ATTEMPT_KINDS, get_practice_quiz_questions, get_latest_practice_attempt,
@@ -33,7 +34,7 @@ from app.shared.access import (
 from app.shared.utils import is_logged_in, current_user_id
 
 
-_BOOKS_MATERIALS_FALLBACK_HTML = '{% extends "shared/base.html" %}\n{% block title %}Books & Premium Material — {{ stream.name }}{% endblock %}\n{% block content %}\n<section class="max-w-xl mx-auto px-4 pt-8 pb-20 relative z-10">\n  <div class="mb-5 flex items-center justify-between gap-3">\n    <a href="{{ url_for(\'user.stream_dashboard\', slug=stream.slug) }}" data-back-url="{{ url_for(\'user.stream_dashboard\', slug=stream.slug) }}" class="btn-cute-soft">&larr; Back to Workspace</a>\n    <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded">{{ stream.name }}</span>\n  </div>\n  <div class="pw-tile p-6 sm:p-8 text-center rounded-2xl">\n    <h1 class="font-display text-xl sm:text-2xl font-bold text-white mb-2">Join Our Telegram Channel for Premium Books &amp; Material</h1>\n    <p class="text-xs sm:text-sm text-gray-300 max-w-md mx-auto leading-relaxed mb-6">All {{ stream.name }} reference books, highlighted NCERT PDFs, short notes, mindmaps, and study modules are uploaded directly on our official Telegram channel.</p>\n    <a href="https://t.me/neetjeesangam" target="_blank" rel="noopener noreferrer" class="btn-cute !px-6 !py-2.5">Join Our Telegram Channel &rarr;</a>\n  </div>\n</section>\n{% endblock %}\n'
+_BOOKS_MATERIALS_FALLBACK_HTML = '{% extends "shared/base.html" %}\n{% block title %}Books & Study Material — {{ stream.name }}{% endblock %}\n{% block content %}\n<section class="max-w-xl mx-auto px-4 pt-8 pb-20 relative z-10">\n  <div class="mb-5 flex items-center justify-between gap-3">\n    <a href="{{ url_for(\'user.stream_dashboard\', slug=stream.slug) }}" data-back-url="{{ url_for(\'user.stream_dashboard\', slug=stream.slug) }}" class="btn-cute-soft">&larr; Back to Dashboard</a>\n    <span class="text-[10px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded">{{ stream.name }}</span>\n  </div>\n  <div class="pw-tile p-6 sm:p-8 text-center rounded-2xl">\n    <h1 class="font-display text-xl sm:text-2xl font-bold text-white mb-2">Join Our Telegram Channel for Books &amp; Study Material</h1>\n    <p class="text-xs sm:text-sm text-gray-300 max-w-md mx-auto leading-relaxed mb-6">All {{ stream.name }} reference books, highlighted NCERT PDFs, short notes, mindmaps, and study modules are uploaded directly on our official Telegram channel.</p>\n    <a href="https://t.me/neetjeesangam" target="_blank" rel="noopener noreferrer" class="btn-cute !px-6 !py-2.5">Join Our Telegram Channel &rarr;</a>\n  </div>\n</section>\n{% endblock %}\n'
 
 
 def _resolve_active_stream_slug(existing):
@@ -161,7 +162,7 @@ def my_dashboard():
 
 
 # ==========================================
-# MENU 1: CHAPTER-WISE MCQ/PYQ PRACTICE
+# MENU 1: CHAPTER-WISE MCQ/PYQ PRACTICE (WITH CONTEXTUAL MY ATTEMPTS)
 # ==========================================
 
 def _chapter_matches_stream(chapter, stream):
@@ -208,7 +209,13 @@ def practice_chapter_detail(slug, chapter_id):
         abort(404)
     if not _chapter_matches_stream(chapter, stream):
         return redirect(url_for("user.practice_subjects", slug=stream["slug"]))
-    return render_template("practice_chapter_detail.html", stream=stream, chapter=chapter)
+    chapter_attempts = get_chapter_practice_attempts_for_user(current_user_id(), chapter_id)
+    return render_template(
+        "practice_chapter_detail.html",
+        stream=stream,
+        chapter=chapter,
+        chapter_attempts=chapter_attempts,
+    )
 
 
 @user_bp.route("/streams/<slug>/practice/chapter/<chapter_id>/<mode>")
@@ -253,7 +260,25 @@ def practice_sets(slug, chapter_id, mode, category, folder):
     if not _chapter_matches_stream(chapter, stream):
         return redirect(url_for("user.practice_subjects", slug=stream["slug"]))
     sets = get_practice_sets_for_folder(chapter_id, mode, category, folder)
-    return render_template("practice_sets.html", stream=stream, chapter=chapter, mode=mode, category=category, folder=folder, sets=sets)
+    folder_attempts = get_chapter_practice_attempts_for_user(
+        current_user_id(), chapter_id, mode=mode, category=category, folder_name=folder
+    )
+    attempts_by_set = {}
+    for a in folder_attempts:
+        sn = a.get("set_name")
+        if sn and sn not in attempts_by_set:
+            attempts_by_set[sn] = a
+    return render_template(
+        "practice_sets.html",
+        stream=stream,
+        chapter=chapter,
+        mode=mode,
+        category=category,
+        folder=folder,
+        sets=sets,
+        folder_attempts=folder_attempts,
+        attempts_by_set=attempts_by_set,
+    )
 
 
 _PRACTICE_MODES = ("mcq", "pyq")
@@ -317,7 +342,7 @@ def practice_overview(slug, chapter_id, mode, category, folder, set_name):
         return redirect(url_for("auth.login"))
 
     stream, chapter = _practice_ctx(slug, chapter_id, mode)
-    questions = get_practice_quiz_questions(chapter_id, mode, category, folder, set_name, columns="id, is_premium, marks")
+    questions = get_practice_quiz_questions(chapter_id, mode, category, folder, set_name, columns="id, is_premium, marks, negative_marks")
 
     if not questions:
         abort(404)
@@ -326,6 +351,8 @@ def practice_overview(slug, chapter_id, mode, category, folder, set_name):
     locked = is_premium and not user_has_premium(current_user_id())
     total_questions = len(questions)
     total_marks = sum((q.get("marks") if q.get("marks") is not None else 4) for q in questions)
+    sample_marks = questions[0].get("marks") if questions[0].get("marks") is not None else 4
+    sample_neg = questions[0].get("negative_marks") if questions[0].get("negative_marks") is not None else 1
 
     attempt = get_latest_practice_attempt(current_user_id(), chapter_id, mode, category, folder, set_name)
     if attempt is None:
@@ -342,6 +369,7 @@ def practice_overview(slug, chapter_id, mode, category, folder, set_name):
     return render_template(
         "practice_overview.html", stream=stream, chapter=chapter, mode=mode, category=category,
         folder=folder, set_name=set_name, total_questions=total_questions, total_marks=total_marks,
+        marks_per_q=sample_marks, neg_marks=sample_neg,
         is_premium=is_premium, locked=locked, attempt=attempt, attempt_state=attempt_state,
     )
 
@@ -558,7 +586,7 @@ def practice_analyse_view(slug, chapter_id, mode, category, folder, set_name, vi
 
 
 # ==========================================
-# MENU 2: MOCK TEST SERIES (FAST CACHED + PER-SERIES FREE/PAID + NTA PATTERN)
+# MENU 2: MOCK TEST SERIES (WITH FOLDER-SCOPED MY ATTEMPTS & 720-MARK NTA ENGINE)
 # ==========================================
 
 @user_bp.route("/streams/<slug>/tests")
@@ -585,9 +613,29 @@ def series_tests(slug, series_id):
     if not raw_series:
         abort(404)
 
-    series = enrich_series_list([raw_series], current_user_id())[0]
+    uid = current_user_id()
+    series = enrich_series_list([raw_series], uid)[0]
     tests = get_tests_for_series(series_id, stream["id"])
-    return render_template("user_series_tests.html", stream=stream, series=series, tests=tests)
+
+    # Fetch ONLY this logged-in user's attempts for tests belonging to THIS series folder
+    series_attempts = get_series_attempts_for_user(uid, series_id, tests_in_series=tests)
+    latest_attempt_by_tid = {}
+    for a in series_attempts:
+        tid = a.get("test_id")
+        if tid and tid not in latest_attempt_by_tid:
+            latest_attempt_by_tid[tid] = a
+
+    active_tab = "attempts" if request.args.get("tab") == "attempts" else "tests"
+
+    return render_template(
+        "user_series_tests.html",
+        stream=stream,
+        series=series,
+        tests=tests,
+        series_attempts=series_attempts,
+        latest_attempt_by_tid=latest_attempt_by_tid,
+        active_tab=active_tab,
+    )
 
 
 @user_bp.route("/streams/<slug>/tests/<test_id>")
@@ -595,9 +643,12 @@ def test_overview(slug, test_id):
     if not is_logged_in():
         return redirect(url_for("auth.login"))
     stream = get_stream_by_slug(slug)
+    if not stream:
+        abort(404)
     test = get_test_by_id(test_id)
     if not test:
-        abort(404)
+        flash("That test is no longer available or may have been removed.", "error")
+        return redirect(url_for("user.tests_feed", slug=slug))
     test = dict(test)
     nta_meta = get_test_nta_meta(test_id, stored_total_marks=test.get("total_marks"))
     test["total_marks"] = nta_meta["effective_total_marks"]
@@ -633,7 +684,8 @@ def test_start(slug, test_id):
 
     test = get_test_by_id(test_id)
     if not test:
-        abort(404)
+        flash("That test is no longer available.", "error")
+        return redirect(url_for("user.tests_feed", slug=slug))
 
     if not user_has_access_to_test(test, current_user_id()):
         flash("Please purchase this Test Series to unlock and attempt its mock tests.", "error")
@@ -641,7 +693,6 @@ def test_start(slug, test_id):
             return redirect(url_for("payments.buy_series", series_id=test["series_id"]))
         return redirect(url_for("user.test_overview", slug=slug, test_id=test_id))
 
-    # Guard against starting a test with 0 uploaded questions
     qids = get_mock_question_ids_for_test(test_id) or []
     if not qids:
         flash("Questions for this test are still being uploaded. Please try another test.", "error")
@@ -685,8 +736,15 @@ def test_attempt(slug, test_id, attempt_id):
 
     stream = get_stream_by_slug(slug)
     test = get_test_by_id(test_id)
+    if not test:
+        flash("That test is no longer available.", "error")
+        return redirect(url_for("user.tests_feed", slug=slug))
     if not user_has_access_to_test(test, current_user_id()):
         return redirect(url_for("user.test_overview", slug=slug, test_id=test_id))
+
+    test = dict(test)
+    nta_meta = get_test_nta_meta(test_id, stored_total_marks=test.get("total_marks"))
+    test["total_marks"] = nta_meta["effective_total_marks"]
 
     questions_by_subject = get_mock_questions_for_test(test_id)
     saved_progress = get_attempt_answers_map(attempt_id)
@@ -703,7 +761,7 @@ def test_attempt(slug, test_id, attempt_id):
     else:
         subject_caps = {subj: compute_nta_subject_cap(len(qs)) for subj, qs in questions_by_subject.items()}
 
-    full_seconds = int((test.get("duration_minutes") or 60) * 60)
+    full_seconds = int((test.get("duration_minutes") or 180) * 60)
     if replay_ids is not None:
         total_q = max(1, len(get_mock_question_ids_for_test(test_id) or []))
         duration_seconds = max(60, round(full_seconds * len(replay_ids) / total_q))
@@ -719,6 +777,7 @@ def test_attempt(slug, test_id, attempt_id):
         subject_caps=subject_caps,
         saved_progress=saved_progress,
         duration_seconds=duration_seconds,
+        nta_meta=nta_meta,
     )
 
 
@@ -787,7 +846,7 @@ def test_attempt_submit(slug, test_id, attempt_id):
             "time_taken_sec": entry.get("time_taken_sec"),
         }
         for qid, entry in final_answers.items()
-        if qid in writable_ids
+        if qid in writable_ids and isinstance(entry, dict)
     ]
     bulk_save_attempt_progress(attempt_id, bulk_entries)
 
@@ -842,6 +901,13 @@ def test_attempt_review(slug, test_id, attempt_id):
 
     stream = get_stream_by_slug(slug)
     test = get_test_by_id(test_id)
+    if not test:
+        flash("That test is no longer available.", "error")
+        return redirect(url_for("user.tests_feed", slug=slug))
+    test = dict(test)
+    nta_meta = get_test_nta_meta(test_id, stored_total_marks=test.get("total_marks"))
+    test["total_marks"] = nta_meta["effective_total_marks"]
+
     questions_by_subject = get_mock_questions_for_test_review(test_id, attempt_id)
     subject_caps = {subj: compute_nta_subject_cap(len(qs)) for subj, qs in questions_by_subject.items()}
 
@@ -854,6 +920,7 @@ def test_attempt_review(slug, test_id, attempt_id):
         subject_caps=subject_caps,
         saved_progress={},
         is_review_mode=True,
+        nta_meta=nta_meta,
     )
 
 
@@ -939,7 +1006,7 @@ def _latest_mock_attempt(test_id):
     return get_latest_full_mock_attempt(test_id, current_user_id())
 
 
-# ---------- Profile (My Purchases & Payments + My Attempts) ----------
+# ---------- Profile (Redirects to contextual dashboard or shows account overview) ----------
 
 @user_bp.route("/profile")
 def profile():
@@ -959,7 +1026,7 @@ def clear_history():
     delete_all_attempts_for_user(current_user_id())
     
     flash("All your test history and attempts have been permanently deleted.", "success")
-    return redirect(url_for("user.profile"))
+    return redirect(url_for("user.my_dashboard"))
 
 
 USERNAME_MIN_LEN = 3
