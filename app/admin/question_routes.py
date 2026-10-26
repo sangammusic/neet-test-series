@@ -21,7 +21,7 @@ from flask import render_template, request, redirect, url_for, flash, jsonify
 from app.admin import admin_bp
 from app.admin.decorators import admin_required
 from app.extensions import supabase_admin
-from app.shared.latex_lint import lint_question_payload
+from app.shared.latex_lint import lint_question_payload, clean_question_text
 from app.shared.models import (
     get_practice_folders_for_chapter,
     get_practice_sets_for_folder,
@@ -141,7 +141,8 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_na
     else:
         pyq_year = None
 
-    image_url = str(raw.get("image_url", "")).strip() if raw.get("image_url") else None
+    img_raw = str(raw.get("image_url", "")).strip() if raw.get("image_url") else ""
+    image_url = img_raw if (img_raw and re.match(r"^https?://", img_raw, re.I)) else None
     has_image = bool(raw.get("has_image", bool(image_url)))
 
     try:
@@ -161,13 +162,13 @@ def _validate_bulk_question(raw, difficulty_ids, chapter_id, folder_name, set_na
         "folder_name": folder_name,
         "set_name": set_name,
         "topic_name": set_name, 
-        "question_text": str(raw["question_text"]).strip(),
-        "option_a": str(raw["option_a"]).strip(),
-        "option_b": str(raw["option_b"]).strip(),
-        "option_c": str(raw["option_c"]).strip(),
-        "option_d": str(raw["option_d"]).strip(),
+        "question_text": clean_question_text(str(raw["question_text"]).strip()),
+        "option_a": clean_question_text(str(raw["option_a"]).strip()),
+        "option_b": clean_question_text(str(raw["option_b"]).strip()),
+        "option_c": clean_question_text(str(raw["option_c"]).strip()),
+        "option_d": clean_question_text(str(raw["option_d"]).strip()),
         "correct_option": correct_option,
-        "explanation": (str(raw.get("explanation", "")).strip() if raw.get("explanation") else None),
+        "explanation": (clean_question_text(str(raw.get("explanation", "")).strip()) if raw.get("explanation") else None),
         "is_pyq": is_pyq,
         "pyq_year": pyq_year,
         "image_url": image_url,

@@ -1,21 +1,22 @@
-# STUDY SANGAM HUB v4.0 — Smart & Forgiving Mock Question Validator (2026-10-22)
+# STUDY SANGAM HUB v5.0 — Smart & Forgiving Mock Question Validator
 """
 Shared validation for Mock Test question bulk-paste uploads.
 
 Key improvements:
-  * `topic_name` is NO LONGER mandatory in pasted JSON — if omitted (e.g. when pasting
-    questions formatted like Chapter Practice sets), it defaults cleanly to
+  * Cleans AI citation/span artifacts (`[span_0](start_span)` etc.) and normalizes
+    bare/double-escaped LaTeX expressions automatically on upload.
+  * `topic_name` is optional in pasted JSON — if omitted, it defaults cleanly to
     `topic` / `chapter_name` / `set_name` / `subject_name` / 'General'.
   * Supports both `option_a..option_d` AND `options: ["...", "...", "...", "..."]` or
     `options: {"A": "...", "B": "...", "C": "...", "D": "..."}`.
   * Supports `correct_option`, `answer`, `correct_answer`, `ans` in formats like
     'A'..'D', 'a'..'d', 'Option A', or 1..4.
-  * Forgiving `difficulty_id`: accepts 1/2/3, 'Easy'/'Medium'/'Hard', or omitted, and
-    never fails if `difficulty_levels` table is missing an ID.
+  * Forgiving `difficulty_id`: accepts 1/2/3, 'Easy'/'Medium'/'Hard', or omitted.
   * Smart subject resolution: matches exact name, case-insensitive, or prefix
     ('phys' -> Physics, 'chem' -> Chemistry, 'bio'/'bot'/'zoo' -> Biology, 'math' -> Mathematics).
 """
 import re
+from app.shared.latex_lint import clean_question_text
 
 
 REQUIRED_BULK_FIELDS = (
@@ -44,7 +45,7 @@ def _normalize_options(raw):
             val = opts_raw[idx]
         if (val is None or str(val).strip() == "") and isinstance(opts_raw, dict):
             val = opts_raw.get(letter.upper()) or opts_raw.get(letter) or opts_raw.get(str(idx + 1))
-        out[key] = str(val).strip() if val is not None else ""
+        out[key] = clean_question_text(str(val).strip()) if val is not None else ""
     return out
 
 
@@ -64,11 +65,9 @@ def _normalize_correct_option(raw):
     s = str(val).strip().upper()
     if s in ("A", "B", "C", "D"):
         return s
-    # Handle "OPTION A", "(A)", "A.", etc.
     m = re.match(r"^(?:OPTION\s*)?\(?([ABCD])\)?[.\s]*$", s)
     if m:
         return m.group(1)
-    # Handle 1-based numeric options 1, 2, 3, 4
     if s in ("1", "2", "3", "4"):
         return ("A", "B", "C", "D")[int(s) - 1]
     return s
@@ -84,7 +83,6 @@ def _resolve_subject_id(subject_name_raw, subject_name_to_id):
     if s_low in subject_name_to_id:
         return subject_name_to_id[s_low]
 
-    # Synonym & prefix matching
     for db_name, sid in subject_name_to_id.items():
         if s_low.startswith("phys") and "phys" in db_name:
             return sid
@@ -111,13 +109,15 @@ def _validate_mock_question(raw, subject_name_to_id, difficulty_ids, stream_id, 
     if not isinstance(raw, dict):
         return None, "not a JSON object"
 
-    q_text = str(
-        raw.get("question_text")
-        or raw.get("question")
-        or raw.get("text")
-        or raw.get("stem")
-        or ""
-    ).strip()
+    q_text = clean_question_text(
+        str(
+            raw.get("question_text")
+            or raw.get("question")
+            or raw.get("text")
+            or raw.get("stem")
+            or ""
+        ).strip()
+    )
     opts = _normalize_options(raw)
     correct_option = _normalize_correct_option(raw)
 
@@ -186,7 +186,7 @@ def _validate_mock_question(raw, subject_name_to_id, difficulty_ids, stream_id, 
     image_url = image_url_raw if (image_url_raw and re.match(r"^https?://", image_url_raw, re.I)) else None
     has_image = bool(raw.get("has_image", bool(image_url)))
 
-    explanation_raw = str(raw.get("explanation") or raw.get("solution") or "").strip()
+    explanation_raw = clean_question_text(str(raw.get("explanation") or raw.get("solution") or "").strip())
 
     payload = {
         "stream_id": stream_id,

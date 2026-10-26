@@ -1,4 +1,4 @@
-# STUDY SANGAM HUB v4.0 — Mock Test Series Admin (Resilient Chunk Upload, Auto Subject Sync, NTA Pattern & Zero Empty Shells)
+# STUDY SANGAM HUB v5.0 — Mock Test Series Admin (720-Mark Default, Structured Syllabus, Strict Validation & Clean Cache)
 import json
 import logging
 import re
@@ -12,7 +12,12 @@ from app.extensions import supabase_admin, cache
 from app.shared import payments_core as pay
 from app.shared.access import enrich_series_list, get_series_pricing, invalidate_series_plans_cache
 from app.shared.latex_lint import lint_question_payload
-from app.shared.models import compute_nta_subject_cap, compute_nta_test_meta
+from app.shared.models import (
+    compute_nta_subject_cap,
+    compute_nta_test_meta,
+    format_syllabus_description,
+    parse_structured_syllabus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +95,6 @@ def _ensure_subjects_for_stream(stream_id, required_names=("Physics", "Chemistry
                 if created and created[0].get("id"):
                     name_to_id[key] = created[0]["id"]
             except Exception:
-                # Re-query in case of slug conflict
                 try:
                     existing = (
                         supabase_admin.table("subjects")
@@ -147,7 +151,6 @@ def _insert_mock_questions_resilient(payloads):
         err_str = str(first_exc).lower()
         logger.warning(f"Primary mock_questions insert raised ({first_exc}); retrying with resilient fallback.")
 
-        # Strip optional columns that might not exist in an older DB schema or FK mismatch
         optional_cols = ("is_premium", "has_image", "pyq_year", "is_pyq", "difficulty_id", "image_url")
         cleaned = []
         for p in payloads:
@@ -163,7 +166,6 @@ def _insert_mock_questions_resilient(payloads):
             res = supabase_admin.table("mock_questions").insert(cleaned).execute()
             return [r["id"] for r in (res.data or []) if r.get("id")]
         except Exception:
-            # Minimal core schema fallback
             core_keys = (
                 "stream_id", "subject_id", "topic_name", "question_text",
                 "option_a", "option_b", "option_c", "option_d", "correct_option", "explanation",
@@ -363,11 +365,12 @@ def series_tests(series_id):
 
     if request.method == "POST":
         title = request.form.get("title", "").strip()
-        marks_per_question_raw = request.form.get("marks_per_question")
+        marks_per_question_raw = request.form.get("marks_per_question") or "4"
+        selected_total_marks_raw = request.form.get("total_marks") or "720"
         stream_id = series_data.get("stream_id") or request.form.get("stream_id")
-        category_name = request.form.get("category_name", "").strip()
+        category_name = request.form.get("category_name", "").strip() or "Full Length Mock"
 
-        if not title or not marks_per_question_raw or not str(marks_per_question_raw).strip() or not category_name or not stream_id:
+        if not title or not str(marks_per_question_raw).strip() or not category_name or not stream_id:
             flash("Please fill all the details, including Category and Marks per Question.", "error")
             return redirect(url_for("admin.series_tests", series_id=series_id))
 
@@ -393,17 +396,32 @@ def series_tests(series_id):
             flash(f"Category Error: Could not save the category '{category_name}'.", "error")
             return redirect(url_for("admin.series_tests", series_id=series_id))
 
-        negative_marking_raw = float(request.form.get("negative_marking") or 0)
+        negative_marking_raw = float(request.form.get("negative_marking") or 1)
         negative_marking = abs(negative_marking_raw)
+
+        try:
+            selected_total_marks = int(float(selected_total_marks_raw or 720))
+            if selected_total_marks <= 0:
+                selected_total_marks = 720
+        except (TypeError, ValueError):
+            selected_total_marks = 720
+
+        # Build structured subject-wise syllabus from Physics / Chemistry / Biology fields or description
+        structured_desc = format_syllabus_description(
+            general_desc=request.form.get("description", ""),
+            physics_Syl=request.form.get("syllabus_physics", ""),
+            chemistry_Syl=request.form.get("syllabus_chemistry", ""),
+            biology_Syl=request.form.get("syllabus_biology", ""),
+        )
 
         payload = {
             "series_id": series_id,
             "stream_id": stream_id,
             "category_id": category_id,
             "title": title,
-            "description": request.form.get("description", "").strip() or None,
+            "description": structured_desc or None,
             "duration_minutes": int(request.form.get("duration_minutes") or 180),
-            "total_marks": 0,
+            "total_marks": selected_total_marks,
             "negative_marking": negative_marking,
             "is_premium": bool(pricing["is_paid"]),
             "price_inr": float(pricing["price_inr"] or 0),
@@ -413,7 +431,7 @@ def series_tests(series_id):
             result = supabase_admin.table("tests").insert(payload).execute()
             test_id = result.data[0]["id"]
             _invalidate_test_questions_cache(test_id=test_id, series_id=series_id)
-            return redirect(url_for("admin.tests_upload", test_id=test_id, mpq=marks_per_question_raw))
+            return redirect(url_for("admin.tests_upload", test_id=test_id, mpq=marks_per_question_raw, tm=selected_total_marks))
         except Exception as exc:
             logger.error(f"Could not create test: {exc}")
             flash("Could not create test.", "error")
@@ -442,7 +460,6 @@ def series_tests(series_id):
         .data or []
     )
 
-    # Auto-clean any abandoned 0-question test shells so empty tests never sit in the folder!
     tests = []
     discarded_empty = 0
     for t in raw_tests:
@@ -484,8 +501,15 @@ def tests_upload(test_id):
         return redirect(url_for("admin.test_series_list"))
 
     mpq = request.args.get("mpq", 4)
+    selected_tm = request.args.get("tm") or test.get("total_marks") or 720
     uploaded_counts = _get_uploaded_subject_counts(test_id)
-    return render_template("admin_test_upload.html", test=test, mpq=mpq, uploaded_counts=uploaded_counts)
+    return render_template(
+        "admin_test_upload.html",
+        test=test,
+        mpq=mpq,
+        selected_tm=selected_tm,
+        uploaded_counts=uploaded_counts,
+    )
 
 
 @admin_bp.route("/tests/<test_id>/discard-empty", methods=["POST", "GET"])
@@ -521,17 +545,19 @@ def tests_lock_targets(test_id):
     mpq = float(data.get("mpq") or 4)
 
     if targets and isinstance(targets, dict):
+        p_t = max(0, int(targets.get("physics") or 0))
+        c_t = max(0, int(targets.get("chemistry") or 0))
+        b_t = max(0, int(targets.get("biology") or 0))
+        if p_t + c_t + b_t <= 0:
+            return jsonify({"ok": False, "error": "Please set at least one subject question target greater than 0."}), 400
         meta = compute_nta_test_meta(
-            {
-                "Physics": int(targets.get("physics") or 0),
-                "Chemistry": int(targets.get("chemistry") or 0),
-                "Biology": int(targets.get("biology") or 0),
-            },
+            {"Physics": p_t, "Chemistry": c_t, "Biology": b_t},
+            stored_total_marks=total_marks,
             default_mpq=mpq,
         )
         total_marks = meta["effective_total_marks"]
 
-    if total_marks is None:
+    if total_marks is None or int(total_marks) <= 0:
         return jsonify({"ok": False, "error": "total_marks calculation missing."}), 400
         
     try:
@@ -565,10 +591,26 @@ def tests_manage(test_id):
         .data or []
     )
 
-    # If 0 questions were uploaded and Admin clicked DONE, redirect back to upload screen with a clear notice
     if len(mapped) == 0:
         flash("Please upload at least 1 question chunk before opening the Question Manager.", "error")
         return redirect(url_for("admin.tests_upload", test_id=test_id))
+
+    # Check if configured total_marks (e.g. 720 for 180 Qs) matches actual uploaded count
+    counts = _get_uploaded_subject_counts(test_id)
+    configured_marks = int(test.get("total_marks") or 720)
+    expected_qs = configured_marks // 4 if configured_marks > 0 else 180
+    if counts["total"] < expected_qs and expected_qs == 180:
+        missing_p = max(0, 45 - counts["physics"])
+        missing_c = max(0, 45 - counts["chemistry"])
+        missing_b = max(0, 90 - counts["biology"])
+        missing_total = max(0, 180 - counts["total"])
+        if missing_total > 0:
+            flash(
+                f"Notice: {counts['total']}/180 questions uploaded so far ({missing_total} missing — "
+                f"Physics: {missing_p} left, Chemistry: {missing_c} left, Biology: {missing_b} left). "
+                "Upload the remaining questions for a complete 720-mark NEET UG mock test.",
+                "error",
+            )
 
     edit_json_map = {}
     for m in mapped:
@@ -599,7 +641,7 @@ def tests_manage(test_id):
 def tests_bulk_map_questions(test_id):
     is_ajax = request.args.get("ajax") == "1" or request.is_json
     
-    test = supabase_admin.table("tests").select("id, stream_id, total_marks, series_id").eq("id", test_id).maybe_single().execute().data
+    test = supabase_admin.table("tests").select("id, stream_id, total_marks, series_id, description").eq("id", test_id).maybe_single().execute().data
     if not test:
         if is_ajax:
             return jsonify({"ok": False, "error": "Test not found."}), 404
@@ -632,7 +674,6 @@ def tests_bulk_map_questions(test_id):
         except json.JSONDecodeError as e:
             return jsonify({"ok": False, "error": f"Invalid JSON format ({e.msg} at line {e.lineno}). Check brackets and commas."}), 400
 
-    # Support pasting a single JSON question object {...} or {"questions": [...]}
     if isinstance(parsed, dict):
         if isinstance(parsed.get("questions"), list):
             parsed = parsed["questions"]
@@ -642,7 +683,6 @@ def tests_bulk_map_questions(test_id):
     if not isinstance(parsed, list) or len(parsed) == 0:
         return jsonify({"ok": False, "error": "Empty or invalid JSON array."}), 400
 
-    # Ensure standard subjects exist for this stream in Supabase
     subject_name_to_id = _ensure_subjects_for_stream(stream_id)
     try:
         difficulty_ids = {d["id"] for d in (supabase_admin.table("difficulty_levels").select("id").execute().data or [])}
@@ -705,14 +745,14 @@ def tests_bulk_map_questions(test_id):
             logger.error(f"Test Mapping Error: {exc}")
             return jsonify({"ok": False, "error": f"Mapping questions to test failed: {str(exc)[:140]}"}), 500
 
-        # Auto-sync NTA total_marks based on uploaded subject counts
+        # Auto-sync NTA total_marks when upload reaches standard count or when unset
         try:
             counts = _get_uploaded_subject_counts(test_id)
             nta_meta = compute_nta_test_meta(
                 {"Physics": counts["physics"], "Chemistry": counts["chemistry"], "Biology": counts["biology"]},
                 stored_total_marks=test.get("total_marks"),
             )
-            if int(test.get("total_marks") or 0) <= 0 or nta_meta["optional_skips"] > 0:
+            if int(test.get("total_marks") or 0) <= 0 or counts["total"] in (180, 200):
                 supabase_admin.table("tests").update(
                     {"total_marks": nta_meta["effective_total_marks"]}
                 ).eq("id", test_id).execute()
@@ -852,6 +892,7 @@ def toggle_question_image(question_id):
     
     try:
         supabase_admin.table("mock_questions").update({"has_image": has_image}).eq("id", question_id).execute()
+        _invalidate_test_questions_cache()
         return jsonify({"ok": True})
     except Exception as exc:
         logger.error(f"Toggle image error: {exc}")
@@ -872,6 +913,7 @@ def change_question_answer(question_id):
     
     try:
         supabase_admin.table("mock_questions").update({"correct_option": correct_option}).eq("id", question_id).execute()
+        _invalidate_test_questions_cache()
         return jsonify({"ok": True})
     except Exception as exc:
         logger.error(f"Change answer error: {exc}")
@@ -921,6 +963,16 @@ def tests_delete(test_id):
                 except Exception as e:
                     logger.error(f"Bucket batch delete raised an exception: {e}")
 
+        # Clean up any attempts and attempt_answers referencing this deleted test so stale references never persist
+        try:
+            att_rows = supabase_admin.table("test_attempts").select("id").eq("test_id", test_id).execute().data or []
+            att_ids = [r["id"] for r in att_rows if r.get("id")]
+            for i in range(0, len(att_ids), 40):
+                supabase_admin.table("attempt_answers").delete().in_("attempt_id", att_ids[i:i+40]).execute()
+            supabase_admin.table("test_attempts").delete().eq("test_id", test_id).execute()
+        except Exception as e:
+            logger.warning(f"Attempt cleanup on test delete: {e}")
+
         supabase_admin.table("mock_test_questions").delete().eq("test_id", test_id).execute()
         supabase_admin.table("tests").delete().eq("id", test_id).execute()
 
@@ -930,7 +982,7 @@ def tests_delete(test_id):
                 supabase_admin.table("mock_questions").delete().in_("id", chunk).execute()
 
         _invalidate_test_questions_cache(test_id=test_id, series_id=series_id)
-        flash("Test and ALL related questions/images permanently wiped from DB and Storage.", "success")
+        flash("Test and ALL related questions/images/attempts permanently wiped from DB and Storage.", "success")
         if series_id:
             return redirect(url_for("admin.series_tests", series_id=series_id))
     except Exception as exc:
