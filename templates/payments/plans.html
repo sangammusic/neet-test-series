@@ -7,15 +7,23 @@
   <div class="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3.5">
     <div>
       <a href="{{ url_for('user.my_dashboard') }}" data-back-url="{{ url_for('user.my_dashboard') }}" class="btn-cute-soft mb-2">
-        &larr; Workspace
+        &larr; Dashboard
       </a>
       <h1 class="font-display text-xl sm:text-2xl font-bold text-white tracking-tight">Paid Test Series</h1>
       <p class="mt-0.5 text-xs text-gray-400">Unlock individual Paid Mock Test Series or check your purchased series.</p>
     </div>
     <a href="{{ url_for('payments.history') }}" class="btn-cute-soft">
-      🛍️ My Purchases
+      My Purchases
     </a>
   </div>
+
+  {% if ps and ps.active %}
+  <div class="mb-4 pw-tile p-4 border-emerald-400/40 bg-emerald-500/10">
+    <p class="font-display text-xs sm:text-sm font-bold text-emerald-300">
+      ✓ Your {{ ps.plan_name or 'Test Series Pass' }} is active{% if ps.expires_label %} (valid until {{ ps.expires_label }}){% endif %}.
+    </p>
+  </div>
+  {% endif %}
 
   {% if open_order %}
     <a href="{{ url_for('payments.checkout', order_id=open_order.id) }}"
@@ -41,6 +49,7 @@
       </div>
     </div>
 
+    {% if not (ps and ps.active) %}
     <form method="POST" action="{{ url_for('payments.start') }}" class="mt-3.5">
       <input type="hidden" name="plan_code" value="{{ plan.code }}">
       <button type="submit" class="btn-cute !w-full !py-2.5 !text-xs sm:!text-sm">
@@ -48,14 +57,14 @@
         <span>&rarr;</span>
       </button>
     </form>
+    {% endif %}
   </article>
   {% else %}
   <div class="pw-tile p-6 text-center rounded-xl">
     <p class="font-display text-base font-bold text-white">Explore Mock Test Series</p>
-    <p class="mt-1 text-xs text-gray-400">Open your Stream Workspace to browse all Free and Paid Mock Test Series.</p>
-    <a href="{{ url_for('user.my_dashboard') }}" class="mt-4 btn-cute">Go to Workspace &rarr;</a>
+    <p class="mt-1 text-xs text-gray-400">Open your Stream Dashboard to browse all Free and Paid Mock Test Series.</p>
+    <a href="{{ url_for('user.my_dashboard') }}" class="mt-4 btn-cute">Go to Dashboard &rarr;</a>
   </div>
   {% endfor %}
 </section>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->
