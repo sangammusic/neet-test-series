@@ -2,55 +2,59 @@
 {% block title %}{{ test.title }} — STUDY SANGAM HUB{% endblock %}
 {% block content %}
 {% set parent_list_url = url_for('user.series_tests', slug=stream.slug, series_id=test.series_id) if test.series_id else url_for('user.tests_feed', slug=stream.slug) %}
-<section class="max-w-lg mx-auto px-3.5 sm:px-5 pt-5 pb-16 relative z-10">
+<section class="max-w-xl mx-auto px-3.5 sm:px-5 pt-5 pb-16 relative z-10">
 
   <div class="mb-3.5 flex items-center justify-between gap-2">
     <a href="{{ parent_list_url }}" data-back-url="{{ parent_list_url }}" class="btn-cute-soft">
-      &larr; Back to Pack
+      &larr; Back to Test Series
     </a>
     <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded-full">{{ stream.name }}</span>
   </div>
 
-  <div class="pw-tile rounded-2xl p-4 sm:p-5">
+  <div class="pw-tile rounded-2xl p-4 sm:p-6">
     <div class="text-center mb-4">
-      <span class="text-[9px] font-extrabold uppercase tracking-widest text-emerald-400 bg-emerald-500/15 border border-emerald-400/30 px-2 py-0.5 rounded-full">
-        {% if nta_meta and nta_meta.has_optional %}NTA Optional Pattern · +4 / -{{ test.negative_marking }}{% else %}NTA Exam Arena · +4 / -{{ test.negative_marking }}{% endif %}
+      <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-500/15 border border-emerald-400/30 px-2.5 py-0.5 rounded-full">
+        +{{ nta_meta.marks_per_question | int if (nta_meta and nta_meta.marks_per_question == (nta_meta.marks_per_question | int)) else 4 }} Correct &nbsp;|&nbsp; -{{ test.negative_marking or 1 }} Incorrect &nbsp;|&nbsp; 0 Unanswered
       </span>
-      <h1 class="font-display text-lg sm:text-xl font-bold text-white mt-2">{{ test.title }}</h1>
+      <h1 class="font-display text-lg sm:text-2xl font-bold text-white mt-2.5">{{ test.title }}</h1>
     </div>
 
-    <!-- Compact 3-Column Test Stats Grid -->
-    <div class="grid grid-cols-3 gap-2 mb-4">
-      <div class="bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-center">
-        <p class="text-base sm:text-lg font-display font-bold text-white">{{ test.total_marks or (nta_meta.total_attemptable * 4 if nta_meta else '720') }}</p>
-        <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">Max Marks</p>
+    <!-- 3-Column Test Stats Grid -->
+    <div class="grid grid-cols-3 gap-2.5 mb-5">
+      <div class="bg-white/[0.04] border border-white/10 rounded-xl p-3 text-center">
+        <p class="text-base sm:text-xl font-display font-bold text-white">{{ test.total_marks or (nta_meta.total_attemptable * 4 if nta_meta else 720) }}</p>
+        <p class="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">Maximum Marks</p>
       </div>
-      <div class="bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-center">
-        <p class="text-base sm:text-lg font-display font-bold text-white">{{ test.duration_minutes }}m</p>
-        <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">Duration</p>
+      <div class="bg-white/[0.04] border border-white/10 rounded-xl p-3 text-center">
+        <p class="text-base sm:text-xl font-display font-bold text-white">{{ test.duration_minutes }} min</p>
+        <p class="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">Duration</p>
       </div>
-      <div class="bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-center">
-        <p class="text-base sm:text-lg font-display font-bold text-emerald-400">
-          {% if nta_meta and nta_meta.total_uploaded > 0 %}{{ nta_meta.total_attemptable }}/{{ nta_meta.total_uploaded }}{% else %}—{% endif %}
+      <div class="bg-white/[0.04] border border-white/10 rounded-xl p-3 text-center">
+        <p class="text-base sm:text-xl font-display font-bold text-emerald-400">
+          {% if nta_meta and nta_meta.total_uploaded > 0 %}
+            {% if nta_meta.has_optional %}{{ nta_meta.total_attemptable }}/{{ nta_meta.total_uploaded }}{% else %}{{ nta_meta.total_uploaded }}{% endif %}
+          {% else %}180{% endif %}
         </p>
-        <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">Attempt Qs</p>
+        <p class="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">Total Questions</p>
       </div>
     </div>
 
     {% if nta_meta and nta_meta.subjects %}
-    <!-- NTA Subject Breakdown Pill Row -->
-    <div class="mb-4 bg-white/[0.03] border border-white/10 rounded-xl p-3">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-[9px] font-extrabold uppercase tracking-widest text-gold">NTA Section Rules</span>
-        <span class="text-[9px] font-bold text-emerald-400">Skipped Qs = 0 Negative</span>
+    <!-- Subject Question Distribution -->
+    <div class="mb-5 bg-white/[0.03] border border-white/10 rounded-xl p-3.5">
+      <div class="flex items-center justify-between mb-2.5">
+        <span class="text-[10px] font-extrabold uppercase tracking-wider text-gold">Subject Distribution</span>
+        <span class="text-[10px] font-bold text-emerald-400">+4 Correct | -{{ test.negative_marking or 1 }} Incorrect | 0 Unanswered</span>
       </div>
-      <div class="grid grid-cols-3 gap-1.5">
+      <div class="grid grid-cols-3 gap-2">
         {% for s in nta_meta.subjects %}
-        <div class="bg-white/[0.04] border border-white/10 rounded-lg p-2 text-center">
-          <p class="text-[10px] font-bold text-white truncate">{{ s.subject }}</p>
-          <p class="text-xs font-display font-bold text-gold mt-0.5">{{ s.attemptable }} / {{ s.uploaded }}</p>
-          <p class="text-[8px] text-gray-400 font-semibold">
-            {% if s.optional_skips > 0 %}{{ s.optional_skips }} Free Skip{% else %}Compulsory{% endif %}
+        <div class="bg-white/[0.04] border border-white/10 rounded-lg p-2.5 text-center">
+          <p class="text-xs font-bold text-white truncate">{{ s.subject }}</p>
+          <p class="text-sm font-display font-bold text-gold mt-0.5">
+            {% if s.optional_skips > 0 %}{{ s.attemptable }} / {{ s.uploaded }} Qs{% else %}{{ s.uploaded }} Qs{% endif %}
+          </p>
+          <p class="text-[9px] text-gray-400 font-semibold">
+            {{ s.attemptable * 4 }} Marks
           </p>
         </div>
         {% endfor %}
@@ -58,20 +62,30 @@
     </div>
     {% endif %}
 
-    <!-- Compact Syllabus Block -->
-    <div class="mb-4">
-      <h2 class="font-display text-[11px] font-extrabold text-white mb-1.5 uppercase tracking-wider">Syllabus Blueprint</h2>
-      <div class="bg-white/[0.03] border border-white/10 rounded-xl p-3">
-        {% for subject, chapters in syllabus.items() %}
-        <div class="{% if not loop.last %}mb-2 pb-2 border-b border-white/5{% endif %}">
-          <p class="text-xs">
-            <span class="font-bold text-gold uppercase tracking-wider text-[9px] block mb-0.5">{{ subject }}</span>
-            <span class="text-gray-300 font-medium leading-relaxed text-[11px]">{{ chapters|join(' • ') }}</span>
-          </p>
-        </div>
+    <!-- Subject-wise Syllabus Display -->
+    <div class="mb-5">
+      <h2 class="font-display text-xs font-extrabold text-white mb-2 uppercase tracking-wider">Test Syllabus</h2>
+      <div class="bg-white/[0.03] border border-white/10 rounded-xl p-4 space-y-3">
+        {% if syllabus and syllabus|length > 0 %}
+          {% for subject, topics in syllabus.items() %}
+          <div class="{% if not loop.last %}pb-3 border-b border-white/10{% endif %}">
+            <p class="font-bold text-gold uppercase tracking-wider text-[11px] mb-1.5">{{ subject }}</p>
+            {% if topics and topics|length > 0 %}
+              <ul class="space-y-1 pl-3.5 list-disc text-xs text-gray-200 font-medium">
+                {% for topic in topics %}
+                  <li>{{ topic }}</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="text-xs text-gray-400 italic">No specific topics listed for {{ subject }}.</p>
+            {% endif %}
+          </div>
+          {% endfor %}
+        {% elif test.description and test.description.strip() %}
+          <p class="text-xs text-gray-200 font-medium leading-relaxed whitespace-pre-line">{{ test.description.strip() }}</p>
         {% else %}
-        <p class="text-[11px] font-medium text-gray-400 text-center py-0.5">Full NCERT &amp; NTA high-yield syllabus.</p>
-        {% endfor %}
+          <p class="text-xs text-gray-400 text-center py-1 italic">Syllabus details have not been added for this test yet.</p>
+        {% endif %}
       </div>
     </div>
 
@@ -79,33 +93,33 @@
     <div class="text-center">
       {% if has_access %}
         {% if attempt_state == 'submitted' %}
-        <div class="grid grid-cols-3 gap-2 text-center mb-3">
-          <div class="bg-white/5 border border-white/10 rounded-lg py-1.5"><p class="text-sm font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[8px] text-gray-400 uppercase font-black">Correct</p></div>
-          <div class="bg-white/5 border border-white/10 rounded-lg py-1.5"><p class="text-sm font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[8px] text-gray-400 uppercase font-black">Wrong</p></div>
-          <div class="bg-white/5 border border-white/10 rounded-lg py-1.5"><p class="text-sm font-display font-bold text-gray-300">{{ attempt.skipped_count }}</p><p class="text-[8px] text-gray-400 uppercase font-black">Skipped (0)</p></div>
+        <div class="grid grid-cols-3 gap-2 text-center mb-3.5">
+          <div class="bg-white/5 border border-white/10 rounded-lg py-2"><p class="text-sm font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[9px] text-gray-400 uppercase font-bold">Correct</p></div>
+          <div class="bg-white/5 border border-white/10 rounded-lg py-2"><p class="text-sm font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[9px] text-gray-400 uppercase font-bold">Incorrect</p></div>
+          <div class="bg-white/5 border border-white/10 rounded-lg py-2"><p class="text-sm font-display font-bold text-gray-300">{{ attempt.skipped_count }}</p><p class="text-[9px] text-gray-400 uppercase font-bold">Unanswered</p></div>
         </div>
         <div class="flex flex-col gap-2">
           <a href="{{ url_for('user.test_analyse', slug=stream.slug, test_id=test.id) }}" data-replace-link class="btn-cute !w-full !py-2.5 !text-xs">
-            📊 View Scorecard &amp; Mistake Autopsy
+            📊 View Result &amp; Review Answers
           </a>
           <a href="{{ url_for('user.test_analyse', slug=stream.slug, test_id=test.id) }}#reattempt" data-replace-link class="btn-cute-soft !w-full !py-2 !text-xs">
-            🔁 Run It Back (Reattempt)
+            🔁 Reattempt Test
           </a>
         </div>
 
         {% elif attempt_state == 'in_progress' %}
         <a href="{{ url_for('user.test_attempt', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}" data-replace-link class="btn-cute !w-full !py-2.5 !text-xs">
-          ▶ Resume Live Attempt
+          ▶ Resume Test
         </a>
         <form action="{{ url_for('user.test_start', slug=stream.slug, test_id=test.id) }}" method="POST" data-replace-form class="m-0 mt-2"
-              onsubmit="return confirm('Start fresh? Your unfinished progress in this mock will be reset.');">
+              onsubmit="return confirm('Start a fresh attempt? Your unfinished progress in this test will be reset.');">
           <button type="submit" class="btn-cute-soft !w-full !py-2 !text-xs">Start Fresh Attempt</button>
         </form>
 
         {% else %}
         <form action="{{ url_for('user.test_start', slug=stream.slug, test_id=test.id) }}" method="POST" data-replace-form>
-          <button type="submit" class="btn-cute !w-full !py-2.5 !text-xs sm:!text-sm">
-            <span>⚡ Lock In &amp; Start Mock</span>
+          <button type="submit" class="btn-cute !w-full !py-3 !text-xs sm:!text-sm">
+            <span>Start Test</span>
             <span>&rarr;</span>
           </button>
         </form>
@@ -113,7 +127,7 @@
       {% else %}
         <a href="{{ url_for('payments.buy_series', series_id=test.series_id) if test.series_id else url_for('payments.plans') }}"
            class="btn-cute !w-full !py-2.5 !text-xs sm:!text-sm">
-          <span>🔒 Unlock Test Pack ({{ (series_price or test.price_inr or 99) | inr }})</span>
+          <span>🔒 Unlock Test Series ({{ (series_price or test.price_inr or 99) | inr }})</span>
           <span>&rarr;</span>
         </a>
       {% endif %}
@@ -126,4 +140,3 @@
   }
 </script>
 {% endblock %}
-<!-- STUDY SANGAM HUB v4.0 -->

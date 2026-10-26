@@ -6,19 +6,27 @@
   {% set sets_url = url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) %}
   <div class="mb-4 flex items-center justify-between">
     <a href="{{ sets_url }}" data-back-url="{{ sets_url }}" class="btn-cute-soft">
-      &larr; Back to Quizzes
+      &larr; Back to Practice Sets
     </a>
     <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ chapter.name }}</span>
   </div>
 
-  <!-- Compact Pre-start Card -->
+  <!-- Pre-start Card -->
   <div class="pw-tile rounded-2xl p-5 sm:p-6 text-center relative overflow-hidden">
     <div class="flex flex-wrap items-center justify-center gap-1.5 mb-2.5">
-        <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ 'PYQ Archive' if mode == 'pyq' else 'Concept MCQs' }}</span>
+        <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ 'PYQ Practice' if mode == 'pyq' else 'Concept MCQs' }}</span>
         <span class="text-[9px] font-black tracking-widest uppercase text-gray-300 border border-white/15 bg-white/5 px-2 py-0.5 rounded">📁 {{ folder }}</span>
     </div>
     
-    <h1 class="font-display text-xl sm:text-2xl font-bold text-white mb-4">{{ set_name }}</h1>
+    <h1 class="font-display text-xl sm:text-2xl font-bold text-white mb-3">{{ set_name }}</h1>
+
+    <div class="mb-4 inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-xs font-bold">
+      <span class="text-emerald-400">+{{ marks_per_q | int if (marks_per_q is defined and marks_per_q == (marks_per_q | int)) else 4 }} Correct</span>
+      <span class="text-gray-500">|</span>
+      <span class="text-red-400">-{{ neg_marks if neg_marks is defined else 1 }} Incorrect</span>
+      <span class="text-gray-500">|</span>
+      <span class="text-gray-300">0 Unanswered</span>
+    </div>
 
     <div class="grid grid-cols-2 gap-2.5 mb-5">
       <div class="bg-white/[0.04] border border-white/10 rounded-xl p-3">
@@ -27,7 +35,7 @@
       </div>
       <div class="bg-white/[0.04] border border-white/10 rounded-xl p-3">
         <p class="text-xl font-display font-bold text-white">{{ total_marks }}</p>
-        <p class="text-[9px] text-gray-400 uppercase tracking-widest font-bold mt-0.5">Total Marks</p>
+        <p class="text-[9px] text-gray-400 uppercase tracking-widest font-bold mt-0.5">Maximum Marks</p>
       </div>
     </div>
 
@@ -36,7 +44,7 @@
     {% if locked %}
       <div class="rounded-xl border border-gold/30 bg-gold/[0.06] p-4">
         <h3 class="font-display text-base font-bold text-white mb-1">🔒 Premium Set</h3>
-        <p class="text-xs leading-relaxed text-gray-300 mb-3">Unlock access to attempt this practice set.</p>
+        <p class="text-xs leading-relaxed text-gray-300 mb-3">Unlock access with a Season Pass or Test Series Pass to attempt this practice set.</p>
         <a href="{{ url_for('payments.plans') }}" class="btn-cute !w-full !py-2.5 !text-xs">Unlock Access &rarr;</a>
       </div>
     {% elif attempt_state == 'none' %}
@@ -53,22 +61,22 @@
         <span>▶ Resume Practice</span>
       </a>
       <form method="POST" action="{{ start_url }}" data-replace-form class="m-0 mt-2"
-            onsubmit="return confirm('Start over? Your unfinished progress in this quiz will be discarded.');">
+            onsubmit="return confirm('Start over? Your unfinished progress in this practice set will be discarded.');">
         <input type="hidden" name="kind" value="full">
-        <button type="submit" class="btn-cute-soft !w-full !py-2 !text-xs">Start Over</button>
+        <button type="submit" class="btn-cute-soft !w-full !py-2 !text-xs">Start Fresh Attempt</button>
       </form>
     {% else %}
       <div class="mb-3.5 grid grid-cols-3 gap-2 text-center">
         <div class="bg-white/5 border border-white/10 rounded-lg py-2"><p class="text-base font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[8px] text-gray-400 uppercase font-black">Correct</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-lg py-2"><p class="text-base font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[8px] text-gray-400 uppercase font-black">Wrong</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-lg py-2"><p class="text-base font-display font-bold text-gray-400">{{ attempt.skipped_count }}</p><p class="text-[8px] text-gray-400 uppercase font-black">Skipped</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-lg py-2"><p class="text-base font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[8px] text-gray-400 uppercase font-black">Incorrect</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-lg py-2"><p class="text-base font-display font-bold text-gray-400">{{ attempt.skipped_count }}</p><p class="text-[8px] text-gray-400 uppercase font-black">Unanswered</p></div>
       </div>
-      <p class="text-xs text-gray-300 mb-3.5">Last score: <span class="text-white font-bold">{{ attempt.score }}</span> / {{ total_marks }}</p>
+      <p class="text-xs text-gray-300 mb-3.5">Last Score: <span class="text-white font-bold">{{ attempt.score }}</span> / {{ total_marks }}</p>
 
       <div class="flex flex-col gap-2">
         <a href="{{ url_for('user.practice_analyse', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=set_name) }}" data-replace-link
            class="btn-cute !w-full !py-2.5 !text-xs sm:!text-sm">
-          <span>📊 Analyse &amp; Reattempt</span>
+          <span>📊 Review Answers &amp; Result</span>
         </a>
         <form method="POST" action="{{ start_url }}" data-replace-form class="m-0">
           <input type="hidden" name="kind" value="full">
@@ -84,4 +92,3 @@
   }
 </script>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->

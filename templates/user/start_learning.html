@@ -2,40 +2,38 @@
 {% block title %}Welcome — STUDY SANGAM HUB{% endblock %}
 
 {% block content %}
-<section class="max-w-md mx-auto px-4 pt-8 sm:pt-12 pb-14 text-center relative z-10">
-  <div class="pw-tile p-5 sm:p-7 rounded-2xl relative overflow-hidden">
-    <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-40 bg-gold/15 rounded-full blur-3xl pointer-events-none"></div>
+<section class="max-w-lg mx-auto px-4 pt-10 sm:pt-14 pb-16 text-center relative z-10">
+  <div class="pw-tile p-6 sm:p-8 rounded-2xl relative overflow-hidden">
 
-    <!-- Single top navbar already displays the brand logo; no duplicate logo here -->
-    <span class="text-gold font-extrabold text-[9px] tracking-widest uppercase mb-2 border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded-full inline-block relative z-10">
-      LOCK IN • GRIND • CONQUER
-    </span>
+    <div class="flex justify-center mb-4">
+      <img src="{{ url_for('static', filename='img/logo-mark.png') }}"
+           onerror="this.onerror=null;this.src=window.SANGAM_LOGO_URI"
+           alt="Study Sangam Hub"
+           class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-contain shadow-md">
+    </div>
 
-    <h1 class="font-display text-xl sm:text-2xl font-bold mb-2 text-white relative z-10">
-      Ready to Rank Up? ⚡
-    </h1>
-
-    <p class="text-xs text-gray-300 mb-5 max-w-xs mx-auto leading-relaxed relative z-10">
-      High-yield Topic Drills, NTA-pattern Mock Arenas (45/50 section rules), and NCERT Vault notes built for serious NEET &amp; JEE aspirants.
+    <p class="text-[10px] font-bold tracking-widest uppercase text-gold mb-2">
+      STUDY SANGAM HUB
     </p>
 
-    <div class="flex flex-col sm:flex-row items-center justify-center gap-2 relative z-10">
+    <h1 class="font-display text-xl sm:text-2xl font-bold mb-2.5 text-white leading-snug">
+      Your Daily Practice Partner for NEET Success
+    </h1>
+
+    <p class="text-xs sm:text-sm text-gray-300 mb-6 max-w-md mx-auto leading-relaxed">
+      Build exam-day confidence with NCERT-aligned chapter practice, previous-year questions, and full-length 720-mark NTA mock tests.
+    </p>
+
+    <div class="flex justify-center">
       <a href="{{ next_url or url_for('user.enter_workspace') }}"
          data-replace-link
          onclick="try { sessionStorage.setItem('sangam_welcomed', '1'); } catch(e) {}"
-         class="btn-cute !px-5 !py-2.5 !text-xs w-full sm:w-auto">
-        <span>Enter Command HQ</span>
+         class="btn-cute !px-7 !py-3 !text-xs sm:!text-sm w-full sm:w-auto">
+        <span>Start Learning</span>
         <span>&rarr;</span>
       </a>
-
-      {% if active_stream_slug %}
-      <a href="{{ url_for('user.switch_stream') }}"
-         class="btn-cute-soft !px-3.5 !py-2 !text-xs w-full sm:w-auto">
-        <span>🔄 Switch Stream ({{ active_stream_slug | upper }})</span>
-      </a>
-      {% endif %}
     </div>
+
   </div>
 </section>
 {% endblock %}
-<!-- STUDY SANGAM HUB v4.0 -->

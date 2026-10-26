@@ -1,67 +1,104 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ series.name }} — {{ stream.name }}{% endblock %}
 {% block content %}
-<section class="max-w-4xl mx-auto px-3 sm:px-5 pt-4 pb-14 relative z-10">
+<section class="max-w-4xl mx-auto px-3 sm:px-5 pt-4 pb-16 relative z-10"
+         x-data="{ activeTab: {{ (active_tab or 'tests') | tojson }} }">
 
-  <div class="mb-4 border-b border-white/10 pb-3">
-    <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}" data-back-url="{{ url_for('user.tests_feed', slug=stream.slug) }}" class="btn-cute-soft mb-2">
-      &larr; All Test Packs
+  <div class="mb-4 border-b border-white/10 pb-3.5">
+    <a href="{{ url_for('user.tests_feed', slug=stream.slug) }}" data-back-url="{{ url_for('user.tests_feed', slug=stream.slug) }}" class="btn-cute-soft mb-2.5">
+      &larr; All Test Series
     </a>
-    <div class="flex flex-wrap items-center gap-2">
-      <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded-full">{{ stream.name }}</span>
-      {% if series.is_paid %}
-        {% if series.has_access %}
-          <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-400/35 px-2 py-0.5 rounded-full">✓ Unlocked</span>
-        {% else %}
-          <span class="text-[9px] font-black uppercase bg-gold/15 text-gold border border-gold/40 px-2 py-0.5 rounded-full">🔒 Pro Pack · {{ series.price_inr | inr }}</span>
-        {% endif %}
-      {% else %}
-        <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-400/35 px-2 py-0.5 rounded-full">⚡ Free Pack</span>
-      {% endif %}
-      <h1 class="font-display text-base sm:text-xl font-bold text-white">{{ series.name }}</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <div class="flex flex-wrap items-center gap-2 mb-1">
+          <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded-full">{{ stream.name }}</span>
+          {% if series.is_paid %}
+            {% if series.has_access %}
+              <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-400/35 px-2 py-0.5 rounded-full">✓ Unlocked</span>
+            {% else %}
+              <span class="text-[9px] font-black uppercase bg-gold/15 text-gold border border-gold/40 px-2 py-0.5 rounded-full">🔒 Paid Series · {{ series.price_inr | inr }}</span>
+            {% endif %}
+          {% else %}
+            <span class="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-400/35 px-2 py-0.5 rounded-full">Free Series</span>
+          {% endif %}
+        </div>
+        <h1 class="font-display text-lg sm:text-2xl font-bold text-white">{{ series.name }}</h1>
+      </div>
+
+      <!-- Contextual Tabs inside this Test Series Folder: Available Tests | My Attempts -->
+      <div class="inline-flex items-center p-1 rounded-xl bg-white/5 border border-white/15 gap-1">
+        <button type="button"
+                @click="activeTab = 'tests'"
+                :class="activeTab === 'tests' ? 'bg-gold text-ink font-extrabold shadow-sm' : 'text-gray-300 hover:text-white font-semibold'"
+                class="px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5">
+          <span>📋 Available Tests</span>
+          <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20" x-text="{{ tests|length }}"></span>
+        </button>
+        <button type="button"
+                @click="activeTab = 'attempts'"
+                :class="activeTab === 'attempts' ? 'bg-gold text-ink font-extrabold shadow-sm' : 'text-gray-300 hover:text-white font-semibold'"
+                class="px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5">
+          <span>📊 My Attempts</span>
+          <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20" x-text="{{ series_attempts|length if series_attempts is defined else 0 }}"></span>
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- Single Unlock Banner if Series is Paid & Locked -->
+  <!-- Unlock Banner if Series is Paid & Locked -->
   {% if series.is_paid and not series.has_access %}
-  <div class="mb-4 pw-tile p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+  <div class="mb-4 pw-tile p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
     <div>
-      <p class="font-display text-xs sm:text-sm font-bold text-white">🔒 Unlock All Mocks in {{ series.name }}</p>
+      <p class="font-display text-xs sm:text-sm font-bold text-white">🔒 Unlock All Tests in {{ series.name }}</p>
       <p class="text-[11px] text-gray-300 mt-0.5">
-        One-time pass ({{ series.price_inr | inr }}) unlocks every full-length NTA mock in this pack.
+        One-time access ({{ series.price_inr | inr }}) unlocks every full-length mock test in this series.
       </p>
     </div>
     {% if series.pending_order_id and series.pending_status == 'submitted' %}
       <a href="{{ url_for('payments.checkout', order_id=series.pending_order_id) }}" class="btn-cute shrink-0">
-        ⏳ Check Pass Status
+        ⏳ Check Payment Status
       </a>
     {% else %}
       <a href="{{ url_for('payments.buy_series', series_id=series.id) }}" class="btn-cute shrink-0">
-        Unlock Pack · {{ series.price_inr | inr }} &rarr;
+        Unlock Series · {{ series.price_inr | inr }} &rarr;
       </a>
     {% endif %}
   </div>
   {% endif %}
 
-  <!-- Cute Compact Test Cards inside Series -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+  <!-- =================================================================
+       TAB 1: AVAILABLE TESTS IN THIS SERIES FOLDER
+       ================================================================= -->
+  <div x-show="activeTab === 'tests'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
     {% for t in tests %}
-    <div class="pw-tile p-3 sm:p-3.5 flex items-center justify-between gap-2.5 group">
+    {% set my_latest = (latest_attempt_by_tid or {}).get(t.id) %}
+    <div class="pw-tile p-4 flex items-center justify-between gap-3 group">
       <div class="min-w-0 flex-1">
-        <p class="font-display text-xs sm:text-sm font-bold text-white truncate">{{ t.title }}</p>
-        {% if t.description %}
-        <p class="text-[10px] text-gray-400 mt-0.5 font-medium line-clamp-1">{{ t.description }}</p>
-        {% endif %}
-        <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
-          <span class="text-[9px] font-bold text-gray-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
-            ⏱ {{ t.duration_minutes }}m
+        <div class="flex items-center gap-2">
+          <p class="font-display text-sm sm:text-base font-bold text-white truncate">{{ t.title }}</p>
+          {% if my_latest %}
+            {% if my_latest.submitted_at %}
+              <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded shrink-0">
+                Scored {{ my_latest.score }}/{{ t.total_marks or 720 }}
+              </span>
+            {% else %}
+              <span class="text-[9px] font-bold uppercase text-gold bg-gold/15 border border-gold/30 px-1.5 py-0.5 rounded shrink-0">
+                In Progress
+              </span>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5 mt-2">
+          <span class="text-[10px] font-bold text-gray-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
+            ⏱ {{ t.duration_minutes }} min
           </span>
-          <span class="text-[9px] font-bold text-gold bg-gold/10 border border-gold/25 px-1.5 py-0.5 rounded">
-            🎯 {{ t.total_marks or '720' }} Marks
+          <span class="text-[10px] font-bold text-gold bg-gold/10 border border-gold/25 px-2 py-0.5 rounded">
+            🎯 {{ t.total_marks or 720 }} Marks
           </span>
           {% if t.total_uploaded %}
-          <span class="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-400/25 px-1.5 py-0.5 rounded">
-            ⚡ {% if t.has_optional %}{{ t.total_attemptable }}/{{ t.total_uploaded }} Qs (NTA){% else %}{{ t.total_uploaded }} Qs{% endif %}
+          <span class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-400/25 px-2 py-0.5 rounded">
+            {% if t.has_optional %}{{ t.total_attemptable }}/{{ t.total_uploaded }} Qs{% else %}{{ t.total_uploaded }} Questions{% endif %}
           </span>
           {% endif %}
         </div>
@@ -69,12 +106,12 @@
 
       <div class="shrink-0">
         {% if series.is_paid and not series.has_access %}
-          <span class="text-[10px] font-bold text-gray-400 border border-white/15 bg-white/5 px-2.5 py-1 rounded-lg inline-block">
+          <span class="text-[10px] font-bold text-gray-400 border border-white/15 bg-white/5 px-2.5 py-1.5 rounded-lg inline-block">
             🔒 Locked
           </span>
         {% else %}
-          <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}" data-replace-link class="btn-cute !py-1.5 !px-3 !text-[10px]">
-            <span>Lock In</span>
+          <a href="{{ url_for('user.test_overview', slug=stream.slug, test_id=t.id) }}" data-replace-link class="btn-cute !py-2 !px-3.5 !text-xs">
+            <span>Open Test</span>
             <span>&rsaquo;</span>
           </a>
         {% endif %}
@@ -82,11 +119,101 @@
     </div>
     {% else %}
     <div class="col-span-full text-center p-6 pw-tile rounded-xl">
-      <p class="text-white font-bold text-xs sm:text-sm mb-1">Mocks Dropping Soon ⚡</p>
-      <p class="text-gray-400 text-[11px] font-medium">Full-length NTA mocks for this pack are being finalized with complete question sets.</p>
+      <p class="text-white font-bold text-xs sm:text-sm mb-1">No Tests Published in This Series Yet</p>
+      <p class="text-gray-400 text-[11px] font-medium">Tests for {{ series.name }} will appear here once published.</p>
     </div>
     {% endfor %}
   </div>
+
+  <!-- =================================================================
+       TAB 2: MY ATTEMPTS (STRICTLY SCOPED TO THIS TEST SERIES FOLDER)
+       ================================================================= -->
+  <div x-show="activeTab === 'attempts'" x-cloak>
+    {% if series_attempts and series_attempts|length > 0 %}
+      <div class="grid grid-cols-3 gap-2.5 mb-4">
+        <div class="pw-tile p-3 text-center">
+          <p class="text-lg sm:text-xl font-display font-bold text-white">{{ series_attempts|length }}</p>
+          <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Total Attempts</p>
+        </div>
+        <div class="pw-tile p-3 text-center">
+          <p class="text-lg sm:text-xl font-display font-bold text-emerald-400">
+            {{ series_attempts|selectattr('submitted_at')|list|length }}
+          </p>
+          <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Completed</p>
+        </div>
+        <div class="pw-tile p-3 text-center">
+          <p class="text-lg sm:text-xl font-display font-bold text-gold">
+            {% set scored = series_attempts|selectattr('submitted_at')|selectattr('score', 'defined')|selectattr('score', 'ne', none)|list %}
+            {{ (scored|sum(attribute='score') / scored|length)|round(1) if scored else '—' }}
+          </p>
+          <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Average Score</p>
+        </div>
+      </div>
+
+      <div class="space-y-2.5">
+        {% for a in series_attempts %}
+        <div class="pw-tile p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="font-bold text-white text-sm sm:text-base truncate">{{ a.test_title or (a.tests.title if a.tests else 'Mock Test') }}</h3>
+              <span class="text-[10px] font-bold text-gold bg-gold/10 border border-gold/25 px-2 py-0.5 rounded">Attempt #{{ a.attempt_no }}</span>
+              {% if a.submitted_at %}
+                <span class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded uppercase">Completed</span>
+              {% else %}
+                <span class="text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded uppercase">In Progress</span>
+              {% endif %}
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 text-[11px] font-medium text-gray-400 mt-1.5">
+              {% if (a.submitted_at or a.started_at) %}
+                <span>📅 {{ (a.submitted_at or a.started_at) | ist_datetime }}</span>
+              {% endif %}
+              {% if a.submitted_at %}
+                <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-emerald-300 font-semibold">Correct: {{ a.correct_count }}</span>
+                <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-red-300 font-semibold">Incorrect: {{ a.wrong_count }}</span>
+                <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-300 font-semibold">Unanswered: {{ a.skipped_count }}</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/10">
+            {% if a.submitted_at %}
+            <div class="text-left sm:text-right">
+              <p class="font-display text-base sm:text-lg font-bold text-white leading-none">
+                {{ a.score }} <span class="text-xs text-gray-400 font-normal">/ {{ a.test_total_marks or (a.tests.total_marks if a.tests else 720) }}</span>
+              </p>
+              <p class="text-[9px] text-gray-400 uppercase font-bold mt-0.5">Score</p>
+            </div>
+            {% endif %}
+
+            <div class="flex gap-2 shrink-0">
+              {% if a.submitted_at %}
+                <a href="{{ url_for('user.test_result', slug=stream.slug, test_id=a.test_id, attempt_id=a.id) }}" class="btn-cute !py-1.5 !px-3 !text-xs">
+                  View Result
+                </a>
+                <a href="{{ url_for('user.test_attempt_review', slug=stream.slug, test_id=a.test_id, attempt_id=a.id) }}" class="btn-cute-soft !py-1.5 !px-3 !text-xs">
+                  Review Answers
+                </a>
+              {% else %}
+                <a href="{{ url_for('user.test_attempt', slug=stream.slug, test_id=a.test_id, attempt_id=a.id) }}" class="btn-cute !py-1.5 !px-3.5 !text-xs">
+                  Resume Test
+                </a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="pw-tile p-8 text-center rounded-xl">
+        <p class="font-display text-base font-bold text-white mb-1">No Attempts in {{ series.name }} Yet</p>
+        <p class="text-gray-400 text-xs mb-4">When you attempt any test inside {{ series.name }}, your attempt history, scores, and answer reviews will appear here.</p>
+        <button type="button" @click="activeTab = 'tests'" class="btn-cute !py-2 !px-4 !text-xs">
+          Browse Available Tests &rarr;
+        </button>
+      </div>
+    {% endif %}
+  </div>
+
 </section>
 {% endblock %}
-<!-- STUDY SANGAM HUB v4.0 -->

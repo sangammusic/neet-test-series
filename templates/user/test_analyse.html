@@ -1,46 +1,54 @@
 {% extends "shared/base.html" %}
-{% block title %}Mistake Autopsy — {{ test.title }}{% endblock %}
+{% block title %}Test Analysis — {{ test.title }}{% endblock %}
 {% block content %}
 {% set base = {'slug': stream.slug, 'test_id': test.id} %}
 {% set start_url = url_for('user.test_start', **base) %}
 {% set parent_list_url = url_for('user.series_tests', slug=stream.slug, series_id=test.series_id) if test.series_id else url_for('user.tests_feed', slug=stream.slug) %}
+{% set attempts_tab_url = url_for('user.series_tests', slug=stream.slug, series_id=test.series_id, tab='attempts') if test.series_id else parent_list_url %}
 <section class="max-w-xl mx-auto px-3.5 sm:px-5 pt-5 pb-16 relative z-10 font-body">
 
   <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
     <a href="{{ parent_list_url }}" data-back-url="{{ parent_list_url }}" class="btn-cute-soft">
-      &larr; Back to Mocks
+      &larr; Back to Test Series
     </a>
-    <a href="{{ parent_list_url }}" data-replace-link class="btn-cute">
-      🚀 Next Mock &rarr;
+    {% if test.series_id %}
+    <a href="{{ attempts_tab_url }}" data-replace-link class="btn-cute-soft">
+      📊 My Attempts in Series
     </a>
+    {% endif %}
   </div>
 
   <div class="text-center mb-4">
-    <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded-full inline-block mb-1.5">Last Attempt Autopsy</span>
+    <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-0.5 rounded-full inline-block mb-1.5">Attempt Analysis &amp; Review</span>
     <h1 class="font-display text-xl sm:text-2xl font-bold text-white">{{ test.title }}</h1>
   </div>
 
   <div class="pw-tile rounded-2xl p-4 text-center mb-2.5">
     <p class="text-[9px] font-extrabold text-gold uppercase tracking-widest mb-0.5">Score</p>
-    <p class="font-display text-3xl sm:text-4xl font-bold text-white">{{ attempt.score }} <span class="text-sm sm:text-base text-gray-400 font-medium">/ {{ test.total_marks or (nta_meta.total_attemptable * 4 if nta_meta else attempt.total_questions * 4) }}</span></p>
-    {% if nta_meta and nta_meta.has_optional %}
+    <p class="font-display text-3xl sm:text-4xl font-bold text-white">{{ attempt.score }} <span class="text-sm sm:text-base text-gray-400 font-medium">/ {{ test.total_marks or (nta_meta.total_attemptable * 4 if nta_meta else 720) }}</span></p>
     <p class="text-[10px] text-emerald-400 font-bold mt-1">
-      NTA Pattern: {{ nta_meta.total_attemptable }} of {{ nta_meta.total_uploaded }} Qs Attemptable · 0 Negative on Skips
+      Marking Scheme: +4 Correct &nbsp;|&nbsp; -{{ test.negative_marking or 1 }} Incorrect &nbsp;|&nbsp; 0 Unanswered
     </p>
-    {% endif %}
   </div>
-  <div class="grid grid-cols-3 gap-2 mb-5">
+  <div class="grid grid-cols-3 gap-2 mb-4">
     <div class="pw-tile rounded-xl p-2.5 text-center"><p class="text-lg font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Correct (+4)</p></div>
-    <div class="pw-tile rounded-xl p-2.5 text-center"><p class="text-lg font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Wrong (-{{ test.negative_marking or 1 }})</p></div>
-    <div class="pw-tile rounded-xl p-2.5 text-center"><p class="text-lg font-display font-bold text-gray-300">{{ attempt.skipped_count }}</p><p class="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Skipped (0)</p></div>
+    <div class="pw-tile rounded-xl p-2.5 text-center"><p class="text-lg font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Incorrect (-{{ test.negative_marking or 1 }})</p></div>
+    <div class="pw-tile rounded-xl p-2.5 text-center"><p class="text-lg font-display font-bold text-gray-300">{{ attempt.skipped_count }}</p><p class="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Unanswered (0)</p></div>
   </div>
 
-  <h2 class="font-display text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider mb-2">📊 Mistake Autopsy</h2>
+  <div class="mb-5">
+    <a href="{{ url_for('user.test_attempt_review', slug=stream.slug, test_id=test.id, attempt_id=attempt.id) }}"
+       class="btn-cute !w-full !py-2.5 !text-xs">
+      🔍 Review Answers in Exam View
+    </a>
+  </div>
+
+  <h2 class="font-display text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider mb-2">📋 Question Review</h2>
   <div class="space-y-2 mb-5">
     {% for view, label, sub, n in [
-        ('wrong',  'Fix Mistakes & Skips',      'Wrong + unattempted questions with solutions', counts.wrong),
-        ('marked', 'Review Bookmarked Qs',      'Questions marked for review during test',      counts.marked),
-        ('full',   'Full Paper Breakdown',      'Every question with explanations & notes',     counts.full) ] %}
+        ('wrong',  'Review Incorrect & Unanswered', 'Incorrect + unattempted questions with solutions', counts.wrong),
+        ('marked', 'Review Marked Questions',       'Questions marked for review during the test',      counts.marked),
+        ('full',   'Complete Question Review',      'All questions with answer key, solutions & notes', counts.full) ] %}
     {% if n > 0 %}
     <a href="{{ url_for('user.test_analyse_view', view=view, **base) }}"
        class="pw-tile flex items-center justify-between gap-3 p-3 sm:p-3.5">
@@ -51,13 +59,13 @@
     {% endfor %}
   </div>
 
-  <h2 id="reattempt" class="font-display text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider mb-2">🔁 Run It Back (Reattempt)</h2>
+  <h2 id="reattempt" class="font-display text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider mb-2">🔁 Reattempt Options</h2>
   <div class="space-y-2">
     {% set wm = counts.wrong_or_marked %}
     {% for kind, label, sub, n in [
-        ('wrong_only',            'Redemption Round (Wrong Only)', 'Re-solve only wrong & skipped questions', counts.wrong),
-        ('marked_and_wrong_only', 'Replay Wrong + Bookmarked',     'Targeted drill on tricky questions',      wm),
-        ('full',                  'Fresh Full Mock Attempt',       'Reset clock and run the full test again', counts.full) ] %}
+        ('wrong_only',            'Reattempt Incorrect & Unanswered', 'Practice only incorrect and skipped questions', counts.wrong),
+        ('marked_and_wrong_only', 'Reattempt Incorrect + Marked',     'Practice incorrect and marked questions',       wm),
+        ('full',                  'Start Fresh Full Attempt',         'Reset timer and attempt the full test again',   counts.full) ] %}
     {% if n > 0 %}
     <form method="POST" action="{{ start_url }}" data-replace-form class="m-0">
       <input type="hidden" name="kind" value="{{ kind }}">
@@ -76,4 +84,3 @@
   }
 </script>
 {% endblock %}
-<!-- STUDY SANGAM HUB v4.0 -->

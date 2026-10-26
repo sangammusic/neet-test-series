@@ -1,26 +1,91 @@
 {% extends "shared/base.html" %}
-{% block title %}{{ test.title }} — {{ 'Review' if is_review_mode else 'Live Arena' }}{% endblock %}
+{% block title %}{{ test.title }} — {{ 'Review Answers' if is_review_mode else 'Live Mock Test' }}{% endblock %}
 
 {% block nav %}{% endblock %}
 
 {% block extra_head %}
-<!-- SANGAM CORE: x-ray + zombie-proof clock + offscreen prerender cache -->
 <script src="{{ url_for('static', filename='js/sangam-quiz-core.js') }}"></script>
 <style>
-  /* Palette status colors — matches NTA's exam-interface convention */
-  .status-not-visited   { background: #2A2A2A; color: #9CA3AF; }
-  .status-not-answered  { background: #DC2626; color: #fff; }
-  .status-answered      { background: #16A34A; color: #fff; }
-  .status-marked        { background: #8A6A1F; color: #F3E3B8; }
-  .status-answered-marked {
-    background: #8A6A1F; color: #F3E3B8;
-    box-shadow: inset 0 0 0 2px #16A34A;
+  /* Official NTA Examination Status Indicators */
+  .status-not-visited {
+    background: #334155;
+    color: #F8FAFC;
+    border: 1px solid rgba(255, 255, 255, 0.22);
   }
-  .subject-tab.active { border-color: #D4A017; color: #fff; background: rgba(212,160,23,0.14); }
-  .subject-tab { border-color: transparent; color: #9CA3AF; }
+  html[data-theme="light"] .status-not-visited {
+    background: #F1F5F9;
+    color: #334155;
+    border: 1px solid #CBD5E1;
+  }
+  .status-not-answered {
+    background: #DC2626;
+    color: #FFFFFF;
+    border: 1px solid #B91C1C;
+  }
+  .status-answered {
+    background: #16A34A;
+    color: #FFFFFF;
+    border: 1px solid #15803D;
+  }
+  .status-marked {
+    background: #7C3AED;
+    color: #FFFFFF;
+    border: 1px solid #6D28D9;
+  }
+  .status-answered-marked {
+    background: #7C3AED;
+    color: #FFFFFF;
+    border: 2px solid #22C55E;
+    box-shadow: inset 0 0 0 2px #16A34A;
+    position: relative;
+  }
+  .status-answered-marked::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: #22C55E;
+  }
 
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .subject-tab.active {
+    border-color: #D4A017;
+    color: #FFFFFF;
+    background: rgba(212, 160, 23, 0.22);
+  }
+  html[data-theme="light"] .subject-tab.active {
+    border-color: #141824;
+    color: #FFFFFF;
+    background: #141824;
+  }
+  .subject-tab {
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #9CA3AF;
+  }
+  html[data-theme="light"] .subject-tab {
+    border-color: #CBD5E1;
+    color: #334155;
+  }
+
+  /* Custom clean scrollbar for the right-side question palette */
+  .palette-scroll {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(212, 160, 23, 0.5) rgba(255, 255, 255, 0.05);
+  }
+  .palette-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .palette-scroll::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+  }
+  .palette-scroll::-webkit-scrollbar-thumb {
+    background: rgba(212, 160, 23, 0.55);
+    border-radius: 6px;
+  }
 
   #nta-runner .q-card { position: relative; contain: layout paint; }
   #nta-runner .q-swapbar {
@@ -53,161 +118,146 @@
 {% endblock %}
 
 {% block content %}
-<div id="nta-runner" x-data="testAttempt()" class="min-h-screen bg-[#0a0a0a] text-gray-100 flex flex-col font-body">
+<div id="nta-runner" x-data="testAttempt()" class="min-h-screen flex flex-col font-body">
 
-  <!-- Top bar: timer (left) / subject tabs (center) / submit (right) -->
-  <div class="bg-[#111111] border-b border-white/10 px-2.5 sm:px-5 py-2 flex items-center gap-2 sticky top-0 z-20 shadow-sm">
-    <template x-if="!isReviewMode">
-      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg shrink-0"
-           :class="finished ? 'bg-white/5 opacity-60' : 'bg-white/5 border border-white/10'">
-        <span class="text-[10px] text-gray-400 hidden sm:inline uppercase tracking-wider font-bold">Time</span>
-        <span class="font-display text-sm sm:text-base font-bold tabular-nums text-gold-light" x-text="formattedTime"></span>
+  <!-- =================================================================
+       STICKY TOP EXAM HEADER BAR
+       ================================================================= -->
+  <header class="nta-panel bg-[#0d111a]/95 backdrop-blur-md border-b border-white/15 px-3 sm:px-6 py-2.5 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-md">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <img src="{{ url_for('static', filename='img/logo-mark.png') }}"
+           onerror="this.onerror=null;this.src=window.SANGAM_LOGO_URI"
+           alt="Sangam Study"
+           class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-contain shrink-0">
+      <div class="min-w-0">
+        <p class="text-[9px] font-black uppercase tracking-widest text-gold truncate">{{ stream.name }} · NTA CBT Interface</p>
+        <h1 class="font-display text-xs sm:text-base font-bold text-white truncate">{{ test.title }}</h1>
       </div>
-    </template>
+    </div>
 
-    <template x-if="isReviewMode">
-      <div class="flex items-center gap-1.5 bg-gold/10 border border-gold/25 px-2.5 py-1 rounded-lg shrink-0">
-        <span class="text-[10px] font-bold text-gold-light uppercase tracking-wider">Review Mode</span>
+    <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+      <!-- Live Exam Countdown Timer -->
+      <template x-if="!isReviewMode">
+        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 border border-white/15">
+          <span class="text-[10px] text-gray-300 hidden sm:inline uppercase tracking-wider font-bold">Time Left:</span>
+          <span class="font-display text-sm sm:text-base font-bold tabular-nums text-gold" x-text="formattedTime"></span>
+        </div>
+      </template>
+
+      <template x-if="isReviewMode">
+        <div class="flex items-center gap-1.5 bg-gold/15 border border-gold/30 px-2.5 py-1 rounded-lg">
+          <span class="text-[10px] font-bold text-gold uppercase tracking-wider">Review Mode</span>
+        </div>
+      </template>
+
+      <!-- Dark / White Theme Switch -->
+      <div class="theme-toggle-pill" role="group" aria-label="Color theme">
+        <button type="button" data-theme-btn="dark" onclick="window.setSangamTheme('dark')" class="theme-toggle-btn active">🌙</button>
+        <button type="button" data-theme-btn="light" onclick="window.setSangamTheme('light')" class="theme-toggle-btn">☀️</button>
       </div>
-    </template>
 
-    <div class="flex-1 flex justify-center gap-1 overflow-x-auto no-scrollbar">
-      <template x-for="subject in subjects" :key="subject">
-        <button
-          @click="switchSubject(subject)"
-          class="subject-tab px-2.5 sm:px-4 py-1 text-[11px] sm:text-xs font-bold border rounded-lg whitespace-nowrap transition-all duration-150 flex items-center gap-1.5"
-          :class="{ 'active': currentSubject === subject, 'hover:bg-white/5': currentSubject !== subject }">
-          <span x-text="subject"></span>
-          <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-gray-200 tabular-nums"
-                x-text="subjectAnsweredCount(subject) + '/' + subjectCap(subject)"></span>
+      <!-- Mobile Palette Drawer Button (Shown on screens < lg) -->
+      <button type="button"
+              @click="mobilePaletteOpen = true"
+              class="lg:hidden btn-cute-soft !py-1.5 !px-2.5 !text-xs"
+              aria-label="Open Question Palette">
+        <span>Palette</span>
+        <span class="text-[10px] bg-gold/20 text-gold px-1.5 py-0.2 rounded" x-text="(currentIndexInSubject + 1) + '/' + currentSubjectQuestions.length"></span>
+      </button>
+
+      <!-- Submit Test / Back to Scorecard -->
+      <template x-if="!isReviewMode">
+        <button type="button" @click="openSubmitConfirm()" class="btn-cute !py-1.5 !px-3.5 !text-xs">
+          Submit Test
         </button>
       </template>
+
+      <template x-if="isReviewMode">
+        <a :href="resultUrl" :data-back-url="resultUrl" class="btn-cute-soft !py-1.5 !px-3 !text-xs">
+          &larr; Back to Result
+        </a>
+      </template>
     </div>
+  </header>
 
-    <div class="theme-toggle-pill shrink-0" role="group" aria-label="Color theme">
-      <button type="button" data-theme-btn="dark" onclick="window.setSangamTheme('dark')" class="theme-toggle-btn active">🌙</button>
-      <button type="button" data-theme-btn="light" onclick="window.setSangamTheme('light')" class="theme-toggle-btn">☀️</button>
-    </div>
-
-    <template x-if="!isReviewMode">
-      <button @click="openSubmitConfirm()"
-        class="shrink-0 btn-cute !py-1.5 !px-3 !text-[11px]">
-        Submit
-      </button>
-    </template>
-
-    <template x-if="isReviewMode">
-      <a :href="resultUrl" :data-back-url="resultUrl"
-        class="shrink-0 btn-cute-soft !py-1.5 !px-3 !text-[11px]">
-        &larr; Scorecard
-      </a>
-    </template>
-  </div>
-
-  <!-- Horizontal question palette strip + NTA Section Cap Info -->
-  <div class="bg-[#0f0f0f] border-b border-white/5 px-2.5 sm:px-5 py-2 flex flex-col gap-1.5 sticky top-[45px] sm:top-[49px] z-10 shadow-sm">
-    <div class="flex items-center justify-between gap-2 text-[10px] sm:text-[11px]">
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="font-extrabold text-gold uppercase tracking-wider" x-text="currentSubject"></span>
-        <span class="text-gray-300 font-semibold tabular-nums">
-          Attempted: <strong class="text-emerald-400" x-text="subjectAnsweredCount(currentSubject)"></strong> / <strong class="text-white" x-text="subjectCap(currentSubject)"></strong>
-        </span>
-        <template x-if="subjectOptionalSkips(currentSubject) > 0">
-          <span class="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-bold text-[9px] sm:text-[10px]">
-            NTA Rule: Attempt any <span x-text="subjectCap(currentSubject)"></span> of <span x-text="currentSubjectQuestions.length"></span> (<span x-text="subjectOptionalSkips(currentSubject)"></span> Free Skips · 0 Negative)
-          </span>
-        </template>
-      </div>
-      <span class="text-[10px] font-bold text-gray-400 shrink-0">+4 · -{{ test.negative_marking or 1 }} · Skip 0</span>
-    </div>
-
-    <div class="flex items-center gap-2">
-      <div class="flex-1 flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-        <template x-for="(q, idx) in currentSubjectQuestions" :key="'strip-' + q.id">
-          <button
-            @click="jumpTo(currentSubject, idx)"
-            class="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg text-[11px] font-bold flex items-center justify-center transition-transform hover:scale-105 shadow-sm"
-            :class="[paletteClass(q), currentIndexInSubject === idx ? 'ring-2 ring-gold ring-offset-1 ring-offset-[#0f0f0f]' : '']"
-            x-text="idx + 1"></button>
-        </template>
-      </div>
-      <button @click="showGridModal = true"
-        class="shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-        aria-label="Open full question grid">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-gray-200">
-          <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-          <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-          <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-          <rect x="14" y="14" width="7" height="7" rx="1"></rect>
-        </svg>
-      </button>
-    </div>
-  </div>
-
-  <!-- NTA Subject Cap Warning Banner -->
-  <div x-show="capWarning" x-cloak class="max-w-4xl mx-auto w-full px-4 pt-3">
-    <div class="rounded-xl px-3.5 py-2.5 bg-amber-500/15 border border-amber-400/40 text-amber-200 text-xs font-bold flex items-center justify-between gap-2">
+  <!-- NTA Subject Cap Warning Banner (Only when optional cap applies) -->
+  <div x-show="capWarning" x-cloak class="max-w-7xl mx-auto w-full px-4 pt-3">
+    <div class="rounded-xl px-4 py-2.5 bg-amber-500/20 border border-amber-400/50 text-amber-200 text-xs font-bold flex items-center justify-between gap-2">
       <span x-text="capWarning"></span>
       <button type="button" @click="capWarning = null" class="text-amber-300 hover:text-white text-xs font-extrabold px-1.5">✕</button>
     </div>
   </div>
 
-  <!-- Main question area -->
-  <div class="flex-1 w-full max-w-4xl mx-auto p-3.5 sm:p-6">
-    <div x-show="currentQuestion" x-cloak class="w-full">
-      <div class="flex items-center justify-between mb-4">
+  <!-- =================================================================
+       PROFESSIONAL NTA 2-COLUMN EXAM WORKSPACE (Desktop: Left Question + Right Palette)
+       ================================================================= -->
+  <div class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-5 py-4 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+    <!-- ===============================================================
+         LEFT PANEL (lg:col-span-8): QUESTION CONTENT & ACTION BAR
+         =============================================================== -->
+    <div class="lg:col-span-8 flex flex-col w-full min-w-0" x-show="currentQuestion" x-cloak>
+
+      <!-- Question Top Header & Clear Visible Marking Scheme Box -->
+      <div class="nta-panel bg-[#111622]/90 border border-white/15 rounded-t-2xl px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2.5">
         <div class="flex items-center gap-2.5">
-          <p class="text-xs sm:text-sm font-bold text-gray-200">
-            Q<span x-text="currentIndexInSubject + 1"></span> <span class="text-gray-400 font-medium">/ <span x-text="currentSubjectQuestions.length"></span></span>
-            <span class="text-gold font-bold ml-1">· <span x-text="currentSubject"></span></span>
-          </p>
-          <!-- Bookmark Icon -->
-          <button x-show="!isReviewMode" type="button" @click="toggleMark(currentQuestion?.id)"
-            class="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150 focus:outline-none"
-            :class="isMarked(currentQuestion?.id) ? 'text-gold bg-gold/15 border border-gold/40' : 'text-gray-400 hover:text-gray-200 bg-white/5 border border-white/10'"
-            :aria-pressed="isMarked(currentQuestion?.id)"
-            title="Mark for review">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="15" height="15"
-              :fill="isMarked(currentQuestion?.id) ? 'currentColor' : 'none'"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-            </svg>
-          </button>
+          <span class="px-2.5 py-1 rounded-lg bg-gold/15 border border-gold/35 text-gold font-display font-bold text-xs sm:text-sm">
+            Question <span x-text="currentIndexInSubject + 1"></span> of <span x-text="currentSubjectQuestions.length"></span>
+          </span>
+          <span x-show="subjects.length > 1" class="text-xs sm:text-sm font-bold text-white">
+            · <span x-text="currentSubject"></span>
+          </span>
         </div>
 
-        <template x-if="!isReviewMode">
-          <p class="flex items-center gap-1.5 text-[11px] font-bold text-gray-300 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-gold" :class="finished ? '' : 'animate-pulse'"></span>
-            <span class="tabular-nums" x-text="formattedQuestionTime"></span>
-          </p>
-        </template>
+        <!-- Clearly Visible Marking Scheme Box (+4 Correct | -1 Incorrect | 0 Unanswered) -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.06] border border-white/15 text-xs font-bold">
+            <span class="text-emerald-400">+{{ nta_meta.marks_per_question | int if (nta_meta and nta_meta.marks_per_question == (nta_meta.marks_per_question | int)) else 4 }} Correct</span>
+            <span class="text-gray-500">|</span>
+            <span class="text-red-400">-{{ test.negative_marking or 1 }} Incorrect</span>
+            <span class="text-gray-500">|</span>
+            <span class="text-gray-300">0 Unanswered</span>
+          </div>
 
-        <template x-if="isReviewMode">
-          <p class="text-[11px] font-bold text-gray-300 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-            Time: <span class="tabular-nums text-white ml-1" x-text="formatSeconds(currentQuestion?.time_taken_sec)"></span>
-          </p>
-        </template>
+          <template x-if="!isReviewMode">
+            <span class="inline-flex items-center gap-1 text-xs font-bold text-gray-300 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg tabular-nums" title="Time spent on this question">
+              ⏱ <span x-text="formattedQuestionTime"></span>
+            </span>
+          </template>
+          <template x-if="isReviewMode">
+            <span class="inline-flex items-center gap-1 text-xs font-bold text-gray-300 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg tabular-nums">
+              ⏱ <span x-text="formatSeconds(currentQuestion?.time_taken_sec)"></span>
+            </span>
+          </template>
+        </div>
       </div>
 
-      <div class="q-card bg-[#161616] border border-white/10 rounded-2xl p-4 sm:p-6 mb-5 shadow-lg"
+      <!-- Question Stem, Optional Diagram & Options Card -->
+      <div class="q-card bg-[#141926]/95 border-x border-b border-white/15 rounded-b-2xl p-4 sm:p-6 mb-4 shadow-xl"
            x-ref="questionCard" :style="cardStyle">
         <div class="q-swapbar" :class="swapping ? 'on' : ''"></div>
 
+        <!-- Question Text -->
         <div class="question-text text-sm sm:text-base md:text-lg leading-relaxed mb-5 text-gray-100 font-medium"
              x-html="rendered.question_text"></div>
 
-        <!-- Question Image rendering if exists -->
-        <img :src="hasValidImage(currentQuestion) ? currentQuestion.image_url : ''"
-             x-show="hasValidImage(currentQuestion)"
-             decoding="async"
-             class="max-h-[280px] w-auto max-w-full object-contain bg-white rounded-lg p-2 border border-gray-300 mx-auto my-5 shadow-sm" alt="Diagram"
-             @load="onImageLoad($event, currentQuestion)"
-             @error="onImageError($event, currentQuestion)">
-        <p x-show="currentQuestion && imageErrorIds[currentQuestion.id]" x-cloak
-           class="text-xs font-semibold text-red-400 text-center -mt-3 mb-4">
-          ⚠ Diagram failed to load — image link may be broken.
-        </p>
+        <!-- Conditional Diagram Rendering: ONLY mounted in DOM when a valid diagram URL exists -->
+        <template x-if="hasValidImage(currentQuestion)">
+          <div class="my-5 flex flex-col items-center">
+            <img :src="currentQuestion.image_url"
+                 decoding="async"
+                 class="max-h-[300px] w-auto max-w-full object-contain bg-white rounded-xl p-2.5 border border-gray-300 mx-auto shadow-sm"
+                 alt="Question Diagram"
+                 @load="onImageLoad($event, currentQuestion)"
+                 @error="onImageError($event, currentQuestion)">
+            <p x-show="imageErrorIds[currentQuestion.id]" x-cloak
+               class="text-xs font-semibold text-red-400 text-center mt-2">
+              ⚠ Diagram failed to load — image link may be broken.
+            </p>
+          </div>
+        </template>
 
+        <!-- Options A, B, C, D -->
         <div class="space-y-3">
           <template x-for="opt in ['A','B','C','D']" :key="opt">
             <button
@@ -219,107 +269,234 @@
               <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-colors"
                 :class="optionBadgeClass(opt)"
                 x-text="opt"></span>
-              <span class="option-text text-xs sm:text-sm md:text-base leading-relaxed mt-0.5"
+              <span class="option-text text-xs sm:text-sm md:text-base leading-relaxed mt-0.5 flex-1"
                     x-html="rendered['option_' + opt.toLowerCase()]"></span>
             </button>
           </template>
         </div>
-      </div>
 
-      <!-- Navigation Actions -->
-      <div class="grid grid-cols-2 gap-3">
-        <button @click="goPrev()" :disabled="currentIndexInSubject === 0"
-          class="btn-cute-soft !py-3 !text-xs sm:!text-sm disabled:opacity-30 disabled:cursor-not-allowed">
-          &larr; Previous
-        </button>
-
-        <template x-if="!isReviewMode">
-          <button @click="saveAndNext(currentQuestion?.id)" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
-            class="btn-cute !py-3 !text-xs sm:!text-sm disabled:opacity-30 disabled:cursor-not-allowed">
-            Save &amp; Next &rarr;
-          </button>
-        </template>
-
+        <!-- Review Mode Answer Key & Explanation -->
         <template x-if="isReviewMode">
-          <button @click="goNext()" :disabled="currentIndexInSubject === currentSubjectQuestions.length - 1"
-            class="btn-cute !py-3 !text-xs sm:!text-sm disabled:opacity-30 disabled:cursor-not-allowed">
-            Next &rarr;
-          </button>
+          <div class="mt-5 pt-4 border-t border-white/15 space-y-2 text-xs sm:text-sm">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="font-bold text-emerald-400">Correct Answer: Option <span x-text="currentQuestion?.correct_option"></span></span>
+              <span class="text-gray-400">|</span>
+              <span class="font-bold" :class="currentQuestion?.selected_option ? (currentQuestion?.is_correct ? 'text-emerald-400' : 'text-red-400') : 'text-gray-400'">
+                Your Answer: <span x-text="currentQuestion?.selected_option ? ('Option ' + currentQuestion.selected_option) : 'Not Answered'"></span>
+              </span>
+            </div>
+            <div x-show="rendered.explanation" class="p-3.5 rounded-xl bg-white/[0.04] border border-white/10 text-gray-200 leading-relaxed">
+              <span class="font-bold text-gold block mb-1">Solution / Explanation:</span>
+              <div x-html="rendered.explanation"></div>
+            </div>
+          </div>
         </template>
       </div>
-    </div>
-  </div>
 
-  <!-- Full Question Grid Modal -->
-  <div x-show="showGridModal" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" @click.self="showGridModal = false">
-    <div class="bg-[#161616] border border-white/10 rounded-2xl p-5 sm:p-6 max-w-xl w-full max-h-[85vh] overflow-y-auto shadow-2xl">
-      <div class="flex items-center justify-between mb-5">
-        <h3 class="font-display text-lg font-bold text-white">Question Palette</h3>
-        <button @click="showGridModal = false" class="text-gray-400 hover:text-white transition-colors p-1 focus:outline-none">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
+      <!-- NTA Bottom Action Bar: Mark for Review, Clear Response, Previous, Skip / Next, Save & Next -->
+      <template x-if="!isReviewMode">
+        <div class="nta-panel bg-[#111622]/90 border border-white/15 rounded-2xl p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2.5">
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    @click="markForReviewAndNext()"
+                    class="px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-all"
+                    :class="isMarked(currentQuestion?.id) ? 'bg-purple-600 text-white border-purple-500' : 'bg-purple-500/15 text-purple-200 border-purple-400/35 hover:bg-purple-500/25'">
+              <span x-text="isMarked(currentQuestion?.id) ? '★ Marked for Review' : '☆ Mark for Review'"></span>
+            </button>
 
-      <template x-for="subject in subjects" :key="'grid-' + subject">
-        <div class="mb-5">
-          <div class="flex items-center justify-between mb-2">
-            <p class="text-xs sm:text-sm font-bold text-gold" x-text="subject"></p>
-            <span class="text-[11px] font-bold text-gray-300 tabular-nums"
-                  x-text="'Attempted: ' + subjectAnsweredCount(subject) + ' / ' + subjectCap(subject) + (subjectOptionalSkips(subject) > 0 ? ' (' + subjectOptionalSkips(subject) + ' optional)' : '')"></span>
+            <button type="button"
+                    @click="clearResponse()"
+                    :disabled="!selectedOption(currentQuestion?.id)"
+                    class="px-3.5 py-2.5 rounded-xl text-xs font-bold border border-white/15 bg-white/5 text-gray-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+              Clear Response
+            </button>
           </div>
-          <div class="grid grid-cols-7 sm:grid-cols-10 gap-1.5">
-            <template x-for="(q, idx) in questionsBySubject[subject]" :key="q.id">
-              <button
-                @click="jumpTo(subject, idx); showGridModal = false"
-                class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg text-xs font-bold flex items-center justify-center transition-transform hover:scale-105 shadow-sm"
-                :class="paletteClass(q)"
-                x-text="idx + 1"></button>
-            </template>
+
+          <div class="flex items-center gap-2 ml-auto">
+            <button type="button"
+                    @click="goPrev()"
+                    :disabled="!canGoPrev()"
+                    class="btn-cute-soft !py-2.5 !px-3.5 !text-xs disabled:opacity-35 disabled:cursor-not-allowed">
+              &larr; Previous
+            </button>
+
+            <button type="button"
+                    @click="skipAndNext()"
+                    :disabled="!canGoNext()"
+                    class="btn-cute-soft !py-2.5 !px-3.5 !text-xs disabled:opacity-35 disabled:cursor-not-allowed">
+              Skip / Next &rarr;
+            </button>
+
+            <button type="button"
+                    @click="saveAndNext(currentQuestion?.id)"
+                    class="btn-cute !py-2.5 !px-5 !text-xs sm:!text-sm">
+              Save &amp; Next &rarr;
+            </button>
           </div>
         </div>
       </template>
 
-      <div class="text-xs space-y-2 mt-5 pt-4 border-t border-white/10 text-gray-300 bg-white/5 rounded-xl p-3.5">
-        <div class="grid grid-cols-2 gap-2.5">
-          <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-not-visited inline-block border border-white/10"></span> Not Visited</p>
-          <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-not-answered inline-block border border-black/20"></span> Not Answered (0 Marks)</p>
-          <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-answered inline-block border border-black/20"></span> Answered</p>
-          <p class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded status-marked inline-block border border-black/20"></span> Marked for Review</p>
-          <p class="flex items-center gap-2 col-span-2"><span class="w-3.5 h-3.5 rounded status-answered-marked inline-block"></span> Answered &amp; Marked for Review</p>
+      <template x-if="isReviewMode">
+        <div class="nta-panel bg-[#111622]/90 border border-white/15 rounded-2xl p-3 sm:p-4 flex items-center justify-between gap-3">
+          <button type="button"
+                  @click="goPrev()"
+                  :disabled="!canGoPrev()"
+                  class="btn-cute-soft !py-2.5 !px-4 !text-xs disabled:opacity-35 disabled:cursor-not-allowed">
+            &larr; Previous Question
+          </button>
+          <button type="button"
+                  @click="goNext()"
+                  :disabled="!canGoNext()"
+                  class="btn-cute !py-2.5 !px-5 !text-xs disabled:opacity-35 disabled:cursor-not-allowed">
+            Next Question &rarr;
+          </button>
         </div>
-      </div>
+      </template>
+
     </div>
+
+    <!-- ===============================================================
+         RIGHT PANEL (lg:col-span-4): NTA QUESTION PALETTE & LEGEND
+         =============================================================== -->
+    <aside class="lg:col-span-4 w-full lg:sticky lg:top-[68px]"
+           :class="mobilePaletteOpen ? 'fixed inset-0 z-50 bg-black/80 p-4 flex items-center justify-center backdrop-blur-sm lg:static lg:bg-transparent lg:p-0 lg:block' : 'hidden lg:block'">
+      <div class="nta-panel bg-[#111622]/95 border border-white/15 rounded-2xl p-4 w-full max-w-md lg:max-w-none max-h-[88vh] lg:max-h-[calc(100vh-84px)] flex flex-col shadow-2xl">
+
+        <!-- Mobile Close Header -->
+        <div class="flex items-center justify-between pb-3 mb-3 border-b border-white/10 lg:hidden">
+          <h2 class="font-display text-sm font-bold text-white">Question Navigation Palette</h2>
+          <button type="button" @click="mobilePaletteOpen = false" class="text-gray-400 hover:text-white text-sm font-bold px-2 py-0.5 rounded">✕ Close</button>
+        </div>
+
+        <!-- 1. Compact NTA Status Legend & Counts Box -->
+        <div class="mb-3.5 pb-3.5 border-b border-white/10">
+          <p class="text-[10px] font-black uppercase tracking-widest text-gold mb-2">Question Status Legend</p>
+          <div class="grid grid-cols-2 gap-2 text-[11px] font-semibold text-gray-200">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-md status-answered flex items-center justify-center text-[10px] font-extrabold shrink-0" x-text="counts.answered"></span>
+              <span>Answered</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-md status-not-answered flex items-center justify-center text-[10px] font-extrabold shrink-0" x-text="counts.notAnswered"></span>
+              <span>Not Answered</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-md status-not-visited flex items-center justify-center text-[10px] font-extrabold shrink-0" x-text="counts.notVisited"></span>
+              <span>Not Visited</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-md status-marked flex items-center justify-center text-[10px] font-extrabold shrink-0" x-text="counts.markedOnly"></span>
+              <span>Marked for Review</span>
+            </div>
+            <div class="col-span-2 flex items-center gap-2">
+              <span class="w-6 h-6 rounded-md status-answered-marked flex items-center justify-center text-[10px] font-extrabold shrink-0" x-text="counts.answeredMarked"></span>
+              <span>Answered &amp; Marked for Review (Evaluated)</span>
+            </div>
+          </div>
+
+          <!-- Short Action Guide -->
+          <details class="mt-2.5 text-[10px] text-gray-400 bg-white/[0.03] border border-white/10 rounded-lg px-2.5 py-1.5">
+            <summary class="cursor-pointer font-bold text-gray-300 select-none">Button Instructions</summary>
+            <ul class="mt-1.5 space-y-1 leading-snug">
+              <li><strong class="text-white">Save &amp; Next:</strong> Saves your selected option and moves to the next question.</li>
+              <li><strong class="text-white">Skip / Next:</strong> Moves to the next question without saving an answer.</li>
+              <li><strong class="text-white">Mark for Review:</strong> Flags the question to check again later.</li>
+              <li><strong class="text-white">Clear Response:</strong> Removes the currently selected option.</li>
+            </ul>
+          </details>
+        </div>
+
+        <!-- 2. Subject Tabs (Physics | Chemistry | Biology) — Shown ONLY when test has multiple subjects -->
+        <template x-if="subjects.length > 1">
+          <div class="mb-3">
+            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Select Subject Section</p>
+            <div class="grid grid-cols-3 gap-1.5">
+              <template x-for="subject in subjects" :key="'tab-' + subject">
+                <button
+                  type="button"
+                  @click="switchSubject(subject)"
+                  class="subject-tab px-2 py-2 text-xs font-bold border rounded-xl transition-all flex flex-col items-center justify-center gap-0.5"
+                  :class="{ 'active': currentSubject === subject }">
+                  <span class="truncate max-w-full" x-text="subject"></span>
+                  <span class="text-[10px] opacity-85 tabular-nums"
+                        x-text="subjectAnsweredCount(subject) + '/' + subjectCap(subject)"></span>
+                </button>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- Current Subject Header Info -->
+        <div class="flex items-center justify-between text-xs font-bold mb-2 px-0.5">
+          <span class="text-gold uppercase tracking-wider" x-text="currentSubject + ' Palette'"></span>
+          <span class="text-gray-300 tabular-nums">
+            Attempted: <strong class="text-emerald-400" x-text="subjectAnsweredCount(currentSubject)"></strong> / <strong class="text-white" x-text="subjectCap(currentSubject)"></strong>
+          </span>
+        </div>
+
+        <!-- 3. Vertically Scrollable Question Number Grid (Handles 45, 90, or 180 Questions Smoothly) -->
+        <div class="palette-scroll overflow-y-auto flex-1 min-h-[180px] max-h-[340px] lg:max-h-[380px] pr-1 py-1">
+          <div class="grid grid-cols-5 sm:grid-cols-6 lg:grid-cols-5 gap-2">
+            <template x-for="(q, idx) in currentSubjectQuestions" :key="'pal-' + q.id">
+              <button
+                type="button"
+                @click="jumpTo(currentSubject, idx); mobilePaletteOpen = false"
+                class="h-9 rounded-lg text-xs font-bold flex items-center justify-center transition-transform hover:scale-105 shadow-sm tabular-nums"
+                :class="[paletteClass(q), currentIndexInSubject === idx ? 'ring-2 ring-gold ring-offset-2 ring-offset-[#111622]' : '']"
+                x-text="'Q' + (idx + 1)"></button>
+            </template>
+          </div>
+        </div>
+
+        <!-- Submit Button at Bottom of Right Panel -->
+        <template x-if="!isReviewMode">
+          <div class="pt-3 mt-3 border-t border-white/10">
+            <button type="button" @click="mobilePaletteOpen = false; openSubmitConfirm()" class="btn-cute !w-full !py-2.5 !text-xs">
+              Submit Test
+            </button>
+          </div>
+        </template>
+
+      </div>
+    </aside>
+
   </div>
 
-  <!-- Submit Confirmation Modal -->
+  <!-- =================================================================
+       SUBMIT CONFIRMATION MODAL
+       ================================================================= -->
   <div x-show="showSubmitConfirm" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-    <div class="bg-[#161616] border border-white/10 rounded-2xl p-5 sm:p-6 max-w-sm w-full shadow-2xl">
-      <h3 class="font-display text-lg sm:text-xl font-bold mb-1.5 text-white text-center">Lock In &amp; Submit?</h3>
-      <p class="text-[11px] text-gray-400 text-center mb-4">Skipped / unattempted questions carry <strong class="text-emerald-400">0 negative marks</strong>.</p>
+    <div class="bg-[#141926] border border-white/15 rounded-2xl p-5 sm:p-6 max-w-sm w-full shadow-2xl">
+      <h3 class="font-display text-lg sm:text-xl font-bold mb-1.5 text-white text-center">Submit Mock Test?</h3>
+      <p class="text-[11px] text-gray-300 text-center mb-4">Unanswered questions carry <strong class="text-emerald-400">0 negative marks</strong>.</p>
 
-      <div class="bg-white/5 rounded-xl p-3.5 text-xs sm:text-sm text-gray-300 space-y-2 mb-4 border border-white/10">
+      <div class="bg-white/5 rounded-xl p-3.5 text-xs text-gray-200 space-y-2 mb-4 border border-white/10">
         <div class="flex justify-between items-center">
           <span>Answered:</span>
-          <span class="font-bold text-green-400 text-sm" x-text="counts.answered"></span>
+          <span class="font-bold text-emerald-400 text-sm" x-text="counts.answered + counts.answeredMarked"></span>
         </div>
         <div class="flex justify-between items-center">
-          <span>Not Answered / Skipped:</span>
-          <span class="font-bold text-gray-200 text-sm" x-text="counts.notAnswered + counts.notVisited"></span>
+          <span>Not Answered:</span>
+          <span class="font-bold text-red-400 text-sm" x-text="counts.notAnswered"></span>
         </div>
         <div class="flex justify-between items-center">
           <span>Marked for Review:</span>
-          <span class="font-bold text-gold text-sm" x-text="counts.marked"></span>
+          <span class="font-bold text-purple-300 text-sm" x-text="counts.marked"></span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span>Not Visited:</span>
+          <span class="font-bold text-gray-300 text-sm" x-text="counts.notVisited"></span>
         </div>
       </div>
 
-      <!-- Per-Subject NTA Attempt Breakdown -->
+      <!-- Per-Subject Breakdown -->
       <div class="bg-white/[0.03] rounded-xl p-3 text-[11px] text-gray-300 space-y-1.5 mb-5 border border-white/10">
-        <p class="text-[9px] font-extrabold uppercase tracking-widest text-gold mb-1">Subject Breakdown (NTA Pattern)</p>
+        <p class="text-[9px] font-extrabold uppercase tracking-widest text-gold mb-1">Subject Summary</p>
         <template x-for="subject in subjects" :key="'sub-cap-' + subject">
           <div class="flex justify-between items-center">
             <span class="font-semibold text-white" x-text="subject"></span>
             <span class="font-bold tabular-nums text-emerald-300"
-                  x-text="subjectAnsweredCount(subject) + ' / ' + subjectCap(subject) + ' attempted'"></span>
+                  x-text="subjectAnsweredCount(subject) + ' / ' + subjectCap(subject) + ' answered'"></span>
           </div>
         </template>
       </div>
@@ -327,16 +504,14 @@
       <p x-show="submitError" x-cloak class="text-xs text-red-400 mb-3 text-center bg-red-400/10 py-2 rounded-lg" x-text="submitError"></p>
 
       <div class="flex gap-2.5">
-        <button @click="cancelSubmitConfirm()" :disabled="submitting"
+        <button type="button" @click="cancelSubmitConfirm()" :disabled="submitting"
           class="flex-1 btn-cute-soft !py-2.5 !text-xs">
-          Keep Solving
+          Return to Test
         </button>
-        <button @click="submitTest()" :disabled="submitting"
+        <button type="button" @click="submitTest()" :disabled="submitting"
           class="flex-1 btn-cute !py-2.5 !text-xs">
-          <template x-if="submitting">
-            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-          </template>
-          <span x-show="!submitting">Yes, Submit</span>
+          <span x-show="!submitting">Confirm Submit</span>
+          <span x-show="submitting">Submitting…</span>
         </button>
       </div>
     </div>
@@ -357,17 +532,17 @@ function testAttempt() {
     timeSpent: {},
     activeQuestionId: null,
     activeQuestionSeconds: 0,
-    durationSeconds: {{ duration_seconds if duration_seconds is defined else (test.duration_minutes or 60) * 60 }},
-    secondsLeft: {{ duration_seconds if duration_seconds is defined else (test.duration_minutes or 60) * 60 }},
+    durationSeconds: {{ duration_seconds if duration_seconds is defined else (test.duration_minutes or 180) * 60 }},
+    secondsLeft: {{ duration_seconds if duration_seconds is defined else (test.duration_minutes or 180) * 60 }},
     showSubmitConfirm: false,
-    showGridModal: false,
+    mobilePaletteOpen: false,
     submitting: false,
     submitError: null,
     capWarning: null,
     finished: false,
 
     // --- render state ---
-    rendered: { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '' },
+    rendered: { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', explanation: '' },
     swapping: false,
     cardStyle: '',
     _swapToken: 0,
@@ -424,7 +599,6 @@ function testAttempt() {
 
     destroy() { this.stopTimers(); },
 
-    /* NTA Per-Subject Attempt Cap Helpers */
     subjectCap(subject) {
       if (!subject) return 0;
       const list = this.questionsBySubject[subject] || [];
@@ -434,7 +608,6 @@ function testAttempt() {
       }
       if (total === 50) return 45;
       if (total === 100) return 90;
-      if (total === 30) return 25;
       return total;
     },
 
@@ -506,13 +679,14 @@ function testAttempt() {
     },
 
     _rawFor(q) {
-      if (!q) return { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '' };
+      if (!q) return { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', explanation: '' };
       return {
-        question_text: q.question_text || '',
-        option_a: q.option_a || '',
-        option_b: q.option_b || '',
-        option_c: q.option_c || '',
-        option_d: q.option_d || ''
+        question_text: SangamQuiz.sanitizeMathString(q.question_text || ''),
+        option_a: SangamQuiz.sanitizeMathString(q.option_a || ''),
+        option_b: SangamQuiz.sanitizeMathString(q.option_b || ''),
+        option_c: SangamQuiz.sanitizeMathString(q.option_c || ''),
+        option_d: SangamQuiz.sanitizeMathString(q.option_d || ''),
+        explanation: SangamQuiz.sanitizeMathString(q.explanation || '')
       };
     },
 
@@ -525,17 +699,22 @@ function testAttempt() {
       const token = ++this._swapToken;
       const key = this._keyFor(q);
 
-      const apply = (map, hit) => {
+      const apply = (map) => {
         if (token !== this._swapToken) return;
         this.rendered = map;
         this._hasContent = true;
         this._clearSwapBar();
         this._unlockHeight();
         this._warmNeighbours();
+        this.$nextTick(() => {
+          if (this.$refs.questionCard && SangamQuiz.typesetElement) {
+            SangamQuiz.typesetElement(this.$refs.questionCard);
+          }
+        });
       };
 
       const cached = this._renderer.get(key);
-      if (cached) { apply(cached, true); return; }
+      if (cached) { apply(cached); return; }
 
       if (!this._hasContent) this.rendered = this._rawFor(q);
 
@@ -546,15 +725,15 @@ function testAttempt() {
       const safety = setTimeout(() => {
         if (settled || token !== this._swapToken) return;
         settled = true;
-        apply(this._rawFor(q), false);
+        apply(this._rawFor(q));
       }, 1200);
 
       this._renderer.prepare(key, this._rawFor(q)).then((map) => {
         if (settled) return;
-        settled = true; clearTimeout(safety); apply(map, false);
+        settled = true; clearTimeout(safety); apply(map);
       }).catch(() => {
         if (settled) return;
-        settled = true; clearTimeout(safety); apply(this._rawFor(q), false);
+        settled = true; clearTimeout(safety); apply(this._rawFor(q));
       });
     },
 
@@ -599,18 +778,17 @@ function testAttempt() {
     },
 
     hasValidImage(q) {
-      const url = q && q.image_url;
-      if (typeof url !== 'string') return false;
-      const trimmed = url.trim();
-      if (!trimmed) return false;
-      return /^https?:\/\//i.test(trimmed);
+      if (!q || !q.image_url) return false;
+      const url = String(q.image_url).trim();
+      return /^https?:\/\/\S+/i.test(url);
     },
 
     get formattedTime() {
       const left = Math.max(0, this.secondsLeft);
-      const m = Math.floor(left / 60).toString().padStart(2, '0');
+      const h = Math.floor(left / 3600);
+      const m = Math.floor((left % 3600) / 60).toString().padStart(2, '0');
       const s = (left % 60).toString().padStart(2, '0');
-      return m + ':' + s;
+      return h > 0 ? (h + ':' + m + ':' + s) : (m + ':' + s);
     },
 
     get formattedQuestionTime() { return this.formatSeconds(this.activeQuestionSeconds); },
@@ -623,17 +801,31 @@ function testAttempt() {
     },
 
     get counts() {
-      let answered = 0, notAnswered = 0, marked = 0, notVisited = 0;
+      let answered = 0, notAnswered = 0, markedOnly = 0, answeredMarked = 0, notVisited = 0;
       for (const subject of this.subjects) {
-        for (const q of this.questionsBySubject[subject]) {
+        for (const q of (this.questionsBySubject[subject] || [])) {
+          if (this.isReviewMode) {
+            if (q.selected_option == null) notVisited++;
+            else if (q.is_correct) answered++;
+            else notAnswered++;
+            continue;
+          }
           const entry = this.progress[q.id];
-          if (!entry || entry.status === 'not_visited' || !entry.status) { notVisited++; continue; }
-          if (entry.status === 'answered' || entry.status === 'answered_marked') answered++;
-          else if (entry.status === 'marked') marked++;
+          if (!entry || !entry.status || entry.status === 'not_visited') { notVisited++; continue; }
+          if (entry.status === 'answered') answered++;
+          else if (entry.status === 'answered_marked') answeredMarked++;
+          else if (entry.status === 'marked') markedOnly++;
           else notAnswered++;
         }
       }
-      return { answered, notAnswered, marked, notVisited };
+      return {
+        answered,
+        notAnswered,
+        markedOnly,
+        answeredMarked,
+        marked: markedOnly + answeredMarked,
+        notVisited,
+      };
     },
 
     autoSubmit() {
@@ -662,23 +854,54 @@ function testAttempt() {
       this.showQuestion();
     },
 
+    canGoNext() {
+      if (this.currentIndexInSubject < this.currentSubjectQuestions.length - 1) return true;
+      const sIdx = this.subjects.indexOf(this.currentSubject);
+      return sIdx >= 0 && sIdx < this.subjects.length - 1;
+    },
+
+    canGoPrev() {
+      if (this.currentIndexInSubject > 0) return true;
+      const sIdx = this.subjects.indexOf(this.currentSubject);
+      return sIdx > 0;
+    },
+
     goNext() {
+      this.capWarning = null;
       if (this.currentIndexInSubject < this.currentSubjectQuestions.length - 1) {
-        this.capWarning = null;
         this.currentIndexInSubject++;
         this.markVisited();
         this._resetQuestionTimer();
         this.showQuestion();
+      } else {
+        const sIdx = this.subjects.indexOf(this.currentSubject);
+        if (sIdx >= 0 && sIdx < this.subjects.length - 1) {
+          this.currentSubject = this.subjects[sIdx + 1];
+          this.currentIndexInSubject = 0;
+          this.markVisited();
+          this._resetQuestionTimer();
+          this.showQuestion();
+        }
       }
     },
 
     goPrev() {
+      this.capWarning = null;
       if (this.currentIndexInSubject > 0) {
-        this.capWarning = null;
         this.currentIndexInSubject--;
         this.markVisited();
         this._resetQuestionTimer();
         this.showQuestion();
+      } else {
+        const sIdx = this.subjects.indexOf(this.currentSubject);
+        if (sIdx > 0) {
+          const prevSubj = this.subjects[sIdx - 1];
+          this.currentSubject = prevSubj;
+          this.currentIndexInSubject = Math.max(0, (this.questionsBySubject[prevSubj] || []).length - 1);
+          this.markVisited();
+          this._resetQuestionTimer();
+          this.showQuestion();
+        }
       }
     },
 
@@ -686,8 +909,9 @@ function testAttempt() {
       if (this.isReviewMode) return;
       const q = this.currentQuestion;
       if (!q) return;
-      if (!this.progress[q.id]) {
+      if (!this.progress[q.id] || !this.progress[q.id].status || this.progress[q.id].status === 'not_visited') {
         this.progress[q.id] = { selected_option: null, status: 'not_answered' };
+        this.persist(q.id);
       }
     },
 
@@ -701,7 +925,7 @@ function testAttempt() {
     },
 
     selectOption(questionId, opt) {
-      if (this.isReviewMode) return;
+      if (this.isReviewMode || !questionId) return;
       const entry = this.progress[questionId] || {};
       const wasMarked = entry.status === 'marked' || entry.status === 'answered_marked';
       const alreadySelected = entry.selected_option === opt;
@@ -713,13 +937,12 @@ function testAttempt() {
           status: wasMarked ? 'marked' : 'not_answered',
         };
       } else {
-        // Enforce NTA per-subject attempt cap when selecting a fresh question
         if (!entry.selected_option) {
           const cap = this.subjectCap(this.currentSubject);
           const currentAns = this.subjectAnsweredCount(this.currentSubject);
           const totalInSubj = this.currentSubjectQuestions.length;
           if (currentAns >= cap && cap < totalInSubj) {
-            this.capWarning = `⚡ NTA Rule: Max ${cap} of ${totalInSubj} questions can be attempted in ${this.currentSubject}. Deselect an answered question in ${this.currentSubject} if you want to attempt this one instead.`;
+            this.capWarning = `Maximum ${cap} of ${totalInSubj} questions can be attempted in ${this.currentSubject}. Clear a previous response in ${this.currentSubject} to attempt this question.`;
             return;
           }
         }
@@ -732,20 +955,58 @@ function testAttempt() {
       this.persist(questionId);
     },
 
-    onImageLoad(evt, q) {
+    clearResponse() {
+      if (this.isReviewMode) return;
+      const q = this.currentQuestion;
       if (!q) return;
+      const entry = this.progress[q.id] || {};
+      const wasMarked = entry.status === 'marked' || entry.status === 'answered_marked';
+      this.capWarning = null;
+      this.progress[q.id] = {
+        selected_option: null,
+        status: wasMarked ? 'marked' : 'not_answered',
+      };
+      this.persist(q.id);
+    },
+
+    markForReviewAndNext() {
+      if (this.isReviewMode) return;
+      const q = this.currentQuestion;
+      if (!q) return;
+      this.toggleMark(q.id);
+    },
+
+    skipAndNext() {
+      if (this.isReviewMode) return;
+      const q = this.currentQuestion;
+      if (q) {
+        const entry = this.progress[q.id];
+        if (!entry || !entry.selected_option) {
+          const wasMarked = entry && (entry.status === 'marked' || entry.status === 'answered_marked');
+          this.progress[q.id] = {
+            selected_option: null,
+            status: wasMarked ? 'marked' : 'not_answered',
+          };
+          this.persist(q.id);
+        }
+      }
+      this.goNext();
+    },
+
+    onImageLoad(evt, q) {
+      if (!q || !this.hasValidImage(q)) return;
       if (this.imageErrorIds[q.id]) delete this.imageErrorIds[q.id];
       const img = evt.target;
-      if (img.naturalWidth === 0) { this.onImageError(evt, q); return; }
+      if (img && img.naturalWidth === 0) { this.onImageError(evt, q); }
     },
 
     onImageError(evt, q) {
-      if (!q) return;
+      if (!q || !this.hasValidImage(q)) return;
       this.imageErrorIds[q.id] = true;
     },
 
     toggleMark(questionId) {
-      if (this.isReviewMode) return;
+      if (this.isReviewMode || !questionId) return;
       const entry = this.progress[questionId] || {};
       const hasAnswer = !!entry.selected_option;
       const currentlyMarked = entry.status === 'marked' || entry.status === 'answered_marked';
@@ -765,8 +1026,16 @@ function testAttempt() {
     },
 
     saveAndNext(questionId) {
-      this.persist(questionId);
-      this.goNext();
+      if (questionId) {
+        const entry = this.progress[questionId];
+        if (!entry) {
+          this.progress[questionId] = { selected_option: null, status: 'not_answered' };
+        }
+        this.persist(questionId);
+      }
+      if (this.canGoNext()) {
+        this.goNext();
+      }
     },
 
     fetchWithRetry(url, options, attempts = 3, delayMs = 600) {
@@ -781,7 +1050,7 @@ function testAttempt() {
     },
 
     persist(questionId) {
-      if (!questionId) return;
+      if (!questionId || this.isReviewMode || this.submitting) return;
       const entry = this.progress[questionId];
       if (!entry) return;
       this.fetchWithRetry(this.saveUrl, {
@@ -815,26 +1084,26 @@ function testAttempt() {
       if (this.isReviewMode) {
         const isCorrectOpt = opt === q.correct_option;
         const isUserWrongPick = opt === q.selected_option && q.selected_option !== q.correct_option;
-        if (isCorrectOpt) return 'border-green-500/50 bg-green-500/10 text-white cursor-default ring-1 ring-green-500/50';
-        if (isUserWrongPick) return 'border-red-500/50 bg-red-500/10 text-white cursor-default ring-1 ring-red-500/50';
-        return 'border-white/5 bg-[#1a1a1a] text-gray-400 cursor-default opacity-50';
+        if (isCorrectOpt) return 'border-emerald-500/60 bg-emerald-500/15 text-white cursor-default ring-1 ring-emerald-500/50';
+        if (isUserWrongPick) return 'border-red-500/60 bg-red-500/15 text-white cursor-default ring-1 ring-red-500/50';
+        return 'nta-opt-unselected border-white/10 bg-[#1a2030] text-gray-400 cursor-default opacity-60';
       }
       return this.selectedOption(q.id) === opt
-        ? 'border-gold bg-gold/10 text-white cursor-pointer ring-1 ring-gold'
-        : 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 hover:bg-[#222] cursor-pointer';
+        ? 'border-gold bg-gold/15 text-white cursor-pointer ring-1 ring-gold'
+        : 'nta-opt-unselected border-white/15 bg-[#1a2030] text-gray-200 hover:border-white/35 hover:bg-[#22293d] cursor-pointer';
     },
 
     optionBadgeClass(opt) {
       const q = this.currentQuestion;
       if (!q) return '';
       if (this.isReviewMode) {
-        if (opt === q.correct_option) return 'border-green-500 bg-green-500 text-ink';
+        if (opt === q.correct_option) return 'border-emerald-500 bg-emerald-500 text-ink';
         if (opt === q.selected_option && q.selected_option !== q.correct_option) return 'border-red-500 bg-red-500 text-white';
-        return 'border-white/20 text-gray-500';
+        return 'border-white/25 text-gray-400';
       }
       return this.selectedOption(q.id) === opt
         ? 'border-gold bg-gold text-ink'
-        : 'border-white/30 text-gray-400 group-hover:border-white/50 group-hover:text-gray-200';
+        : 'border-white/30 text-gray-300 group-hover:border-white/50';
     },
 
     openSubmitConfirm() {
@@ -858,7 +1127,7 @@ function testAttempt() {
 
       const answers = {};
       for (const subject of this.subjects) {
-        for (const q of this.questionsBySubject[subject]) {
+        for (const q of (this.questionsBySubject[subject] || [])) {
           const entry = this.progress[q.id];
           answers[q.id] = {
             selected_option: entry ? entry.selected_option : null,
@@ -880,11 +1149,10 @@ function testAttempt() {
         .catch(() => {
           this.submitting = false;
           this._resumeTimers();
-          this.submitError = "Couldn't submit — check your connection and try again. Your answers are saved, so it's safe to retry.";
+          this.submitError = "Could not submit — check your connection and try again. Your answers are saved.";
         });
     },
   };
 }
 </script>
 {% endblock %}
-<!-- STUDY SANGAM HUB v4.0 -->

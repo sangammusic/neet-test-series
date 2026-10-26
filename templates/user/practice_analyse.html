@@ -1,23 +1,22 @@
 {% extends "shared/base.html" %}
-{% block title %}Analyse — {{ set_name }}{% endblock %}
+{% block title %}Practice Result — {{ set_name }}{% endblock %}
 {% block content %}
 {% set base = {'slug': stream.slug, 'chapter_id': chapter.id, 'mode': mode, 'category': category, 'folder': folder, 'set_name': set_name} %}
 {% set start_url = url_for('user.practice_start', **base) %}
 {% set sets_url = url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) %}
 <section class="max-w-xl mx-auto px-4 pt-6 pb-20 relative z-10 font-body">
 
-  <!-- Parallel Back Button + Start Another Quiz Button (Skips finished runner Page 2 completely) -->
   <div class="mb-5 flex flex-wrap items-center justify-between gap-2">
     <a href="{{ sets_url }}" data-back-url="{{ sets_url }}" class="btn-cute-soft">
-      &larr; Back to Quizzes
+      &larr; Back to Practice Sets
     </a>
     <a href="{{ sets_url }}" data-replace-link class="btn-cute">
-      🚀 Start Another Quiz &rarr;
+      Next Practice Set &rarr;
     </a>
   </div>
 
   <div class="text-center mb-6">
-    <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-1 rounded-full inline-block mb-2">Quiz Result &amp; Analysis</span>
+    <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2.5 py-1 rounded-full inline-block mb-2">Practice Result &amp; Review</span>
     <h1 class="font-display text-2xl sm:text-3xl font-bold text-white mb-0.5">{{ set_name }}</h1>
     <p class="text-xs text-gray-400">{{ chapter.name }} · {{ folder }}</p>
   </div>
@@ -29,8 +28,8 @@
   </div>
   <div class="grid grid-cols-3 gap-2.5 mb-6">
     <div class="pw-tile rounded-xl p-3 text-center"><p class="text-xl font-display font-bold text-green-400">{{ attempt.correct_count }}</p><p class="text-[9px] font-bold text-gray-400 uppercase">Correct</p></div>
-    <div class="pw-tile rounded-xl p-3 text-center"><p class="text-xl font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[9px] font-bold text-gray-400 uppercase">Wrong</p></div>
-    <div class="pw-tile rounded-xl p-3 text-center"><p class="text-xl font-display font-bold text-gray-400">{{ attempt.skipped_count }}</p><p class="text-[9px] font-bold text-gray-400 uppercase">Skipped</p></div>
+    <div class="pw-tile rounded-xl p-3 text-center"><p class="text-xl font-display font-bold text-red-400">{{ attempt.wrong_count }}</p><p class="text-[9px] font-bold text-gray-400 uppercase">Incorrect</p></div>
+    <div class="pw-tile rounded-xl p-3 text-center"><p class="text-xl font-display font-bold text-gray-400">{{ attempt.skipped_count }}</p><p class="text-[9px] font-bold text-gray-400 uppercase">Unanswered</p></div>
   </div>
 
   <!-- Time Spent -->
@@ -46,7 +45,7 @@
         <div class="mt-2.5 space-y-1.5">
           {% for it in time_by_question %}
           <div class="flex justify-between items-center text-xs">
-            <span class="text-gray-300 truncate pr-3">Q{{ it.question_order }}. {{ it.question_text | striptags | truncate(48) }}</span>
+            <span class="text-gray-300 truncate pr-3">Q{{ it.question_order }}. {{ it.question_text | clean_q | striptags | truncate(48) }}</span>
             <span class="text-gray-400 font-medium tabular-nums shrink-0">{{ (it.time_taken_sec // 60) }}m {{ (it.time_taken_sec % 60) }}s</span>
           </div>
           {% endfor %}
@@ -56,13 +55,13 @@
   </div>
   {% endif %}
 
-  <!-- ANALYSE -->
-  <h2 class="font-display text-sm sm:text-base font-bold text-white uppercase tracking-wider mb-2.5">📊 Analyse Answers</h2>
+  <!-- REVIEW ANSWERS -->
+  <h2 class="font-display text-sm sm:text-base font-bold text-white uppercase tracking-wider mb-2.5">📋 Review Answers</h2>
   <div class="space-y-2.5 mb-7">
     {% for view, label, sub, n in [
-        ('wrong',  'Analyse Wrong Questions',  'Wrong + not-attempted questions', counts.wrong),
-        ('marked', 'Analyse Marked Questions', 'Questions marked for review',    counts.marked),
-        ('full',   'Analyse Full Quiz',        'Every question with explanations & notes', counts.full) ] %}
+        ('wrong',  'Review Incorrect & Unanswered', 'Incorrect + unattempted questions with explanations', counts.wrong),
+        ('marked', 'Review Marked Questions',       'Questions marked for review during practice',         counts.marked),
+        ('full',   'Complete Question Review',      'Every question with explanations & notes',            counts.full) ] %}
     {% if n > 0 %}
     <a href="{{ url_for('user.practice_analyse_view', view=view, **base) }}"
        class="pw-tile flex items-center justify-between gap-3 p-3.5 sm:p-4">
@@ -71,7 +70,7 @@
     </a>
     {% else %}
     <div class="pw-tile flex items-center justify-between gap-3 p-3.5 opacity-50 cursor-not-allowed">
-      <div><p class="font-bold text-xs sm:text-sm text-gray-400">{{ label }}</p><p class="text-[11px] text-gray-500 mt-0.5">Nothing here</p></div>
+      <div><p class="font-bold text-xs sm:text-sm text-gray-400">{{ label }}</p><p class="text-[11px] text-gray-500 mt-0.5">No questions in this filter</p></div>
       <span class="text-xs font-bold text-gray-500 border border-white/10 rounded-full px-2.5 py-0.5">0</span>
     </div>
     {% endif %}
@@ -79,13 +78,13 @@
   </div>
 
   <!-- REATTEMPT -->
-  <h2 id="reattempt" class="font-display text-sm sm:text-base font-bold text-white uppercase tracking-wider mb-2">🔁 Reattempt</h2>
+  <h2 id="reattempt" class="font-display text-sm sm:text-base font-bold text-white uppercase tracking-wider mb-2">🔁 Reattempt Practice</h2>
   <div class="space-y-2.5">
     {% set wm = counts.wrong_or_marked %}
-    {% for kind, label, sub, n, warn in [
-        ('wrong_only',            'Reattempt Wrong Questions', 'Replay wrong + not-attempted questions',        counts.wrong, ''),
-        ('marked_and_wrong_only', 'Reattempt Wrong + Marked', 'Replay wrong and marked questions',             wm, ''),
-        ('full',                  'Attempt Full Quiz Again',  'Start a fresh full attempt',                    counts.full, '') ] %}
+    {% for kind, label, sub, n in [
+        ('wrong_only',            'Reattempt Incorrect & Unanswered', 'Practice only incorrect and skipped questions', counts.wrong),
+        ('marked_and_wrong_only', 'Reattempt Incorrect + Marked',     'Practice incorrect and marked questions',       wm),
+        ('full',                  'Start Fresh Full Practice',        'Start a fresh attempt of all questions',        counts.full) ] %}
     {% if n > 0 %}
     <form method="POST" action="{{ start_url }}" data-replace-form class="m-0">
       <input type="hidden" name="kind" value="{{ kind }}">
@@ -104,4 +103,3 @@
   }
 </script>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->

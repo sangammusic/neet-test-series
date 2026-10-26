@@ -5,8 +5,59 @@
 {% block extra_head %}
 <script src="{{ url_for('static', filename='js/sangam-quiz-core.js') }}"></script>
 <style>
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  /* Official NTA Examination Status Indicators */
+  .status-not-visited {
+    background: #334155;
+    color: #F8FAFC;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+  }
+  html[data-theme="light"] .status-not-visited {
+    background: #F1F5F9;
+    color: #334155;
+    border: 1px solid #CBD5E1;
+  }
+  .status-not-answered {
+    background: #DC2626;
+    color: #FFFFFF;
+    border: 1px solid #B91C1C;
+  }
+  .status-answered {
+    background: #16A34A;
+    color: #FFFFFF;
+    border: 1px solid #15803D;
+  }
+  .status-marked {
+    background: #7C3AED;
+    color: #FFFFFF;
+    border: 1px solid #6D28D9;
+  }
+  .status-answered-marked {
+    background: #7C3AED;
+    color: #FFFFFF;
+    border: 2px solid #22C55E;
+    box-shadow: inset 0 0 0 2px #16A34A;
+    position: relative;
+  }
+  .status-answered-marked::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: #22C55E;
+  }
+
+  .palette-scroll {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(212, 160, 23, 0.5) rgba(255, 255, 255, 0.05);
+  }
+  .palette-scroll::-webkit-scrollbar { width: 6px; }
+  .palette-scroll::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.04); border-radius: 6px; }
+  .palette-scroll::-webkit-scrollbar-thumb { background: rgba(212, 160, 23, 0.55); border-radius: 6px; }
+
   body:has(#practice-runner) > footer,
   body:has(#practice-runner) [data-footer] {
     display: none !important;
@@ -60,115 +111,140 @@
 {% endblock %}
 
 {% block content %}
-<div id="practice-runner" x-data="practiceRunner()" class="min-h-screen w-full max-w-full overflow-x-hidden bg-[#0a0a0a] text-gray-100 flex flex-col font-body">
+<div id="practice-runner" x-data="practiceRunner()" class="min-h-screen w-full max-w-full overflow-x-hidden flex flex-col font-body">
 
-  <!-- Top bar with Dark/White Mode Toggle + Timer + Exit -->
-  <div class="bg-[#111111] border-b border-white/10 px-3 md:px-6 py-2 flex items-center justify-between gap-2 sticky top-0 z-20 shadow-sm">
-    <div class="min-w-0">
-      <p class="text-[11px] text-gray-400 truncate">{{ chapter.name }} · {{ 'PYQ' if mode == 'pyq' else 'MCQ' }} · 📁 {{ folder }}</p>
-      <p class="text-xs sm:text-sm font-bold text-white truncate">{{ set_name }}</p>
+  <!-- =================================================================
+       STICKY TOP PRACTICE HEADER BAR (No redundant subject tabs!)
+       ================================================================= -->
+  <header class="nta-panel bg-[#0d111a]/95 backdrop-blur-md border-b border-white/15 px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2 sticky top-0 z-30 shadow-md">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <img src="{{ url_for('static', filename='img/logo-mark.png') }}"
+           onerror="this.onerror=null;this.src=window.SANGAM_LOGO_URI"
+           alt="Sangam Study"
+           class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-contain shrink-0">
+      <div class="min-w-0">
+        <p class="text-[10px] text-gold font-bold uppercase tracking-wider truncate">{{ chapter.name }} · {{ 'PYQ Practice' if mode == 'pyq' else 'MCQ Practice' }} · {{ folder }}</p>
+        <h1 class="text-xs sm:text-base font-display font-bold text-white truncate">{{ set_name }}</h1>
+      </div>
     </div>
+
     <div class="shrink-0 flex items-center gap-2">
-      <!-- Dark / White Mode Toggle inside Runner -->
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 border border-white/15">
+        <span class="text-[10px] uppercase tracking-wide text-gray-300 font-bold hidden sm:inline">Time:</span>
+        <span class="font-display text-xs sm:text-sm font-bold tabular-nums text-gold" x-text="formattedTotalTime"></span>
+      </div>
+
       <div class="theme-toggle-pill" role="group" aria-label="Color theme">
         <button type="button" data-theme-btn="dark" onclick="window.setSangamTheme('dark')" class="theme-toggle-btn active">🌙</button>
         <button type="button" data-theme-btn="light" onclick="window.setSangamTheme('light')" class="theme-toggle-btn">☀️</button>
       </div>
 
-      <div class="text-right px-1.5">
-        <p class="text-[9px] uppercase tracking-wide text-gray-400 leading-none mb-0.5">
-          <span x-show="!isFinished">Time</span>
-          <span x-show="isFinished" x-cloak>Final</span>
-        </p>
-        <p class="font-display text-xs sm:text-sm font-bold tabular-nums leading-none"
-           :class="isFinished ? 'text-gray-400' : 'text-gold'"
-           x-text="formattedTotalTime"></p>
-      </div>
+      <button type="button"
+              @click="mobilePaletteOpen = true"
+              class="lg:hidden btn-cute-soft !py-1.5 !px-2.5 !text-xs">
+        <span>Palette</span>
+        <span class="text-[10px] bg-gold/20 text-gold px-1.5 py-0.2 rounded" x-text="(currentIndex + 1) + '/' + questions.length"></span>
+      </button>
 
       <a href="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
          data-back-url="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
-         class="btn-cute-soft !py-1 !px-3 !text-xs">
+         class="btn-cute-soft !py-1.5 !px-3 !text-xs">
         Exit
       </a>
     </div>
-  </div>
+  </header>
 
   {% if attempt_kind != 'full' %}
-  <div class="bg-gold/10 border-b border-gold/20 px-4 py-1.5 text-center text-xs font-semibold text-gold">
-    🔁 Reattempt — {{ 'wrong questions only' if attempt_kind == 'wrong_only' else 'wrong + marked questions' }} ({{ questions|length }} question{{ '' if questions|length == 1 else 's' }})
+  <div class="bg-gold/15 border-b border-gold/30 px-4 py-1.5 text-center text-xs font-bold text-gold">
+    🔁 Reattempt Mode — {{ 'Incorrect & Unanswered Questions Only' if attempt_kind == 'wrong_only' else 'Incorrect + Marked Questions' }} ({{ questions|length }} question{{ '' if questions|length == 1 else 's' }})
   </div>
   {% endif %}
 
-  <!-- Question palette strip -->
-  <div class="bg-[#0f0f0f] border-b border-white/5 px-3 md:px-6 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar sticky top-[45px] z-10 shadow-sm w-full max-w-full">
-    <template x-for="(q, idx) in questions" :key="'strip-' + q.id">
-      <button @click="jumpTo(idx)"
-        class="w-7 h-7 shrink-0 rounded text-xs font-bold flex items-center justify-center transition-all duration-200 hover:scale-105"
-        :class="[paletteClass(idx), currentIndex === idx ? 'ring-2 ring-gold ring-offset-1 ring-offset-[#0f0f0f]' : '']"
-        x-text="idx + 1"></button>
-    </template>
-  </div>
+  <!-- =================================================================
+       2-COLUMN PRACTICE WORKSPACE (Left Question + Right Chapter Palette)
+       ================================================================= -->
+  <div class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-5 py-4 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
 
-  <!-- Main question area -->
-  <div class="flex-1 w-full max-w-3xl mx-auto p-3.5 sm:p-6">
-    <div x-show="currentQuestion" x-cloak class="w-full">
-      <p class="text-xs sm:text-sm font-semibold text-gray-300 mb-3.5 flex items-center justify-between">
-        <span>Question <span x-text="currentIndex + 1"></span> of <span x-text="questions.length"></span></span>
-        <span class="inline-flex items-center gap-1 text-xs font-semibold text-gray-300 bg-white/5 border border-white/10 rounded-full px-2.5 py-0.5">
-          <span x-text="isFinished ? '⏹' : '⏱'"></span>
-          <span class="tabular-nums" x-text="formattedQuestionTime"></span>
-        </span>
-      </p>
+    <!-- LEFT PANEL: QUESTION & OPTIONS -->
+    <div class="lg:col-span-8 flex flex-col w-full min-w-0" x-show="currentQuestion" x-cloak>
 
-      <div class="q-card bg-[#161616] border border-white/10 rounded-xl p-4 sm:p-6 mb-4 shadow-lg overflow-hidden"
+      <!-- Question Top Header & Clear Visible Marking Scheme Box -->
+      <div class="nta-panel bg-[#111622]/90 border border-white/15 rounded-t-2xl px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex items-center gap-2">
+          <span class="px-2.5 py-1 rounded-lg bg-gold/15 border border-gold/35 text-gold font-display font-bold text-xs sm:text-sm">
+            Question <span x-text="currentIndex + 1"></span> of <span x-text="questions.length"></span>
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.06] border border-white/15 text-xs font-bold">
+            <span class="text-emerald-400">+<span x-text="currentQuestion?.marks || 4"></span> Correct</span>
+            <span class="text-gray-500">|</span>
+            <span class="text-red-400">-<span x-text="currentQuestion?.negative_marks || 1"></span> Incorrect</span>
+            <span class="text-gray-500">|</span>
+            <span class="text-gray-300">0 Unanswered</span>
+          </div>
+
+          <span class="inline-flex items-center gap-1 text-xs font-bold text-gray-300 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 tabular-nums">
+            <span x-text="isFinished ? '⏹' : '⏱'"></span>
+            <span x-text="formattedQuestionTime"></span>
+          </span>
+        </div>
+      </div>
+
+      <div class="q-card bg-[#141926]/95 border-x border-b border-white/15 rounded-b-2xl p-4 sm:p-6 mb-4 shadow-xl overflow-hidden"
            x-ref="questionCard" :style="cardStyle">
         <div class="q-swapbar" :class="swapping ? 'on' : ''"></div>
 
-        <div class="question-text text-sm sm:text-base leading-relaxed mb-5 text-gray-100 font-medium"
+        <div class="question-text text-sm sm:text-base md:text-lg leading-relaxed mb-5 text-gray-100 font-medium"
              x-html="rendered.question_text"></div>
 
-        <div x-show="hasValidImage(currentQuestion)" class="my-4 mx-auto max-w-full flex flex-col items-center rounded-md p-2.5 shadow-sm" style="background-color: #ffffff !important;">
-          <img :src="hasValidImage(currentQuestion) ? currentQuestion.image_url : ''"
-               class="max-h-[280px] w-auto max-w-full object-contain"
-               decoding="async" alt="Diagram" style="background-color: #ffffff !important;"
-               @load="onImageLoad($event, currentQuestion)"
-               @error="onImageError($event, currentQuestion)">
-          <p x-show="imageErrorIds[currentQuestion?.id]" x-cloak
-             class="text-xs font-semibold text-red-600 mt-2 text-center px-2">
-            ⚠ Diagram failed to load.
-          </p>
-        </div>
+        <!-- Conditional Diagram Rendering: ONLY mounted in DOM when a valid diagram URL exists -->
+        <template x-if="hasValidImage(currentQuestion)">
+          <div class="my-5 mx-auto max-w-full flex flex-col items-center">
+            <img :src="currentQuestion.image_url"
+                 class="max-h-[280px] w-auto max-w-full object-contain bg-white rounded-xl p-2.5 border border-gray-300 shadow-sm"
+                 decoding="async" alt="Question Diagram"
+                 @load="onImageLoad($event, currentQuestion)"
+                 @error="onImageError($event, currentQuestion)">
+            <p x-show="imageErrorIds[currentQuestion?.id]" x-cloak
+               class="text-xs font-semibold text-red-400 mt-2 text-center px-2">
+              ⚠ Diagram failed to load — image link may be broken.
+            </p>
+          </div>
+        </template>
 
-        <div class="space-y-2.5">
+        <div class="space-y-3">
           <template x-for="opt in ['A','B','C','D']" :key="opt">
             <button type="button" @click="pickOption(opt)"
-              class="w-full flex items-start gap-3 p-3.5 sm:p-4 rounded-xl border text-left transition-all duration-200"
+              class="w-full flex items-start gap-3.5 p-3.5 sm:p-4 rounded-xl border text-left transition-all duration-150"
               :class="optionClass(opt)">
               <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold"
                 :class="optionBadgeClass(opt)" x-text="opt"></span>
-              <span class="option-text text-xs sm:text-sm leading-relaxed mt-0.5"
+              <span class="option-text text-xs sm:text-sm md:text-base leading-relaxed mt-0.5 flex-1"
                     x-html="rendered['option_' + opt.toLowerCase()]"></span>
             </button>
           </template>
         </div>
 
-        <!-- Feedback once submitted -->
+        <!-- Instant Practice Feedback Once Checked -->
         <div x-show="currentQuestion && isChecked(currentQuestion.id)"
-             x-cloak class="mt-4 pt-4 border-t border-white/10">
-          <p class="text-xs sm:text-sm font-bold" :class="answers[currentQuestion?.id] === currentQuestion?.correct_option ? 'text-green-400' : 'text-red-400'">
-            <span x-text="answers[currentQuestion?.id] === currentQuestion?.correct_option ? '✓ Correct!' : '✗ Incorrect.'"></span>
-            <span x-show="answers[currentQuestion?.id] !== currentQuestion?.correct_option">
-              Correct answer: <span x-text="currentQuestion?.correct_option"></span>
+             x-cloak class="mt-5 pt-4 border-t border-white/15">
+          <p class="text-xs sm:text-sm font-bold" :class="answers[currentQuestion?.id] === currentQuestion?.correct_option ? 'text-emerald-400' : 'text-red-400'">
+            <span x-text="answers[currentQuestion?.id] === currentQuestion?.correct_option ? '✓ Correct Answer!' : '✗ Incorrect Answer.'"></span>
+            <span x-show="answers[currentQuestion?.id] !== currentQuestion?.correct_option" class="ml-1">
+              Correct Option: <span x-text="currentQuestion?.correct_option"></span>
             </span>
           </p>
-          <p x-show="currentQuestion?.explanation" x-cloak class="text-xs sm:text-sm text-gray-300 mt-2.5 leading-relaxed">
-            <span class="text-gold font-bold">Explanation: </span><span class="explanation-text" x-html="rendered.explanation"></span>
-          </p>
+          <div x-show="currentQuestion?.explanation" x-cloak class="text-xs sm:text-sm text-gray-200 mt-2.5 leading-relaxed bg-white/[0.04] border border-white/10 rounded-xl p-3.5">
+            <span class="text-gold font-bold block mb-1">Explanation: </span>
+            <div class="explanation-text" x-html="rendered.explanation"></div>
+          </div>
 
           <!-- Mistake Note -->
           <div x-show="currentQuestion && needsNote(currentQuestion.id)" x-cloak
                class="mt-4 rounded-xl border border-red-500/30 bg-red-500/5 p-3.5">
-            <label class="block text-[10px] font-black uppercase tracking-widest text-red-300 mb-1.5">✍️ Enter the mistake you made</label>
+            <label class="block text-[10px] font-black uppercase tracking-widest text-red-300 mb-1.5">✍️ Note Your Mistake for Revision</label>
             <textarea rows="2" maxlength="2000"
                       x-model="notes[currentQuestion?.id]"
                       @input="onNoteInput(currentQuestion.id)"
@@ -177,71 +253,153 @@
                       class="w-full bg-[#0f0f0f] text-gray-100 text-xs sm:text-sm border border-white/10 rounded-lg p-2.5 outline-none focus:border-red-400 resize-y"></textarea>
             <div class="flex items-center justify-between mt-1.5 min-h-[22px]">
               <span class="text-[11px] font-semibold"
-                    :class="noteState[currentQuestion?.id] === 'error' ? 'text-red-400' : (noteState[currentQuestion?.id] === 'saved' ? 'text-green-400' : 'text-gray-400')"
+                    :class="noteState[currentQuestion?.id] === 'error' ? 'text-red-400' : (noteState[currentQuestion?.id] === 'saved' ? 'text-emerald-400' : 'text-gray-400')"
                     x-text="noteStatusText(currentQuestion?.id)"></span>
               <button type="button" @click="saveNote(currentQuestion.id)"
                       x-show="['dirty','error'].includes(noteState[currentQuestion?.id])" x-cloak
-                      class="btn-cute !py-1 !px-3 !text-[11px]">Save note</button>
+                      class="btn-cute !py-1 !px-3 !text-[11px]">Save Note</button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Compact Action Buttons -->
-      <div class="grid grid-cols-2 gap-3">
-        <button @click="goPrev()" :disabled="currentIndex === 0"
-          class="btn-cute-soft !py-2.5 !text-xs sm:!text-sm disabled:opacity-30">
-          ← Previous
-        </button>
-
-        <template x-if="currentQuestion && !isChecked(currentQuestion.id) && !isFinished">
-          <button @click="submitAnswer()" :disabled="selected[currentQuestion.id] == null"
-            class="btn-cute !py-2.5 !text-xs sm:!text-sm disabled:opacity-30">
-            Submit Answer
+      <!-- Practice Bottom Action Bar -->
+      <div class="nta-panel bg-[#111622]/90 border border-white/15 rounded-2xl p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button"
+                  @click="toggleMark(currentQuestion?.id)"
+                  class="px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-colors"
+                  :class="isMarked(currentQuestion?.id) ? 'bg-purple-600 text-white border-purple-500' : 'bg-purple-500/15 text-purple-200 border-purple-400/35 hover:bg-purple-500/25'">
+            <span x-text="isMarked(currentQuestion?.id) ? '★ Marked for Review' : '☆ Mark for Review'"></span>
           </button>
-        </template>
 
-        <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex < questions.length - 1">
-          <button @click="goNext()"
-            class="btn-cute !py-2.5 !text-xs sm:!text-sm">
-            Next →
+          <button type="button"
+                  x-show="currentQuestion && !isChecked(currentQuestion.id)"
+                  @click="clearSelection()"
+                  :disabled="selected[currentQuestion?.id] == null"
+                  class="px-3.5 py-2.5 rounded-xl text-xs font-bold border border-white/15 bg-white/5 text-gray-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            Clear Response
           </button>
-        </template>
+        </div>
 
-        <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && !isFinished">
-          <button @click="showFinishConfirm = true"
-            class="btn-cute !py-2.5 !text-xs sm:!text-sm">
-            Finish Quiz ✓
+        <div class="flex items-center gap-2 ml-auto">
+          <button type="button" @click="goPrev()" :disabled="currentIndex === 0"
+            class="btn-cute-soft !py-2.5 !px-3.5 !text-xs disabled:opacity-35">
+            &larr; Previous
           </button>
-        </template>
+
+          <button type="button"
+                  x-show="currentIndex < questions.length - 1"
+                  @click="skipAndNext()"
+                  class="btn-cute-soft !py-2.5 !px-3.5 !text-xs">
+            Skip / Next &rarr;
+          </button>
+
+          <template x-if="currentQuestion && !isChecked(currentQuestion.id) && !isFinished">
+            <button type="button" @click="submitAnswer()" :disabled="selected[currentQuestion.id] == null"
+              class="btn-cute !py-2.5 !px-5 !text-xs sm:!text-sm disabled:opacity-40">
+              Save &amp; Check Answer
+            </button>
+          </template>
+
+          <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex < questions.length - 1">
+            <button type="button" @click="goNext()"
+              class="btn-cute !py-2.5 !px-5 !text-xs sm:!text-sm">
+              Next Question &rarr;
+            </button>
+          </template>
+
+          <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && !isFinished">
+            <button type="button" @click="showFinishConfirm = true"
+              class="btn-cute !py-2.5 !px-5 !text-xs sm:!text-sm">
+              Finish Practice ✓
+            </button>
+          </template>
+        </div>
       </div>
 
-      <div class="mt-2.5 flex items-center justify-between gap-2">
-        <button @click="toggleMark(currentQuestion?.id)" x-show="currentQuestion"
-          class="flex-1 py-2 rounded-xl text-xs font-semibold border transition-colors"
-          :class="isMarked(currentQuestion?.id) ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 text-gray-400 hover:bg-white/5'">
-          <span x-text="isMarked(currentQuestion?.id) ? '★ Marked for Review' : '☆ Mark for Review'"></span>
-        </button>
-        <button @click="showFinishConfirm = true" x-show="!isFinished"
-          class="btn-cute-soft !py-2 !px-3.5 !text-xs">
-          Finish Quiz
-        </button>
-      </div>
     </div>
+
+    <!-- ===============================================================
+         RIGHT PANEL (lg:col-span-4): CHAPTER QUESTION PALETTE (NO Physics/Chemistry/Biology Tabs!)
+         =============================================================== -->
+    <aside class="lg:col-span-4 w-full lg:sticky lg:top-[68px]"
+           :class="mobilePaletteOpen ? 'fixed inset-0 z-50 bg-black/80 p-4 flex items-center justify-center backdrop-blur-sm lg:static lg:bg-transparent lg:p-0 lg:block' : 'hidden lg:block'">
+      <div class="nta-panel bg-[#111622]/95 border border-white/15 rounded-2xl p-4 w-full max-w-md lg:max-w-none max-h-[88vh] lg:max-h-[calc(100vh-84px)] flex flex-col shadow-2xl">
+
+        <div class="flex items-center justify-between pb-3 mb-3 border-b border-white/10 lg:hidden">
+          <h2 class="font-display text-sm font-bold text-white">Practice Question Palette</h2>
+          <button type="button" @click="mobilePaletteOpen = false" class="text-gray-400 hover:text-white text-sm font-bold px-2 py-0.5 rounded">✕ Close</button>
+        </div>
+
+        <!-- Status Legend -->
+        <div class="mb-3.5 pb-3.5 border-b border-white/10">
+          <p class="text-[10px] font-black uppercase tracking-widest text-gold mb-2">Question Status Legend</p>
+          <div class="grid grid-cols-2 gap-2 text-[11px] font-semibold text-gray-200">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded status-answered inline-block shrink-0"></span>
+              <span>Correct / Answered</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded status-not-answered inline-block shrink-0"></span>
+              <span>Not Answered / Incorrect</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded status-marked inline-block shrink-0"></span>
+              <span>Marked for Review</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded status-not-visited inline-block shrink-0"></span>
+              <span>Not Visited</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Single-Chapter Header (No Physics/Chemistry/Biology Tabs!) -->
+        <div class="flex items-center justify-between text-xs font-bold mb-2.5 px-0.5">
+          <span class="text-gold uppercase tracking-wider truncate">{{ chapter.name }}</span>
+          <span class="text-gray-300 tabular-nums shrink-0">
+            Solved: <strong class="text-emerald-400" x-text="Object.keys(answers).length"></strong> / <strong class="text-white" x-text="questions.length"></strong>
+          </span>
+        </div>
+
+        <!-- Vertically Scrollable Question Grid -->
+        <div class="palette-scroll overflow-y-auto flex-1 min-h-[160px] max-h-[340px] lg:max-h-[380px] pr-1 py-1">
+          <div class="grid grid-cols-5 sm:grid-cols-6 lg:grid-cols-5 gap-2">
+            <template x-for="(q, idx) in questions" :key="'strip-' + q.id">
+              <button type="button"
+                @click="jumpTo(idx); mobilePaletteOpen = false"
+                class="h-9 rounded-lg text-xs font-bold flex items-center justify-center transition-all duration-150 hover:scale-105 tabular-nums"
+                :class="[paletteClass(idx), currentIndex === idx ? 'ring-2 ring-gold ring-offset-2 ring-offset-[#111622]' : '']"
+                x-text="'Q' + (idx + 1)"></button>
+            </template>
+          </div>
+        </div>
+
+        <div class="pt-3 mt-3 border-t border-white/10">
+          <button type="button" @click="mobilePaletteOpen = false; showFinishConfirm = true" x-show="!isFinished"
+            class="btn-cute !w-full !py-2.5 !text-xs">
+            Finish Practice &amp; View Analysis
+          </button>
+        </div>
+
+      </div>
+    </aside>
+
   </div>
 
   <!-- Finish confirmation modal -->
   <div x-show="showFinishConfirm" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4" @click.self="showFinishConfirm = false">
-    <div class="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl">
-      <h3 class="font-display text-lg font-bold text-white mb-2">Finish Quiz &amp; View Result?</h3>
-      <p class="text-xs text-gray-400 mb-5">Your score and question-by-question analysis will open immediately.</p>
+    <div class="bg-[#141926] border border-white/15 rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl">
+      <h3 class="font-display text-lg font-bold text-white mb-2">Finish Practice &amp; View Result?</h3>
+      <p class="text-xs text-gray-300 mb-5">Your score and question-by-question solutions will open immediately.</p>
       <p x-show="submitError" x-cloak class="text-xs font-semibold text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-3" x-text="submitError"></p>
       <div class="grid grid-cols-2 gap-2.5">
-        <button @click="showFinishConfirm = false" :disabled="isSubmitting" class="btn-cute-soft !py-2.5 !text-xs">
-          Cancel
+        <button type="button" @click="showFinishConfirm = false" :disabled="isSubmitting" class="btn-cute-soft !py-2.5 !text-xs">
+          Return to Practice
         </button>
-        <button @click="finishNow()" :disabled="isSubmitting" class="btn-cute !py-2.5 !text-xs">
-          <span x-text="isSubmitting ? 'Submitting…' : 'Yes, Finish'"></span>
+        <button type="button" @click="finishNow()" :disabled="isSubmitting" class="btn-cute !py-2.5 !text-xs">
+          <span x-text="isSubmitting ? 'Submitting…' : 'Confirm Finish'"></span>
         </button>
       </div>
     </div>
@@ -258,10 +416,11 @@ const ANALYSE_URL = {{ url_for('user.practice_analyse',     slug=stream.slug, ch
 function practiceRunner() {
   return {
     questions: {{ questions | tojson }},
-    savedProgress: {{ saved_progress | tojson }},
+    savedProgress: {{ savedProgress if savedProgress is defined else (saved_progress | tojson) }},
     currentIndex: 0,
     selected: {},
     answers: {},
+    visited: {},
     marked: {},
     notes: {},
     noteState: {},
@@ -270,6 +429,7 @@ function practiceRunner() {
     serverSummary: null,
     imageErrorIds: {},
     showFinishConfirm: false,
+    mobilePaletteOpen: false,
     showSummary: false,
     isFinished: false,
 
@@ -298,6 +458,9 @@ function practiceRunner() {
       if (window.sangamInstallBackTrap) {
         window.sangamInstallBackTrap(SETS_URL);
       }
+      if (this.currentQuestion) {
+        this.visited[this.currentQuestion.id] = true;
+      }
       this._startClock();
       this._resetQuestionTimer();
       this.showQuestion(this.currentIndex);
@@ -310,6 +473,9 @@ function practiceRunner() {
       this.questions.forEach((q, idx) => {
         const p = this.savedProgress[q.id];
         if (!p) { if (firstOpen === -1) firstOpen = idx; return; }
+        if (p.status && p.status !== 'not_visited') {
+          this.visited[q.id] = true;
+        }
         if (p.selected_option) {
           this.selected[q.id] = p.selected_option;
           if (p.status === 'answered' || p.status === 'answered_marked') this.answers[q.id] = p.selected_option;
@@ -329,7 +495,8 @@ function practiceRunner() {
       if (answered && marked) return 'answered_marked';
       if (answered) return 'answered';
       if (marked) return 'marked';
-      return 'not_answered';
+      if (this.visited[qid]) return 'not_answered';
+      return 'not_visited';
     },
 
     async _post(url, body) {
@@ -400,9 +567,6 @@ function practiceRunner() {
       this.activeQuestionSeconds = q ? (this.timeSpent[q.id] || 0) : 0;
     },
 
-    /* HISTORY STACK FIX: Finishing a quiz immediately replaces this runner page (Page 2)
-       with the Result/Analyse page (Page 3) via window.location.replace(), so pressing Back
-       from the Result page goes straight to the Quiz List (Page 1) and NEVER re-opens the finished runner! */
     async finishNow() {
       if (this.isSubmitting) return;
       this.isSubmitting = true;
@@ -436,12 +600,12 @@ function practiceRunner() {
     _rawFor(q) {
       if (!q) return { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', explanation: '' };
       return {
-        question_text: q.question_text || '',
-        option_a: q.option_a || '',
-        option_b: q.option_b || '',
-        option_c: q.option_c || '',
-        option_d: q.option_d || '',
-        explanation: q.explanation || ''
+        question_text: SangamQuiz.sanitizeMathString(q.question_text || ''),
+        option_a: SangamQuiz.sanitizeMathString(q.option_a || ''),
+        option_b: SangamQuiz.sanitizeMathString(q.option_b || ''),
+        option_c: SangamQuiz.sanitizeMathString(q.option_c || ''),
+        option_d: SangamQuiz.sanitizeMathString(q.option_d || ''),
+        explanation: SangamQuiz.sanitizeMathString(q.explanation || '')
       };
     },
 
@@ -462,6 +626,11 @@ function practiceRunner() {
         this._unlockHeight();
         this._hasContent = true;
         this._warmNeighbours(idx);
+        this.$nextTick(() => {
+          if (this.$refs.questionCard && SangamQuiz.typesetElement) {
+            SangamQuiz.typesetElement(this.$refs.questionCard);
+          }
+        });
       };
 
       const cached = this._renderer.get(key);
@@ -533,17 +702,21 @@ function practiceRunner() {
     get currentQuestion() { return this.questions[this.currentIndex] || null; },
 
     hasValidImage(q) {
-      const url = q && q.image_url;
-      if (typeof url !== 'string') return false;
-      const trimmed = url.trim();
-      if (!trimmed) return false;
-      return /^https?:\/\//i.test(trimmed);
+      if (!q || !q.image_url) return false;
+      const url = String(q.image_url).trim();
+      return /^https?:\/\/\S+/i.test(url);
     },
 
     pickOption(opt) {
       const q = this.currentQuestion;
       if (!q || this.isChecked(q.id) || this.isFinished) return;
-      this.selected[q.id] = opt;
+      this.selected[q.id] = (this.selected[q.id] === opt) ? null : opt;
+    },
+
+    clearSelection() {
+      const q = this.currentQuestion;
+      if (!q || this.isChecked(q.id) || this.isFinished) return;
+      delete this.selected[q.id];
     },
 
     isChecked(questionId) { return this.answers[questionId] != null; },
@@ -552,25 +725,36 @@ function practiceRunner() {
       const q = this.currentQuestion;
       if (!q || this.selected[q.id] == null || this.isChecked(q.id) || this.isFinished) return;
       this.answers[q.id] = this.selected[q.id];
+      this.visited[q.id] = true;
       if (this.activeQuestionId === q.id) this.activeQuestionId = null;
       this._syncQuestion(q.id);
+    },
+
+    skipAndNext() {
+      const q = this.currentQuestion;
+      if (q) {
+        this.visited[q.id] = true;
+        this._syncQuestion(q.id);
+      }
+      this.goNext();
     },
 
     toggleMark(questionId) {
       if (!questionId || this.isFinished) return;
       this.marked[questionId] = !this.marked[questionId];
+      this.visited[questionId] = true;
       this._syncQuestion(questionId);
     },
 
     onImageLoad(evt, q) {
-      if (!q) return;
+      if (!q || !this.hasValidImage(q)) return;
       if (this.imageErrorIds[q.id]) delete this.imageErrorIds[q.id];
       const img = evt.target;
-      if (img.naturalWidth === 0) this.onImageError(evt, q);
+      if (img && img.naturalWidth === 0) this.onImageError(evt, q);
     },
 
     onImageError(evt, q) {
-      if (!q) return;
+      if (!q || !this.hasValidImage(q)) return;
       this.imageErrorIds[q.id] = true;
     },
     isMarked(questionId) { return questionId ? !!this.marked[questionId] : false; },
@@ -578,6 +762,8 @@ function practiceRunner() {
     _goto(idx) {
       if (idx < 0 || idx >= this.questions.length || idx === this.currentIndex) return;
       this.currentIndex = idx;
+      const q = this.questions[idx];
+      if (q) this.visited[q.id] = true;
       this._resetQuestionTimer();
       this.showQuestion(idx);
     },
@@ -589,10 +775,11 @@ function practiceRunner() {
     paletteClass(idx) {
       const q = this.questions[idx];
       const checked = this.answers[q.id];
-      if (checked != null) return checked === q.correct_option ? 'bg-green-600 text-white' : 'bg-red-600 text-white';
-      if (this.marked[q.id]) return 'bg-[#8A6A1F] text-[#F3E3B8]';
-      if (this.selected[q.id] != null) return 'bg-white/20 text-white';
-      return 'bg-[#2A2A2A] text-gray-400';
+      if (checked != null && this.marked[q.id]) return 'status-answered-marked';
+      if (checked != null) return checked === q.correct_option ? 'status-answered' : 'status-not-answered';
+      if (this.marked[q.id]) return 'status-marked';
+      if (this.visited[q.id]) return 'status-not-answered';
+      return 'status-not-visited';
     },
 
     optionClass(opt) {
@@ -601,12 +788,12 @@ function practiceRunner() {
       const checked = this.answers[q.id];
       if (checked == null) {
         return this.selected[q.id] === opt
-          ? 'border-gold bg-gold/10 text-white cursor-pointer ring-1 ring-gold'
-          : 'border-white/10 bg-[#1a1a1a] text-gray-200 hover:border-white/30 cursor-pointer';
+          ? 'border-gold bg-gold/15 text-white cursor-pointer ring-1 ring-gold'
+          : 'nta-opt-unselected border-white/15 bg-[#1a2030] text-gray-200 hover:border-white/35 cursor-pointer';
       }
-      if (opt === q.correct_option) return 'border-green-500/50 bg-green-500/10 text-white cursor-default ring-1 ring-green-500/50';
-      if (opt === checked) return 'border-red-500/50 bg-red-500/10 text-white cursor-default ring-1 ring-red-500/50';
-      return 'border-white/5 bg-[#1a1a1a] text-gray-400 cursor-default opacity-50';
+      if (opt === q.correct_option) return 'border-emerald-500/60 bg-emerald-500/15 text-white cursor-default ring-1 ring-emerald-500/50';
+      if (opt === checked) return 'border-red-500/60 bg-red-500/15 text-white cursor-default ring-1 ring-red-500/50';
+      return 'nta-opt-unselected border-white/10 bg-[#1a2030] text-gray-400 cursor-default opacity-60';
     },
 
     optionBadgeClass(opt) {
@@ -616,14 +803,13 @@ function practiceRunner() {
       if (checked == null) {
         return this.selected[q.id] === opt
           ? 'border-gold bg-gold text-ink'
-          : 'border-white/30 text-gray-400';
+          : 'border-white/30 text-gray-300';
       }
-      if (opt === q.correct_option) return 'border-green-500 bg-green-500 text-ink';
+      if (opt === q.correct_option) return 'border-emerald-500 bg-emerald-500 text-ink';
       if (opt === checked) return 'border-red-500 bg-red-500 text-white';
-      return 'border-white/20 text-gray-500';
+      return 'border-white/25 text-gray-400';
     },
   };
 }
 </script>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->

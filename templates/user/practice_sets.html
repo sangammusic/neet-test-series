@@ -1,37 +1,74 @@
 {% extends "shared/base.html" %}
 {% block title %}{{ folder }} — {{ chapter.name }}{% endblock %}
 {% block content %}
-<section class="max-w-4xl mx-auto px-3.5 sm:px-5 pt-6 pb-16 relative z-10">
+<section class="max-w-4xl mx-auto px-3.5 sm:px-5 pt-6 pb-16 relative z-10"
+         x-data="{ activeTab: 'sets' }">
 
   <div class="mb-5 border-b border-white/10 pb-3.5">
-    <a href="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category) }}" data-back-url="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category) }}" class="btn-cute-soft mb-2">
-      &larr; Folders
+    <a href="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category) }}" data-back-url="{{ url_for('user.practice_folders', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category) }}" class="btn-cute-soft mb-2.5">
+      &larr; Back to Folders
     </a>
     
-    <div class="flex flex-wrap items-center gap-1.5 mb-1">
-      <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ chapter.name }}</span>
-      <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ folder }}</span>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <div class="flex flex-wrap items-center gap-1.5 mb-1">
+          <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ chapter.name }}</span>
+          <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ folder }}</span>
+        </div>
+        <h1 class="font-display text-lg sm:text-2xl font-bold text-white tracking-tight">Practice Sets</h1>
+      </div>
+
+      <!-- Contextual Tabs inside Practice Folder: Practice Sets | My Attempts -->
+      <div class="inline-flex items-center p-1 rounded-xl bg-white/5 border border-white/15 gap-1">
+        <button type="button"
+                @click="activeTab = 'sets'"
+                :class="activeTab === 'sets' ? 'bg-gold text-ink font-extrabold shadow-sm' : 'text-gray-300 hover:text-white font-semibold'"
+                class="px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5">
+          <span>📋 Practice Sets</span>
+          <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20" x-text="{{ sets|length }}"></span>
+        </button>
+        <button type="button"
+                @click="activeTab = 'attempts'"
+                :class="activeTab === 'attempts' ? 'bg-gold text-ink font-extrabold shadow-sm' : 'text-gray-300 hover:text-white font-semibold'"
+                class="px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5">
+          <span>📊 My Attempts</span>
+          <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20" x-text="{{ folder_attempts|length if folder_attempts is defined else 0 }}"></span>
+        </button>
+      </div>
     </div>
-    <h1 class="font-display text-lg sm:text-2xl font-bold text-white tracking-tight">Select Practice Quiz</h1>
   </div>
 
-  <!-- Compact Practice Sets Grid (2 cols on mobile, 3 on tablet/desktop) -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3.5">
+  <!-- TAB 1: PRACTICE SETS -->
+  <div x-show="activeTab === 'sets'" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
     {% for s in sets %}
+    {% set my_att = (attempts_by_set or {}).get(s.name) %}
     <a href="{{ url_for('user.practice_overview', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=s.name) }}"
        data-replace-link
-       class="pw-tile p-3 sm:p-4 flex flex-col justify-between gap-2.5 group">
+       class="pw-tile p-4 flex flex-col justify-between gap-3 group">
       <div class="min-w-0">
-        <p class="font-display text-xs sm:text-base font-bold text-white group-hover:text-gold transition-colors truncate">{{ s.name }}</p>
-        <p class="text-[10px] sm:text-xs font-medium text-gray-400 mt-0.5">
-          {{ s.count }} Question{{ 's' if s.count != 1 else '' }}
+        <div class="flex items-center justify-between gap-2">
+          <p class="font-display text-sm sm:text-base font-bold text-white group-hover:text-gold transition-colors truncate">{{ s.name }}</p>
+          {% if my_att %}
+            {% if my_att.submitted_at %}
+              <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded shrink-0">
+                Score: {{ my_att.score }}
+              </span>
+            {% else %}
+              <span class="text-[9px] font-bold uppercase text-gold bg-gold/15 border border-gold/30 px-1.5 py-0.5 rounded shrink-0">
+                In Progress
+              </span>
+            {% endif %}
+          {% endif %}
+        </div>
+        <p class="text-xs font-medium text-gray-400 mt-1">
+          {{ s.count }} Question{{ 's' if s.count != 1 else '' }} · +{{ s.marks or 4 }} / -{{ s.negative_marks or 1 }}
         </p>
       </div>
       
       <div class="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
-        <span class="text-[9px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-extrabold uppercase rounded px-1.5 py-0.5">Practice</span>
-        <span class="btn-cute !py-1 !px-2.5 !text-[10px]">
-          <span>Start</span>
+        <span class="text-[9px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-extrabold uppercase rounded px-2 py-0.5">Practice Set</span>
+        <span class="btn-cute !py-1.5 !px-3 !text-xs">
+          <span>Start Practice</span>
           <span>&rsaquo;</span>
         </span>
       </div>
@@ -43,6 +80,66 @@
     </div>
     {% endfor %}
   </div>
+
+  <!-- TAB 2: MY ATTEMPTS IN THIS FOLDER -->
+  <div x-show="activeTab === 'attempts'" x-cloak>
+    {% if folder_attempts and folder_attempts|length > 0 %}
+      <div class="space-y-2.5">
+        {% for a in folder_attempts %}
+        <div class="pw-tile p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="font-bold text-white text-sm sm:text-base truncate">{{ a.set_name }}</h3>
+              {% if a.submitted_at %}
+                <span class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded uppercase">Completed</span>
+              {% else %}
+                <span class="text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded uppercase">In Progress</span>
+              {% endif %}
+            </div>
+            <div class="flex flex-wrap items-center gap-2 text-[11px] text-gray-400 mt-1.5">
+              {% if (a.submitted_at or a.started_at) %}
+                <span>📅 {{ (a.submitted_at or a.started_at) | ist_datetime }}</span>
+              {% endif %}
+              {% if a.submitted_at %}
+                <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-emerald-300 font-semibold">Correct: {{ a.correct_count }}</span>
+                <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-red-300 font-semibold">Incorrect: {{ a.wrong_count }}</span>
+                <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-300 font-semibold">Unanswered: {{ a.skipped_count }}</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/10">
+            {% if a.submitted_at %}
+              <div class="text-left sm:text-right">
+                <p class="font-display text-base sm:text-lg font-bold text-white leading-none">{{ a.score }}</p>
+                <p class="text-[9px] text-gray-400 uppercase font-bold mt-0.5">Score</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a href="{{ url_for('user.practice_analyse', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=a.set_name) }}" class="btn-cute !py-1.5 !px-3 !text-xs">
+                  View Result
+                </a>
+                <a href="{{ url_for('user.practice_analyse_view', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=a.set_name, view='full') }}" class="btn-cute-soft !py-1.5 !px-3 !text-xs">
+                  Review Answers
+                </a>
+              </div>
+            {% else %}
+              <a href="{{ url_for('user.practice_run', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder, set_name=a.set_name, attempt_id=a.id) }}" class="btn-cute !py-1.5 !px-3.5 !text-xs">
+                Resume Practice
+              </a>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="pw-tile p-8 text-center rounded-xl">
+        <p class="font-display text-base font-bold text-white mb-1">No Attempts in {{ folder }} Yet</p>
+        <p class="text-gray-400 text-xs mb-4">When you attempt any practice set in {{ folder }}, your attempt history and answer reviews will appear here.</p>
+        <button type="button" @click="activeTab = 'sets'" class="btn-cute !py-2 !px-4 !text-xs">
+          Browse Practice Sets &rarr;
+        </button>
+      </div>
+    {% endif %}
+  </div>
 </section>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->

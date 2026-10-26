@@ -6,7 +6,7 @@
   <div class="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3.5">
     <div>
       <a href="{{ url_for('user.stream_dashboard', slug=stream.slug) }}" data-back-url="{{ url_for('user.stream_dashboard', slug=stream.slug) }}" class="btn-cute-soft mb-2">
-        &larr; Workspace
+        &larr; Dashboard
       </a>
       <div class="flex items-center gap-2">
         <span class="text-[9px] font-black tracking-widest uppercase text-gold border border-gold/30 bg-gold/10 px-2 py-0.5 rounded">{{ stream.name }}</span>
@@ -15,7 +15,6 @@
     </div>
   </div>
 
-  <!-- PW-Style Compact Subject Tiles (3-in-a-row on Mobile/Tablet/Desktop when 3 subjects exist, or 2-3 cols) -->
   <div class="grid grid-cols-3 gap-2 sm:gap-3.5">
     {% for s in subjects %}
     <a href="{{ url_for('user.practice_chapters', slug=stream.slug, subject_id=s.id) }}"
@@ -30,7 +29,7 @@
         </div>
       </div>
       <span class="btn-cute !py-1 !px-2 !text-[10px] w-full sm:w-auto">
-        <span>Open</span>
+        <span>Open Chapters</span>
         <span>&rsaquo;</span>
       </span>
     </a>
@@ -43,4 +42,3 @@
   </div>
 </section>
 {% endblock %}
-<!-- STUDY SANGAM HUB v3.0 -->

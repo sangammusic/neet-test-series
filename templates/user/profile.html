@@ -1,5 +1,5 @@
 {% extends "shared/base.html" %}
-{% block title %}My Attempts — STUDY SANGAM HUB{% endblock %}
+{% block title %}Attempt History — STUDY SANGAM HUB{% endblock %}
 {% block content %}
 <section class="max-w-4xl mx-auto px-3.5 sm:px-5 pt-6 pb-20 font-body relative z-10">
 
@@ -7,16 +7,16 @@
   <div class="flex flex-wrap items-center justify-between gap-3 mb-5 border-b border-white/10 pb-3.5">
     <div>
       <a href="{{ url_for('user.my_dashboard') }}" data-back-url="{{ url_for('user.my_dashboard') }}" class="btn-cute-soft mb-2">
-        &larr; Workspace
+        &larr; Dashboard
       </a>
-      <h1 class="font-display text-xl sm:text-2xl font-bold text-white tracking-tight">📊 My Mock Test Attempts</h1>
-      <p class="text-gray-400 text-xs mt-0.5">Your mock test scores, completion status, and question-by-question review.</p>
+      <h1 class="font-display text-xl sm:text-2xl font-bold text-white tracking-tight">Attempt History</h1>
+      <p class="text-gray-400 text-xs mt-0.5">All your mock test attempts across test series folders. You can also view attempts inside each Test Series folder.</p>
     </div>
 
     {% if attempts %}
-    <form action="{{ url_for('user.clear_history') }}" method="POST" onsubmit="return confirm('⚠️ Permanently wipe ALL your test history and scores?');">
+    <form action="{{ url_for('user.clear_history') }}" method="POST" onsubmit="return confirm('Permanently clear all your test attempt history and scores?');">
       <button type="submit" class="btn-cute-soft !border-red-500/35 !text-red-400">
-        🗑️ Reset History
+        Clear History
       </button>
     </form>
     {% endif %}
@@ -47,18 +47,25 @@
   <div class="space-y-2.5">
     {% for a in attempts %}
     {% set stream_slug = ((a.tests.get('streams') or {}).get('slug') or 'neet') if a.tests else 'neet' %}
+    {% set series_name = a.tests.get('series_name') if a.tests else none %}
     <div class="pw-tile p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <h3 class="font-bold text-white text-sm sm:text-base truncate">{{ a.tests.title if a.tests else 'Mock Test' }}</h3>
-          <span class="text-[10px] font-semibold text-gray-400 shrink-0">#{{ a.attempt_no }}</span>
+          <span class="text-[10px] font-semibold text-gray-400 shrink-0">Attempt #{{ a.attempt_no }}</span>
+          {% if series_name %}
+          <a href="{{ url_for('user.series_tests', slug=stream_slug, series_name=series_name, tab='attempts') }}"
+             class="text-[10px] font-bold text-gold bg-gold/10 border border-gold/25 px-2 py-0.5 rounded hover:bg-gold/20">
+            {{ series_name }}
+          </a>
+          {% endif %}
         </div>
         <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-gray-400 mt-1.5">
           {% if a.submitted_at %}
             <span class="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded uppercase font-bold">Completed</span>
             <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded">✓ {{ a.correct_count }}</span>
             <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded">✗ {{ a.wrong_count }}</span>
-            <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded">Skip {{ a.skipped_count }}</span>
+            <span class="bg-white/5 border border-white/10 px-2 py-0.5 rounded">Unanswered {{ a.skipped_count }}</span>
           {% else %}
             <span class="text-gold bg-gold/10 border border-gold/25 px-2 py-0.5 rounded uppercase font-bold">In Progress</span>
           {% endif %}
@@ -75,16 +82,16 @@
         <div class="flex gap-1.5 shrink-0">
           {% if a.submitted_at %}
             <a href="{{ url_for('user.test_attempt_review', slug=stream_slug, test_id=a.test_id, attempt_id=a.id) }}" class="btn-cute !py-1.5 !px-3 !text-[11px]">
-               Review
+               Review Answers
             </a>
             {% if a.is_latest %}
             <a href="{{ url_for('user.test_analyse', slug=stream_slug, test_id=a.test_id) }}" class="btn-cute-soft !py-1.5 !px-3 !text-[11px]">
-               Analyse
+               Result Summary
             </a>
             {% endif %}
           {% else %}
             <a href="{{ url_for('user.test_attempt', slug=stream_slug, test_id=a.test_id, attempt_id=a.id) }}" class="btn-cute !py-1.5 !px-3 !text-[11px]">
-               Resume
+               Resume Test
             </a>
           {% endif %}
         </div>
@@ -95,9 +102,9 @@
   {% else %}
   <div class="pw-tile p-8 text-center rounded-xl">
     <p class="font-display text-base font-bold text-white mb-1">No Mock Tests Attempted Yet</p>
-    <p class="text-gray-400 text-xs mb-4">When you attempt mock tests, your scores and question-level analytics will appear here.</p>
+    <p class="text-gray-400 text-xs mb-4">Open any Mock Test Series folder to start a test and view your attempt history.</p>
     <a href="{{ url_for('user.my_dashboard') }}" class="btn-cute">
-      Explore Mock Tests &rarr;
+      Go to Dashboard &rarr;
     </a>
   </div>
   {% endif %}
