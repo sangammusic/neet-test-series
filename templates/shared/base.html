@@ -18,7 +18,7 @@
                 '</defs>' +
                 '<rect width="114" height="114" x="3" y="3" rx="24" fill="url(#sgBg)" stroke="url(#sgGold)" stroke-width="3.5"/>' +
                 '<path d="M60 15L74 36L60 56L46 36Z" fill="url(#sgGold)" opacity="0.22"/>' +
-                '<polygon points="60,21 63.5,31 74,34.5 63.5,38 60,48 56.5,38 46,34.5 56.5,31" fill="url(#sgGold)"/>' +
+                '<polygon points="60,21 63.5,31 74,34.5 63.5,38 60,48 56.5,38 46,34.5 56.5,31" fill="url(#sgSymGold)"/>' +
                 '<path d="M24 52C38 48 50 53 58 63V92C48 84 36 81 24 85Z" fill="#1E3A8A" stroke="#60A5FA" stroke-width="2"/>' +
                 '<path d="M96 52C82 48 70 53 62 63V92C72 84 84 81 96 85Z" fill="#0F766E" stroke="#2DD4BF" stroke-width="2"/>' +
                 '<path d="M28 88C42 74 56 54 68 25C74 48 64 74 44 94C38 92 32 90 28 88Z" fill="url(#sgTeal)"/>' +
@@ -98,11 +98,11 @@
                     colors: {
                         ink: { DEFAULT: '#0F1729', light: '#1B2740' },
                         paper: '#FAF7F0',
-                        gold: { DEFAULT: '#D4A017', light: '#E8C158' },
+                        gold: { DEFAULT: '#FACC15', light: '#FDE047' },
                         scholar: {
                             bg: '#090b10',
-                            card: 'rgba(18, 22, 33, 0.90)',
-                            border: 'rgba(255, 255, 255, 0.14)'
+                            card: 'rgba(12, 16, 26, 0.94)',
+                            border: 'rgba(255, 255, 255, 0.22)'
                         }
                     },
                     fontFamily: {
@@ -297,7 +297,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
 
     <!-- =========================================================================
-         MASTER THEME & COMPONENT ENGINE (Dark Mode & White Mode)
+         MASTER HIGH-CONTRAST THEME & COMPONENT ENGINE (Dark Mode & White Mode)
+         Every word, label, badge, subtitle, and button is guaranteed crystal-clear!
          ========================================================================= -->
     <style id="sangam-core-styles">
         [x-cloak] { display: none !important; }
@@ -307,78 +308,97 @@
         main > .sangam-admin-topnav { display: none !important; }
 
         /* -------------------------------------------------------------------
-           1. STUDY DESK ILLUSTRATION BACKGROUND (Person writing on notebook with pen & bread)
-              Balanced contrast so the illustration is clearly visible in BOTH
-              Dark Mode and White Mode without being crushed to pitch black!
+           1. STUDY DESK ILLUSTRATION BACKGROUND & HIGH-CONTRAST VEIL
            ------------------------------------------------------------------- */
         html[data-theme="dark"] body {
-            background-color: #0b0f17 !important;
-            color: #F8FAFC !important;
+            background-color: #080C14 !important;
+            color: #FFFFFF !important;
         }
         html[data-theme="dark"] .sangam-bg-base {
-            background-color: #0b0f17;
+            background-color: #080C14;
         }
         html[data-theme="dark"] .sangam-bg-photo {
-            opacity: 0.56 !important;
-            filter: brightness(0.74) contrast(1.06) saturate(0.95) !important;
+            opacity: 0.48 !important;
+            filter: brightness(0.62) contrast(1.08) saturate(0.92) !important;
         }
         html[data-theme="dark"] .sangam-bg-veil {
-            background: linear-gradient(180deg, rgba(10, 14, 22, 0.55) 0%, rgba(10, 14, 22, 0.45) 50%, rgba(10, 14, 22, 0.65) 100%) !important;
+            background: linear-gradient(180deg, rgba(8, 12, 20, 0.72) 0%, rgba(8, 12, 20, 0.62) 50%, rgba(8, 12, 20, 0.78) 100%) !important;
         }
 
-        /* WHITE MODE: Study desk & notebook photo visible with balanced contrast */
+        /* WHITE MODE: Study desk & notebook photo visible with high-contrast readability */
         html[data-theme="light"] body {
-            background-color: #1c1814 !important;
-            color: #0F172A !important;
+            background-color: #1A1612 !important;
+            color: #090D16 !important;
         }
         html[data-theme="light"] .sangam-bg-base {
-            background-color: #231e19;
+            background-color: #211C17;
         }
         html[data-theme="light"] .sangam-bg-photo {
-            opacity: 1 !important;
-            filter: brightness(0.82) contrast(1.03) saturate(0.96) !important;
+            opacity: 0.85 !important;
+            filter: brightness(0.75) contrast(1.05) saturate(0.95) !important;
         }
         html[data-theme="light"] .sangam-bg-veil {
-            background: linear-gradient(180deg, rgba(15, 20, 30, 0.26) 0%, rgba(15, 20, 30, 0.16) 45%, rgba(15, 20, 30, 0.26) 100%) !important;
+            background: linear-gradient(180deg, rgba(12, 16, 26, 0.45) 0%, rgba(12, 16, 26, 0.35) 50%, rgba(12, 16, 26, 0.48) 100%) !important;
         }
 
         /* -------------------------------------------------------------------
-           2. COMPACT TILES (.pw-tile & .sangam-card)
+           2. HIGH-CONTRAST CARDS (.pw-tile & .sangam-card)
            ------------------------------------------------------------------- */
         .pw-tile, .sangam-card {
-            border-radius: 0.85rem;
+            border-radius: 0.9rem;
             transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
         }
         html[data-theme="dark"] .pw-tile,
         html[data-theme="dark"] .sangam-card {
-            background: rgba(15, 20, 30, 0.84) !important;
-            border: 1px solid rgba(255, 255, 255, 0.15) !important;
-            box-shadow: 0 8px 22px -6px rgba(0, 0, 0, 0.55);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            color: #F8FAFC;
+            background: rgba(11, 15, 25, 0.94) !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.22) !important;
+            box-shadow: 0 10px 28px -6px rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            color: #FFFFFF !important;
         }
         html[data-theme="dark"] a.pw-tile:hover,
         html[data-theme="dark"] button.pw-tile:hover {
-            border-color: rgba(212, 160, 23, 0.50) !important;
+            border-color: #FACC15 !important;
             transform: translateY(-1.5px);
         }
 
-        /* WHITE MODE CARDS: Translucent glass over the study desk photo */
+        /* DARK MODE HIGH-VISIBILITY TEXT OVERRIDES (No dim/unreadable grey text!) */
+        html[data-theme="dark"] .text-gray-200 {
+            color: #F8FAFC !important;
+        }
+        html[data-theme="dark"] .text-gray-300 {
+            color: #E2E8F0 !important;
+        }
+        html[data-theme="dark"] .text-gray-400 {
+            color: #CBD5E1 !important;
+        }
+        html[data-theme="dark"] .text-gray-500 {
+            color: #94A3B8 !important;
+        }
+        html[data-theme="dark"] .text-gold {
+            color: #FACC15 !important;
+        }
+        html[data-theme="dark"] section h1,
+        html[data-theme="dark"] section h2 {
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+        }
+
+        /* WHITE MODE CARDS: High-opacity crisp white surface so dark ink text is 100% readable */
         html[data-theme="light"] .pw-tile,
         html[data-theme="light"] .sangam-card {
-            background: rgba(255, 255, 255, 0.72) !important;
-            border: 1px solid rgba(15, 23, 42, 0.18) !important;
-            box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.16);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            color: #0F172A !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+            border: 1.5px solid rgba(15, 23, 42, 0.26) !important;
+            box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.25);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: #090D16 !important;
         }
         html[data-theme="light"] a.pw-tile:hover,
         html[data-theme="light"] button.pw-tile:hover {
-            background: rgba(255, 255, 255, 0.84) !important;
-            border-color: #141824 !important;
-            box-shadow: 0 10px 24px -4px rgba(0, 0, 0, 0.22);
+            background: #FFFFFF !important;
+            border-color: #090D16 !important;
+            box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.30);
             transform: translateY(-1.5px);
         }
 
@@ -389,12 +409,12 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.3rem;
-            padding: 0.36rem 0.72rem;
-            font-size: 0.72rem;
-            line-height: 1.15;
+            gap: 0.32rem;
+            padding: 0.42rem 0.85rem;
+            font-size: 0.74rem;
+            line-height: 1.2;
             font-weight: 800;
-            border-radius: 0.55rem;
+            border-radius: 0.6rem;
             cursor: pointer;
             text-decoration: none;
             transition: all 0.15s ease;
@@ -406,22 +426,23 @@
         html[data-theme="dark"] .btn-cute {
             background-color: #FFFFFF !important;
             color: #090D16 !important;
-            border: 1px solid #FFFFFF !important;
-            box-shadow: 0 2px 10px rgba(255, 255, 255, 0.15);
+            border: 1.5px solid #FFFFFF !important;
+            box-shadow: 0 2px 12px rgba(255, 255, 255, 0.20);
         }
         html[data-theme="dark"] .btn-cute * {
             color: #090D16 !important;
         }
         html[data-theme="dark"] .btn-cute:hover {
-            background-color: #FDE047 !important;
-            border-color: #FDE047 !important;
+            background-color: #FACC15 !important;
+            border-color: #FACC15 !important;
+            color: #090D16 !important;
             transform: translateY(-1px);
         }
 
         html[data-theme="dark"] .btn-cute-soft {
-            background-color: rgba(255, 255, 255, 0.11) !important;
-            color: #F8FAFC !important;
-            border: 1px solid rgba(255, 255, 255, 0.25) !important;
+            background-color: rgba(15, 23, 42, 0.90) !important;
+            color: #FFFFFF !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.35) !important;
         }
         html[data-theme="dark"] .btn-cute-soft:hover {
             background-color: #FFFFFF !important;
@@ -435,10 +456,10 @@
         /* WHITE MODE BUTTONS */
         html[data-theme="light"] .btn-cute,
         html[data-theme="light"] .btn-cute-soft {
-            background-color: #141824 !important;
+            background-color: #0F172A !important;
             color: #FFFFFF !important;
-            border: 1px solid rgba(255, 255, 255, 0.18) !important;
-            box-shadow: 0 3px 10px rgba(15, 23, 42, 0.24) !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.25) !important;
+            box-shadow: 0 3px 12px rgba(15, 23, 42, 0.28) !important;
         }
         html[data-theme="light"] .btn-cute *,
         html[data-theme="light"] .btn-cute-soft * {
@@ -446,8 +467,8 @@
         }
         html[data-theme="light"] .btn-cute:hover,
         html[data-theme="light"] .btn-cute-soft:hover {
-            background-color: #090C14 !important;
-            border-color: #F59E0B !important;
+            background-color: #090D16 !important;
+            border-color: #FACC15 !important;
             transform: translateY(-1px);
         }
 
@@ -497,20 +518,20 @@
         }
 
         html[data-theme="light"] .sangam-theme-switch {
-            background-color: #141824;
+            background-color: #0F172A;
             color: #FFFFFF;
-            border: 1px solid rgba(255, 255, 255, 0.22);
+            border: 1px solid rgba(255, 255, 255, 0.25);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
         }
         html[data-theme="light"] .sangam-switch-track {
             background-color: #FACC15;
         }
         html[data-theme="light"] .sangam-switch-thumb {
-            background-color: #141824;
+            background-color: #0F172A;
             transform: translateX(0.82rem);
         }
 
-        /* Legacy .theme-toggle-pill support (used inside quiz runners & login) */
+        /* Legacy .theme-toggle-pill support */
         .theme-toggle-pill {
             display: inline-flex;
             align-items: center;
@@ -529,110 +550,148 @@
             transition: all 0.15s ease;
         }
         html[data-theme="dark"] .theme-toggle-pill {
-            background: rgba(255, 255, 255, 0.12);
-            border: 1px solid rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.14);
+            border: 1px solid rgba(255, 255, 255, 0.28);
         }
-        html[data-theme="dark"] .theme-toggle-btn { color: #CBD5E1; }
+        html[data-theme="dark"] .theme-toggle-btn { color: #E2E8F0; }
         html[data-theme="dark"] .theme-toggle-btn.active {
             background: #FFFFFF;
             color: #090D16;
         }
         html[data-theme="light"] .theme-toggle-pill {
-            background: #141824;
+            background: #0F172A;
             border: 1px solid rgba(255, 255, 255, 0.25);
         }
-        html[data-theme="light"] .theme-toggle-btn { color: #CBD5E1; }
+        html[data-theme="light"] .theme-toggle-btn { color: #E2E8F0; }
         html[data-theme="light"] .theme-toggle-btn.active {
             background: #FACC15;
             color: #090D16;
         }
 
         /* -------------------------------------------------------------------
-           5. WHITE & DARK MODE TEXT, NAVBAR, RUNNER & ADMIN CONTRAST
+           5. WHITE MODE & DARK MODE TEXT, NAVBAR, RUNNER & ADMIN CONTRAST
            ------------------------------------------------------------------- */
         html[data-theme="light"] .sangam-topnav,
         html[data-theme="light"] .sangam-admin-topnav,
         html[data-theme="light"] footer {
-            background-color: rgba(16, 19, 27, 0.90) !important;
-            border-color: rgba(255, 255, 255, 0.14) !important;
-            color: #F8FAFC !important;
+            background-color: rgba(12, 16, 26, 0.94) !important;
+            border-color: rgba(255, 255, 255, 0.18) !important;
+            color: #FFFFFF !important;
         }
         html[data-theme="light"] .sangam-dropdown {
-            background-color: #141824 !important;
-            border-color: rgba(255, 255, 255, 0.18) !important;
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35) !important;
+            background-color: #0F172A !important;
+            border-color: rgba(255, 255, 255, 0.22) !important;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45) !important;
         }
-        html[data-theme="light"] .pw-tile .text-white,
-        html[data-theme="light"] .sangam-card .text-white {
-            color: #0F172A !important;
+        html[data-theme="light"] .pw-tile .text-white:not(.bg-emerald-600):not(.bg-purple-600):not(.bg-red-600):not(.btn-cute):not(.btn-cute-soft),
+        html[data-theme="light"] .sangam-card .text-white:not(.bg-emerald-600):not(.bg-purple-600):not(.bg-red-600):not(.btn-cute):not(.btn-cute-soft),
+        html[data-theme="light"] .pw-tile .text-gray-100,
+        html[data-theme="light"] .sangam-card .text-gray-100,
+        html[data-theme="light"] .pw-tile .text-gray-200,
+        html[data-theme="light"] .sangam-card .text-gray-200 {
+            color: #090D16 !important;
         }
-        html[data-theme="light"] .sangam-sec-title {
-            color: #FFFFFF !important;
-            text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.95);
-        }
+        html[data-theme="light"] .sangam-sec-title,
         html[data-theme="light"] section > div > h1.text-white,
         html[data-theme="light"] section > h1.text-white,
         html[data-theme="light"] section > h2.text-white {
             color: #FFFFFF !important;
-            text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.92), 0 0 3px rgba(0, 0, 0, 0.98);
+        }
+        html[data-theme="light"] section > div > p.text-gray-200,
+        html[data-theme="light"] section > div > p.text-gray-300,
+        html[data-theme="light"] section > div > p.text-gray-400 {
+            color: #F8FAFC !important;
+            text-shadow: 0 1px 6px rgba(0, 0, 0, 0.90);
         }
         html[data-theme="light"] .pw-tile .text-gray-300,
-        html[data-theme="light"] .pw-tile .text-gray-400 {
+        html[data-theme="light"] .sangam-card .text-gray-300 {
+            color: #1E293B !important;
+        }
+        html[data-theme="light"] .pw-tile .text-gray-400,
+        html[data-theme="light"] .pw-tile .text-gray-500,
+        html[data-theme="light"] .sangam-card .text-gray-400,
+        html[data-theme="light"] .sangam-card .text-gray-500 {
             color: #334155 !important;
         }
-        html[data-theme="light"] .pw-tile .text-gold {
+        html[data-theme="light"] .pw-tile .text-gold,
+        html[data-theme="light"] .sangam-card .text-gold,
+        html[data-theme="light"] .pw-tile .text-amber-200,
+        html[data-theme="light"] .pw-tile .text-amber-300,
+        html[data-theme="light"] .pw-tile .text-amber-400 {
             color: #92400E !important;
         }
-        html[data-theme="light"] .pw-tile .text-emerald-400,
-        html[data-theme="light"] .pw-tile .text-emerald-300 {
+        html[data-theme="light"] .pw-tile .text-emerald-200,
+        html[data-theme="light"] .pw-tile .text-emerald-300,
+        html[data-theme="light"] .pw-tile .text-emerald-400 {
             color: #065F46 !important;
         }
+        html[data-theme="light"] .pw-tile .text-sky-200,
+        html[data-theme="light"] .pw-tile .text-sky-300,
         html[data-theme="light"] .pw-tile .text-sky-400 {
             color: #075985 !important;
         }
-        html[data-theme="light"] .pw-tile .border-white\/10 {
-            border-color: rgba(15, 23, 42, 0.12) !important;
+        html[data-theme="light"] .pw-tile .text-purple-200,
+        html[data-theme="light"] .pw-tile .text-purple-300,
+        html[data-theme="light"] .pw-tile .text-purple-400 {
+            color: #5B21B6 !important;
+        }
+        html[data-theme="light"] .pw-tile .text-red-200,
+        html[data-theme="light"] .pw-tile .text-red-300,
+        html[data-theme="light"] .pw-tile .text-red-400 {
+            color: #991B1B !important;
+        }
+        html[data-theme="light"] .pw-tile .border-white\/10,
+        html[data-theme="light"] .pw-tile .border-white\/15,
+        html[data-theme="light"] .pw-tile .border-white\/20 {
+            border-color: rgba(15, 23, 42, 0.18) !important;
         }
         html[data-theme="light"] .pw-tile .bg-white\/5,
+        html[data-theme="light"] .pw-tile .bg-white\/10,
+        html[data-theme="light"] .pw-tile .bg-white\/\[0\.06\],
         html[data-theme="light"] .pw-tile .bg-white\/\[0\.04\],
-        html[data-theme="light"] .pw-tile .bg-white\/\[0\.03\] {
-            background-color: rgba(255, 255, 255, 0.65) !important;
-            border-color: rgba(15, 23, 42, 0.16) !important;
+        html[data-theme="light"] .pw-tile .bg-white\/\[0\.03\],
+        html[data-theme="light"] .pw-tile .bg-\[\#080c14\]\/80,
+        html[data-theme="light"] .pw-tile .bg-\[\#0b0f19\],
+        html[data-theme="light"] .pw-tile .bg-black\/30,
+        html[data-theme="light"] .pw-tile .bg-black\/35 {
+            background-color: #F1F5F9 !important;
+            border-color: #CBD5E1 !important;
+            color: #090D16 !important;
         }
         html[data-theme="light"] input:not([type="submit"]),
         html[data-theme="light"] select,
         html[data-theme="light"] textarea {
-            background-color: rgba(255, 255, 255, 0.92) !important;
-            color: #0F172A !important;
-            border-color: #64748B !important;
+            background-color: #FFFFFF !important;
+            color: #090D16 !important;
+            border-color: #475569 !important;
         }
 
-        /* Quiz & Test Runners in Dark Mode & White Mode:
-           Translucent backdrop so the study desk illustration remains subtly visible in both modes! */
+        /* Quiz & Test Runners in Dark Mode & White Mode */
         html[data-theme="dark"] #practice-runner,
         html[data-theme="dark"] #nta-runner {
-            background-color: rgba(10, 14, 22, 0.72) !important;
-            color: #F8FAFC !important;
+            background-color: rgba(8, 12, 20, 0.84) !important;
+            color: #FFFFFF !important;
         }
         html[data-theme="light"] #practice-runner,
         html[data-theme="light"] #nta-runner {
-            background-color: rgba(248, 250, 252, 0.76) !important;
-            color: #0F172A !important;
+            background-color: rgba(248, 250, 252, 0.88) !important;
+            color: #090D16 !important;
         }
         html[data-theme="light"] #practice-runner > header,
         html[data-theme="light"] #nta-runner > header,
         html[data-theme="light"] #practice-runner .nta-panel,
         html[data-theme="light"] #nta-runner .nta-panel {
-            background-color: rgba(255, 255, 255, 0.92) !important;
+            background-color: rgba(255, 255, 255, 0.96) !important;
             border-color: #CBD5E1 !important;
-            color: #0F172A !important;
+            color: #090D16 !important;
         }
         html[data-theme="light"] #practice-runner .q-card,
         html[data-theme="light"] #nta-runner .q-card {
-            background-color: rgba(255, 255, 255, 0.95) !important;
+            background-color: #FFFFFF !important;
             border-color: #CBD5E1 !important;
-            color: #0F172A !important;
-            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08) !important;
+            color: #090D16 !important;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10) !important;
         }
         html[data-theme="light"] #practice-runner .question-text,
         html[data-theme="light"] #nta-runner .question-text,
@@ -644,45 +703,45 @@
         html[data-theme="light"] #nta-runner .text-gray-200,
         html[data-theme="light"] #practice-runner .text-gray-300,
         html[data-theme="light"] #nta-runner .text-gray-300 {
-            color: #0F172A !important;
+            color: #090D16 !important;
         }
         html[data-theme="light"] #practice-runner .nta-opt-unselected,
         html[data-theme="light"] #nta-runner .nta-opt-unselected {
             background-color: #F8FAFC !important;
-            color: #0F172A !important;
+            color: #090D16 !important;
             border-color: #CBD5E1 !important;
         }
         html[data-theme="light"] #practice-runner .nta-opt-unselected:hover,
         html[data-theme="light"] #nta-runner .nta-opt-unselected:hover {
             background-color: #F1F5F9 !important;
-            border-color: #94A3B8 !important;
+            border-color: #64748B !important;
         }
 
         /* Admin Subpages in Dark Mode */
         html[data-theme="dark"] .admin-body .bg-white,
         html[data-theme="dark"] .admin-body .bg-gray-50,
         html[data-theme="dark"] .admin-body .bg-gray-50\/50 {
-            background-color: #121621 !important;
-            border-color: rgba(255, 255, 255, 0.14) !important;
-            color: #F8FAFC !important;
+            background-color: #111622 !important;
+            border-color: rgba(255, 255, 255, 0.18) !important;
+            color: #FFFFFF !important;
         }
         html[data-theme="dark"] .admin-body .text-ink,
         html[data-theme="dark"] .admin-body .text-gray-900,
         html[data-theme="dark"] .admin-body .text-gray-800,
         html[data-theme="dark"] .admin-body .text-gray-700 {
-            color: #F8FAFC !important;
+            color: #FFFFFF !important;
         }
         html[data-theme="dark"] .admin-body .text-ink\/60,
         html[data-theme="dark"] .admin-body .text-gray-600,
         html[data-theme="dark"] .admin-body .text-gray-500 {
-            color: #94A3B8 !important;
+            color: #CBD5E1 !important;
         }
         html[data-theme="dark"] .admin-body input:not([type="submit"]),
         html[data-theme="dark"] .admin-body select,
         html[data-theme="dark"] .admin-body textarea {
-            background-color: #090b10 !important;
-            color: #F8FAFC !important;
-            border-color: rgba(255, 255, 255, 0.22) !important;
+            background-color: #090D16 !important;
+            color: #FFFFFF !important;
+            border-color: rgba(255, 255, 255, 0.28) !important;
         }
     </style>
 
@@ -732,9 +791,9 @@
             {% if messages %}
                 <div class="max-w-2xl mx-auto mt-3 px-4 relative z-10">
                     {% for category, message in messages %}
-                        <div class="rounded-xl px-4 py-2 mb-2 text-xs font-bold shadow-sm backdrop-blur-md
-                            {{ 'bg-red-500/20 text-red-200 border border-red-500/40' if category == 'error'
-                               else 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/40' }}">
+                        <div class="rounded-xl px-4 py-2.5 mb-2 text-xs font-extrabold shadow-md backdrop-blur-md
+                            {{ 'bg-red-950/90 text-red-100 border border-red-400/60' if category == 'error'
+                               else 'bg-emerald-950/90 text-emerald-100 border border-emerald-400/60' }}">
                             {{ message }}
                         </div>
                     {% endfor %}
