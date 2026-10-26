@@ -42,7 +42,7 @@
     </div>
     <a href="{{ url_for('admin.payments_panel', show='pending') }}"
        class="bg-white border rounded-xl p-4 shadow-sm {{ 'border-amber-300 bg-amber-50' if summary.pending_count else 'border-ink/10' }}">
-      <p class="text-xs font-semibold text-ink/60">Waiting Approval</p>
+      <p class="text-xs font-semibold text-ink/60">Waiting for you</p>
       <p class="font-display text-2xl font-bold text-ink mt-1 tabular-nums">{{ summary.pending_count }}</p>
     </a>
   </div>
@@ -67,7 +67,7 @@
         {% set hooked = webhook and webhook.get('url') %}
         <span class="{{ 'text-emerald-600' if hooked else 'text-amber-600' }} font-bold">{{ '✓' if hooked else '•' }}</span>
         <span class="text-ink">
-          {% if hooked %}Webhook active at <span class="break-all font-semibold">{{ webhook.get('url') }}</span>.
+          {% if hooked %}Bot is connected to <span class="break-all font-semibold">{{ webhook.get('url') }}</span>.
           {% else %}Webhook not connected yet ({{ webhook_target }}).{% endif %}
         </span>
       </li>

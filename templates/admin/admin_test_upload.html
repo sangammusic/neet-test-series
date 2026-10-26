@@ -9,11 +9,10 @@
     <!-- HEADER -->
     <div class="flex flex-wrap justify-between items-center gap-3 mb-6 border-b border-gray-200 pb-4">
         <div>
-            <span class="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded">NTA Optional Pattern Ready</span>
+            <span class="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded">Official NTA NEET UG 720-Mark Pattern</span>
             <h1 class="font-display text-2xl sm:text-3xl font-bold text-ink mt-1">Upload: {{ test.title }}</h1>
-            <p class="text-ink/60 text-xs sm:text-sm font-medium">Paste JSON chunks (topic_name is optional). Unuploaded empty tests are automatically discarded.</p>
+            <p class="text-ink/60 text-xs sm:text-sm font-medium">Default configuration: 180 Questions (Physics 45 + Chemistry 45 + Biology 90) = 720 Marks (+4 / -1 / 0).</p>
         </div>
-        <!-- Back to Folder: If 0 questions uploaded, auto-discards empty shell so it never pollutes the folder -->
         <button type="button" @click="goBackToFolder()" class="text-xs sm:text-sm font-bold text-ink bg-white border-2 border-gray-200 hover:bg-gray-50 px-4 py-2 rounded-xl transition-colors shadow-sm">
             &larr; <span x-text="totalUploaded() === 0 ? 'Cancel & Discard Empty Draft' : 'Back to Tests Folder'"></span>
         </button>
@@ -22,68 +21,62 @@
     <!-- STEP 1: SET NTA TARGETS -->
     <div x-show="!targetsLocked" x-transition class="bg-white border-2 border-indigo-100 rounded-2xl p-5 sm:p-6 mb-6 shadow-sm">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-4 border-b border-gray-100 pb-3">
-            <h3 class="font-bold text-base sm:text-lg text-ink">Step 1: Choose NTA Exam Pattern or Set Custom Targets</h3>
+            <h3 class="font-bold text-base sm:text-lg text-ink">Step 1: Verify Question Distribution &amp; Maximum Marks</h3>
             <span class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
-                ✓ 5 Optional Skips per 50 Qs = Zero Negative Marking
+                ✓ +4 Correct | -1 Incorrect | 0 Unanswered
             </span>
         </div>
 
-        <!-- 1-Click NTA Pattern Presets -->
+        <!-- 1-Click NTA Pattern Presets (Default = 45 Physics + 45 Chemistry + 90 Biology = 180 Qs = 720 Marks) -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-5">
-            <button type="button" @click="applyPreset(50, 50, 50)"
-                    class="text-left p-3 rounded-xl border-2 transition-all"
-                    :class="(targets.physics===50 && targets.chemistry===50 && targets.biology===50) ? 'border-indigo-600 bg-indigo-50/70' : 'border-gray-200 hover:border-indigo-300'">
-                <p class="text-xs font-black text-indigo-900 uppercase">🔥 NTA 50-50-50 Pattern</p>
-                <p class="text-[11px] font-semibold text-gray-600 mt-0.5">50P + 50C + 50B (150 Qs)</p>
-                <p class="text-[10px] font-bold text-emerald-700 mt-1">Attempt 45 each (135 Qs) · 540 Marks</p>
+            <button type="button" @click="applyPreset(45, 45, 90)"
+                    class="text-left p-3.5 rounded-xl border-2 transition-all"
+                    :class="(targets.physics===45 && targets.chemistry===45 && targets.biology===90) ? 'border-indigo-600 bg-indigo-50/70 shadow-sm' : 'border-gray-200 hover:border-indigo-300'">
+                <div class="flex items-center justify-between">
+                    <p class="text-xs font-black text-indigo-900 uppercase">🎯 Official NEET UG 720 Marks</p>
+                    <span class="text-[9px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded">DEFAULT</span>
+                </div>
+                <p class="text-[11px] font-semibold text-gray-600 mt-1">Physics 45 + Chemistry 45 + Biology 90 (180 Qs)</p>
+                <p class="text-[10px] font-bold text-emerald-700 mt-1">All 180 Compulsory · Maximum Score: 720 Marks</p>
             </button>
 
             <button type="button" @click="applyPreset(50, 50, 100)"
-                    class="text-left p-3 rounded-xl border-2 transition-all"
-                    :class="(targets.physics===50 && targets.chemistry===50 && targets.biology===100) ? 'border-indigo-600 bg-indigo-50/70' : 'border-gray-200 hover:border-indigo-300'">
-                <p class="text-xs font-black text-indigo-900 uppercase">🎯 NTA 200Q Full Pattern</p>
-                <p class="text-[11px] font-semibold text-gray-600 mt-0.5">50P + 50C + 100B (200 Qs)</p>
+                    class="text-left p-3.5 rounded-xl border-2 transition-all"
+                    :class="(targets.physics===50 && targets.chemistry===50 && targets.biology===100) ? 'border-indigo-600 bg-indigo-50/70 shadow-sm' : 'border-gray-200 hover:border-indigo-300'">
+                <p class="text-xs font-black text-indigo-900 uppercase">📋 200Q Optional Pattern (720 Marks)</p>
+                <p class="text-[11px] font-semibold text-gray-600 mt-1">Physics 50 + Chemistry 50 + Biology 100 (200 Qs)</p>
                 <p class="text-[10px] font-bold text-emerald-700 mt-1">Attempt 45+45+90 (180 Qs) · 720 Marks</p>
             </button>
 
-            <button type="button" @click="applyPreset(45, 45, 90)"
-                    class="text-left p-3 rounded-xl border-2 transition-all"
-                    :class="(targets.physics===45 && targets.chemistry===45 && targets.biology===90) ? 'border-indigo-600 bg-indigo-50/70' : 'border-gray-200 hover:border-indigo-300'">
-                <p class="text-xs font-black text-indigo-900 uppercase">⚡ NTA 180Q Compulsory</p>
-                <p class="text-[11px] font-semibold text-gray-600 mt-0.5">45P + 45C + 90B (180 Qs)</p>
-                <p class="text-[10px] font-bold text-emerald-700 mt-1">Attempt all 180 Qs · 720 Marks</p>
+            <button type="button" @click="applyPreset(45, 45, 45)"
+                    class="text-left p-3.5 rounded-xl border-2 transition-all"
+                    :class="(targets.physics===45 && targets.chemistry===45 && targets.biology===45) ? 'border-indigo-600 bg-indigo-50/70 shadow-sm' : 'border-gray-200 hover:border-indigo-300'">
+                <p class="text-xs font-black text-indigo-900 uppercase">⚡ 135Q Part Test (540 Marks)</p>
+                <p class="text-[11px] font-semibold text-gray-600 mt-1">Physics 45 + Chemistry 45 + Biology 45 (135 Qs)</p>
+                <p class="text-[10px] font-bold text-emerald-700 mt-1">Attempt 135 Qs · 540 Marks</p>
             </button>
         </div>
 
         <div class="grid grid-cols-3 gap-3 sm:gap-5 mb-5">
             <div>
-                <label class="block text-xs sm:text-sm font-bold text-indigo-900 mb-1.5">Physics Total Qs</label>
+                <label class="block text-xs sm:text-sm font-bold text-indigo-900 mb-1.5">Physics Questions</label>
                 <input type="number" min="0" x-model.number="targets.physics" class="w-full rounded-xl border-2 border-gray-200 px-3.5 py-2.5 focus:border-indigo-600 outline-none font-bold text-base bg-gray-50">
                 <p class="text-[11px] font-bold text-indigo-700 mt-1">
-                    Attempt: <span x-text="attemptCap(targets.physics)"></span>
-                    <span x-show="targets.physics > attemptCap(targets.physics)" class="text-emerald-700">
-                        (<span x-text="targets.physics - attemptCap(targets.physics)"></span> Free Skips)
-                    </span>
+                    Attempt: <span x-text="attemptCap(targets.physics)"></span> Qs (<span x-text="attemptCap(targets.physics) * mpq"></span> Marks)
                 </p>
             </div>
             <div>
-                <label class="block text-xs sm:text-sm font-bold text-amber-900 mb-1.5">Chemistry Total Qs</label>
+                <label class="block text-xs sm:text-sm font-bold text-amber-900 mb-1.5">Chemistry Questions</label>
                 <input type="number" min="0" x-model.number="targets.chemistry" class="w-full rounded-xl border-2 border-gray-200 px-3.5 py-2.5 focus:border-indigo-600 outline-none font-bold text-base bg-gray-50">
                 <p class="text-[11px] font-bold text-amber-700 mt-1">
-                    Attempt: <span x-text="attemptCap(targets.chemistry)"></span>
-                    <span x-show="targets.chemistry > attemptCap(targets.chemistry)" class="text-emerald-700">
-                        (<span x-text="targets.chemistry - attemptCap(targets.chemistry)"></span> Free Skips)
-                    </span>
+                    Attempt: <span x-text="attemptCap(targets.chemistry)"></span> Qs (<span x-text="attemptCap(targets.chemistry) * mpq"></span> Marks)
                 </p>
             </div>
             <div>
-                <label class="block text-xs sm:text-sm font-bold text-emerald-900 mb-1.5">Biology Total Qs</label>
+                <label class="block text-xs sm:text-sm font-bold text-emerald-900 mb-1.5">Biology Questions (Botany + Zoology)</label>
                 <input type="number" min="0" x-model.number="targets.biology" class="w-full rounded-xl border-2 border-gray-200 px-3.5 py-2.5 focus:border-indigo-600 outline-none font-bold text-base bg-gray-50">
                 <p class="text-[11px] font-bold text-emerald-700 mt-1">
-                    Attempt: <span x-text="attemptCap(targets.biology)"></span>
-                    <span x-show="targets.biology > attemptCap(targets.biology)" class="text-emerald-700">
-                        (<span x-text="targets.biology - attemptCap(targets.biology)"></span> Free Skips)
-                    </span>
+                    Attempt: <span x-text="attemptCap(targets.biology)"></span> Qs (<span x-text="attemptCap(targets.biology) * mpq"></span> Marks)
                 </p>
             </div>
         </div>
@@ -91,44 +84,38 @@
         <!-- Live NTA Marks Summary Banner -->
         <div class="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 mb-5 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-indigo-950">
             <div>
-                Total Uploaded Target: <span class="font-black text-indigo-700" x-text="totalTarget()"></span> Qs
-                &middot; Student Attempts: <span class="font-black text-emerald-700" x-text="totalAttemptable()"></span> Qs
-                <span x-show="totalTarget() > totalAttemptable()" class="text-emerald-700">
-                    (<span x-text="totalTarget() - totalAttemptable()"></span> Optional Skips = 0 Marks Deducted)
-                </span>
+                Total Questions Target: <span class="font-black text-indigo-700" x-text="totalTarget()"></span> Qs
+                &middot; Evaluated Questions: <span class="font-black text-emerald-700" x-text="totalAttemptable()"></span> Qs
             </div>
             <div class="text-sm font-black text-indigo-900 bg-white px-3 py-1 rounded-lg border border-indigo-200">
-                Max Test Marks: <span x-text="totalAttemptable() * mpq"></span>
+                Maximum Score: <span x-text="totalAttemptable() * mpq"></span> Marks
             </div>
         </div>
 
         <button @click="lockTargets()" :disabled="isLocking" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md text-sm sm:text-base flex items-center justify-center gap-2">
             <svg x-show="isLocking" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-            <span x-text="isLocking ? 'Saving NTA Pattern & Marks...' : 'Lock Targets & Start Uploading →'"></span>
+            <span x-text="isLocking ? 'Saving 720-Mark Pattern...' : 'Confirm Configuration & Start Uploading →'"></span>
         </button>
     </div>
 
     <!-- LOCKED TARGETS DISPLAY -->
     <div x-show="targetsLocked" x-cloak class="bg-indigo-50 border-2 border-indigo-100 rounded-xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-3">
         <div class="flex flex-wrap items-center gap-2.5 text-xs font-bold">
-            <span class="font-black text-indigo-900 text-sm">🎯 NTA Targets:</span>
+            <span class="font-black text-indigo-900 text-sm">🎯 Test Configuration:</span>
             <span class="bg-white px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-800">
                 Physics: <span x-text="uploaded.physics"></span>/<span x-text="targets.physics"></span>
-                <span x-show="targets.physics > attemptCap(targets.physics)" class="text-[10px] text-emerald-700">(Attempt <span x-text="attemptCap(targets.physics)"></span>)</span>
             </span>
             <span class="bg-white px-3 py-1.5 rounded-lg border border-indigo-200 text-amber-800">
                 Chemistry: <span x-text="uploaded.chemistry"></span>/<span x-text="targets.chemistry"></span>
-                <span x-show="targets.chemistry > attemptCap(targets.chemistry)" class="text-[10px] text-emerald-700">(Attempt <span x-text="attemptCap(targets.chemistry)"></span>)</span>
             </span>
             <span class="bg-white px-3 py-1.5 rounded-lg border border-indigo-200 text-emerald-800">
                 Biology: <span x-text="uploaded.biology"></span>/<span x-text="targets.biology"></span>
-                <span x-show="targets.biology > attemptCap(targets.biology)" class="text-[10px] text-emerald-700">(Attempt <span x-text="attemptCap(targets.biology)"></span>)</span>
             </span>
             <span class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg">
-                Max Marks: <span x-text="totalAttemptable() * mpq"></span>
+                Total: <span x-text="totalUploaded()"></span>/<span x-text="totalTarget()"></span> Qs · Max Marks: <span x-text="totalAttemptable() * mpq"></span>
             </span>
         </div>
-        <button @click="unlockTargets()" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline bg-white px-3 py-1.5 rounded-lg border border-indigo-200 shrink-0">Edit Targets</button>
+        <button @click="unlockTargets()" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline bg-white px-3 py-1.5 rounded-lg border border-indigo-200 shrink-0">Edit Configuration</button>
     </div>
 
     <!-- STEP 2: THE 3-TAB UPLOADER -->
@@ -154,7 +141,7 @@
                     <label class="font-bold text-ink text-sm sm:text-base">
                         Paste JSON Questions for <span class="capitalize text-indigo-600" x-text="activeTab"></span>
                     </label>
-                    <span class="text-xs font-medium text-gray-500 ml-1">(1 to 50 questions per chunk · topic_name optional)</span>
+                    <span class="text-xs font-medium text-gray-500 ml-1">(Up to 90 questions per chunk · topic_name optional)</span>
                 </div>
                 <button type="button" @click="showGuide = !showGuide" class="text-xs font-bold text-indigo-600 hover:underline">
                     <span x-text="showGuide ? 'Hide JSON Format' : 'Show JSON Format'"></span>
@@ -164,7 +151,8 @@
             <div x-show="showGuide" x-cloak class="mb-4 p-3.5 rounded-xl bg-gray-900 text-green-400 font-mono text-xs overflow-x-auto">
 <pre>[
   {
-    "question_text": "Which law states F = ma?",
+    "topic_name": "Laws of Motion",
+    "question_text": "Which law states \\( F = ma \\)?",
     "option_a": "Newton's First Law",
     "option_b": "Newton's Second Law",
     "option_c": "Newton's Third Law",
@@ -180,7 +168,7 @@
             <textarea x-model="jsonInputs[activeTab]" 
                       :disabled="isTargetReached(activeTab) || isProcessing"
                       rows="10" 
-                      placeholder='[{"question_text": "...", "option_a": "...", "option_b": "...", "option_c": "...", "option_d": "...", "correct_option": "A"}]' 
+                      placeholder='[{"topic_name": "Laws of Motion", "question_text": "...", "option_a": "...", "option_b": "...", "option_c": "...", "option_d": "...", "correct_option": "A"}]' 
                       class="w-full rounded-xl border-2 p-4 font-mono text-xs sm:text-sm mb-4 outline-none transition-all resize-y shadow-inner"
                       :class="{
                           'border-gray-300 focus:border-indigo-500 bg-gray-50': !isTargetReached(activeTab),
@@ -191,6 +179,17 @@
             <div x-show="messages[activeTab]" x-transition class="mb-5 text-xs sm:text-sm font-bold px-4 py-3 rounded-xl shadow-sm"
                  :class="isError[activeTab] ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-green-50 text-green-800 border border-green-200'">
                 <span x-text="messages[activeTab]"></span>
+            </div>
+
+            <!-- Missing Questions Validation Banner -->
+            <div x-show="totalUploaded() > 0 && totalUploaded() < totalTarget()" x-cloak class="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900 flex flex-wrap items-center justify-between gap-2">
+                <span>
+                    ⚠️ Progress: <strong x-text="totalUploaded()"></strong> of <strong x-text="totalTarget()"></strong> questions uploaded
+                    (<strong x-text="totalTarget() - totalUploaded()"></strong> remaining —
+                    Physics: <span x-text="Math.max(0, targets.physics - uploaded.physics)"></span> left,
+                    Chemistry: <span x-text="Math.max(0, targets.chemistry - uploaded.chemistry)"></span> left,
+                    Biology: <span x-text="Math.max(0, targets.biology - uploaded.biology)"></span> left).
+                </span>
             </div>
 
             <!-- ACTION BUTTONS: Upload, Undo, Redo, Done -->
@@ -220,7 +219,7 @@
                     <button @click="finishAndGoToManager()"
                             :disabled="totalUploaded() === 0"
                             class="w-full lg:w-auto bg-emerald-600 text-white font-bold py-2.5 px-6 rounded-xl hover:bg-emerald-700 disabled:opacity-40 transition-all shadow-md flex items-center justify-center gap-2 border-2 border-emerald-700 text-xs sm:text-base">
-                        <span x-text="totalUploaded() === 0 ? 'Upload Questions First' : 'DONE → Open Question Manager'"></span>
+                        <span x-text="totalUploaded() === 0 ? 'Upload Questions First' : 'Finish & Open Question Manager →'"></span>
                     </button>
                 </div>
             </div>
@@ -231,12 +230,23 @@
 
 <script>
     const INITIAL_UPLOADED = {{ uploaded_counts | default({'physics': 0, 'chemistry': 0, 'biology': 0, 'total': 0}) | tojson }};
+    const SELECTED_TM = Number({{ (selected_tm if selected_tm is defined else (test.total_marks or 720)) | tojson }}) || 720;
 
     function uploadEngine() {
         const initPhys = Number(INITIAL_UPLOADED.physics || 0);
         const initChem = Number(INITIAL_UPLOADED.chemistry || 0);
         const initBio  = Number(INITIAL_UPLOADED.biology || 0);
         const hasExisting = (initPhys + initChem + initBio) > 0;
+
+        // Default to 45 Physics + 45 Chemistry + 90 Biology (180 Qs = 720 Marks) unless 540 was explicitly selected
+        let defPhys = 45, defChem = 45, defBio = 90;
+        if (SELECTED_TM === 540 && !hasExisting) {
+            defPhys = 45; defChem = 45; defBio = 45;
+        } else if (SELECTED_TM === 360 && !hasExisting) {
+            defPhys = 30; defChem = 30; defBio = 30;
+        } else if (SELECTED_TM === 180 && !hasExisting) {
+            defPhys = 15; defChem = 15; defBio = 15;
+        }
 
         return {
             testId: "{{ test.id }}",
@@ -248,11 +258,10 @@
             activeTab: 'physics',
             isProcessing: false,
             
-            // Default to NTA 50-50-50 (or expand Biology to 100 if >50 already uploaded)
             targets: {
-                physics: Math.max(50, initPhys),
-                chemistry: Math.max(50, initChem),
-                biology: initBio > 50 ? Math.max(100, initBio) : 50
+                physics: Math.max(defPhys, initPhys),
+                chemistry: Math.max(defChem, initChem),
+                biology: Math.max(defBio, initBio)
             },
             uploaded: {
                 physics: initPhys,
@@ -269,7 +278,7 @@
 
             attemptCap(count) {
                 const c = Math.max(0, Number(count || 0));
-                if (c >= 50 && c % 50 === 0) {
+                if (c === 50 || c === 100) {
                     return Math.floor(c / 50) * 45;
                 }
                 return c;
@@ -382,13 +391,13 @@
                     return;
                 }
 
-                if (parsedArray.length > 50) {
-                    this.showMessage(subject, `Maximum 50 questions allowed per chunk. You pasted ${parsedArray.length}.`, true);
+                if (parsedArray.length > 90) {
+                    this.showMessage(subject, `Maximum 90 questions allowed per chunk. You pasted ${parsedArray.length}.`, true);
                     return;
                 }
 
                 if (this.targets[subject] > 0 && this.uploaded[subject] + parsedArray.length > this.targets[subject]) {
-                    this.showMessage(subject, `Target Exceeded! You can only add ${this.targets[subject] - this.uploaded[subject]} more questions in ${subject} (or click Edit Targets to increase limit).`, true);
+                    this.showMessage(subject, `Target Exceeded! You can only add ${this.targets[subject] - this.uploaded[subject]} more questions in ${subject} (or click Edit Configuration to increase limit).`, true);
                     return;
                 }
 
@@ -421,7 +430,7 @@
                     if (item && typeof item === 'object') {
                         item.subject_name = expectedSubjectName;
                         if (!item.topic_name || !String(item.topic_name).trim()) {
-                            item.topic_name = item.topic || item.chapter_name || expectedSubjectName;
+                            item.topic_name = item.topic || item.chapter_name || 'General';
                         }
                     }
                 });
@@ -450,9 +459,9 @@
                             this.jsonInputs[subject] = '';
                         }
 
-                        let msg = `✅ Successfully uploaded ${data.inserted} ${expectedSubjectName} question(s)!`;
+                        let msg = `✅ Uploaded ${data.inserted} ${expectedSubjectName} question(s)! (${this.uploaded[subject]}/${this.targets[subject]} complete)`;
                         if (data.errors && data.errors.length > 0) {
-                            msg += ` (${data.errors.length} skipped: ${data.errors[0]})`;
+                            msg += ` (${data.errors.length} invalid row(s) skipped: ${data.errors[0]})`;
                         }
                         this.showMessage(subject, msg, false);
                     } else {
@@ -511,6 +520,20 @@
                 if (this.totalUploaded() === 0) {
                     alert("Please upload at least 1 question before finishing.");
                     return;
+                }
+                const missing = this.totalTarget() - this.totalUploaded();
+                if (missing > 0) {
+                    const pLeft = Math.max(0, this.targets.physics - this.uploaded.physics);
+                    const cLeft = Math.max(0, this.targets.chemistry - this.uploaded.chemistry);
+                    const bLeft = Math.max(0, this.targets.biology - this.uploaded.biology);
+                    const proceed = confirm(
+                        `Warning: ${missing} question(s) are still missing from your ${this.totalTarget()}-question (${this.totalAttemptable() * this.mpq} marks) target:\n` +
+                        `• Physics: ${pLeft} missing\n` +
+                        `• Chemistry: ${cLeft} missing\n` +
+                        `• Biology: ${bLeft} missing\n\n` +
+                        `Do you want to open the Question Manager anyway, or stay here to upload the remaining ${missing} questions?`
+                    );
+                    if (!proceed) return;
                 }
                 window.location.href = `/admin/tests/${this.testId}/manage`;
             }

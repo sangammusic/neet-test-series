@@ -2,13 +2,9 @@
 {% block title %}Subjects — Admin{% endblock %}
 {% block nav %}{% include "admin/_admin_nav.html" %}{% endblock %}
 {% block content %}
-{% include "admin/_admin_nav.html" %}
 <div class="max-w-4xl mx-auto px-6 py-10">
   <h1 class="font-display text-3xl text-ink mb-6">Manage Subjects</h1>
 
-  <!-- ==========================================
-       CREATE SUBJECT FORM (Strict Hierarchy)
-       ========================================== -->
   <div class="bg-white border border-ink/10 rounded-lg p-6 mb-8 shadow-sm">
     <h2 class="font-medium text-ink text-lg mb-4">Create New Subject</h2>
     <form method="POST" action="{{ url_for('admin.subjects_create') }}" class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -44,9 +40,6 @@
     </form>
   </div>
 
-  <!-- ==========================================
-       EXISTING SUBJECTS LIST
-       ========================================== -->
   <h2 class="font-display text-xl text-ink mb-3">Existing Subjects ({{ subjects|length }})</h2>
   <div class="bg-white border border-ink/10 rounded-lg divide-y divide-ink/10 shadow-sm">
     {% for sub in subjects %}
@@ -66,7 +59,6 @@
           </button>
         </form>
         
-        <!-- HEAVY MATERIAL WARNING -->
         <form method="POST" action="{{ url_for('admin.subjects_delete', subject_id=sub.id) }}"
               onsubmit="return confirm('⚠️ WARNING: Deleting this subject will fail if chapters and questions exist under it. Are you sure you want to proceed?');">
           <button class="text-sm font-bold text-red-600 hover:text-red-800 hover:underline focus:outline-none">
@@ -77,9 +69,6 @@
     </div>
     {% else %}
     <div class="px-5 py-10 text-center">
-      <div class="w-12 h-12 bg-ink/5 rounded-full flex items-center justify-center mx-auto mb-3">
-        <svg class="w-6 h-6 text-ink/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-      </div>
       <p class="text-ink/60 text-sm font-medium">No subjects exist yet.</p>
       <p class="text-ink/40 text-xs mt-1">Select a Stream above and add a subject to get started.</p>
     </div>
@@ -87,4 +76,3 @@
   </div>
 </div>
 {% endblock %}
-<!-- SANGAM STUDY v2.2 — Handcrafted UI Build (2026-10-21) -->
