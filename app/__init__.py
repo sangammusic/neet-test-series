@@ -1,4 +1,4 @@
-# STUDY SANGAM HUB v4.0 — Ultra-Light Gen-Z Dual-Theme Build (2026-10-22)
+# STUDY SANGAM HUB v5.0 — Production-Ready NEET UG Learning Platform
 import logging
 import os
 import threading
@@ -15,12 +15,28 @@ _WEBHOOK_BOOTSTRAPPED = False
 
 _FALLBACK_LOGO_SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">'
-    '<rect width="114" height="114" x="3" y="3" rx="26" fill="#0D1326" stroke="#F59E0B" stroke-width="4"/>'
-    '<path d="M60 20L18 39L60 58L102 39L60 20Z" fill="#FACC15"/>'
-    '<path d="M94 43V65" stroke="#FDE047" stroke-width="4.5" stroke-linecap="round"/>'
-    '<circle cx="94" cy="68" r="4.5" fill="#F59E0B"/>'
-    '<path d="M28 62C38 59 50 62 60 68C70 62 82 59 92 62V90C82 87 70 90 60 96C50 90 38 87 28 90V62Z" fill="#38BDF8"/>'
-    '<path d="M60 68V96" stroke="#0D1326" stroke-width="3.5" stroke-linecap="round"/>'
+    '<defs>'
+    '<linearGradient id="sgBg" x1="0" y1="0" x2="1" y2="1">'
+    '<stop offset="0%" stop-color="#09111E"/>'
+    '<stop offset="100%" stop-color="#0D1B2E"/>'
+    '</linearGradient>'
+    '<linearGradient id="sgTeal" x1="0" y1="1" x2="1" y2="0">'
+    '<stop offset="0%" stop-color="#0284C7"/>'
+    '<stop offset="50%" stop-color="#06B6D4"/>'
+    '<stop offset="100%" stop-color="#67E8F9"/>'
+    '</linearGradient>'
+    '<linearGradient id="sgGold" x1="0" y1="0" x2="1" y2="1">'
+    '<stop offset="0%" stop-color="#FDE047"/>'
+    '<stop offset="100%" stop-color="#D4A017"/>'
+    '</linearGradient>'
+    '</defs>'
+    '<rect width="114" height="114" x="3" y="3" rx="24" fill="url(#sgBg)" stroke="url(#sgGold)" stroke-width="3.5"/>'
+    '<path d="M60 15L74 36L60 56L46 36Z" fill="url(#sgGold)" opacity="0.22"/>'
+    '<polygon points="60,21 63.5,31 74,34.5 63.5,38 60,48 56.5,38 46,34.5 56.5,31" fill="url(#sgGold)"/>'
+    '<path d="M24 52C38 48 50 53 58 63V92C48 84 36 81 24 85Z" fill="#1E3A8A" stroke="#60A5FA" stroke-width="2"/>'
+    '<path d="M96 52C82 48 70 53 62 63V92C72 84 84 81 96 85Z" fill="#0F766E" stroke="#2DD4BF" stroke-width="2"/>'
+    '<path d="M28 88C42 74 56 54 68 25C74 48 64 74 44 94C38 92 32 90 28 88Z" fill="url(#sgTeal)"/>'
+    '<polygon points="60,72 67,85 60,98 53,85" fill="#38BDF8" stroke="#BAE6FD" stroke-width="1.5"/>'
     '</svg>'
 )
 
@@ -31,6 +47,14 @@ def _env_flag(name, default):
     if raw is None or raw.strip() == "":
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _find_static_img_dir(static_folder):
+    for sub in ("img", "Img"):
+        candidate = os.path.join(static_folder, sub)
+        if os.path.isdir(candidate):
+            return candidate
+    return os.path.join(static_folder, "img")
 
 
 def create_app():
@@ -84,9 +108,11 @@ def create_app():
     from app.shared.access import (
         format_inr, format_ist_date, format_ist_datetime, premium_status,
     )
+    from app.shared.latex_lint import clean_question_text
     app.jinja_env.filters["inr"] = format_inr
     app.jinja_env.filters["ist_date"] = format_ist_date
     app.jinja_env.filters["ist_datetime"] = format_ist_datetime
+    app.jinja_env.filters["clean_q"] = clean_question_text
 
     @app.context_processor
     def _template_globals():
@@ -96,17 +122,19 @@ def create_app():
             "support_url": os.environ.get("SUPPORT_URL", "https://t.me/s_u_k_oo_n_143"),
         }
 
-    # Zero-404 Logo & Favicon Guard for Render Free Tier
+    # Zero-404 Logo & Favicon Guard (Case-insensitive for Linux / Render)
     @app.route("/favicon.ico")
     def favicon():
-        img_dir = os.path.join(app.static_folder, "img")
-        if os.path.isfile(os.path.join(img_dir, "logo-mark.png")):
-            return send_from_directory(img_dir, "logo-mark.png", mimetype="image/png")
+        img_dir = _find_static_img_dir(app.static_folder)
+        for fname in ("favicon.png", "logo-mark.png", "logo.png"):
+            if os.path.isfile(os.path.join(img_dir, fname)):
+                return send_from_directory(img_dir, fname, mimetype="image/png")
         return Response(_FALLBACK_LOGO_SVG, mimetype="image/svg+xml")
 
     @app.route("/static/img/<path:filename>")
+    @app.route("/static/Img/<path:filename>")
     def serve_static_img(filename):
-        img_dir = os.path.join(app.static_folder, "img")
+        img_dir = _find_static_img_dir(app.static_folder)
         target = os.path.join(img_dir, filename)
         if os.path.isfile(target):
             return send_from_directory(img_dir, filename)
