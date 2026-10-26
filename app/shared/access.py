@@ -128,9 +128,13 @@ def get_all_series_plans_map():
 
     by_series = {}
     for r in rows:
-        sid = extract_series_id_from_code(r.get("code"))
-        if sid:
-            by_series[sid] = r
+        code = str(r.get("code") or "")
+        if code == BOT_QR_PLAN_CODE:
+            continue
+        sid = extract_series_id_from_code(code)
+        key = sid or code or str(r.get("id") or "")
+        if key:
+            by_series[key] = r
     cache.set(_PLANS_KEY, by_series, timeout=_PLANS_TTL)
     return by_series
 
