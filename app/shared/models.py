@@ -1,6 +1,7 @@
-# STUDY SANGAM HUB v5.0 — Shared Data Access, NTA NEET UG 180Q/720M Engine & Contextual Attempt History
+# STUDY SANGAM HUB v5.0 — Shared Data Access, NTA NEET UG 180Q/720M & 200Q Optional Engine, Contextual Attempt History
 import json
 import logging
+import random
 import re
 from app.extensions import supabase_public, supabase_admin, cache
 from app.shared.latex_lint import clean_question_dict, clean_question_text
@@ -8,6 +9,22 @@ from app.shared.latex_lint import clean_question_dict, clean_question_text
 logger = logging.getLogger(__name__)
 
 DEFAULT_PRACTICE_FOLDER = "General / Uncategorized"
+
+# In-process registry mapping attempt_id -> chosen exam_pattern ('compulsory_45' or 'optional_50')
+_ATTEMPT_PATTERN_MAP = {}
+
+
+def set_attempt_exam_pattern(attempt_id: str, exam_pattern: str):
+    if not attempt_id:
+        return
+    norm = "optional_50" if str(exam_pattern or "").strip().lower() in ("optional_50", "optional", "200", "50") else "compulsory_45"
+    _ATTEMPT_PATTERN_MAP[str(attempt_id)] = norm
+
+
+def get_attempt_exam_pattern(attempt_id: str, default: str = "compulsory_45") -> str:
+    if not attempt_id:
+        return default
+    return _ATTEMPT_PATTERN_MAP.get(str(attempt_id), default)
 
 
 def natural_sort_key(text):
@@ -29,29 +46,71 @@ def _canonical_subject_order(subject_name: str) -> tuple:
 
 
 # ======================================================================
-# NTA NEET UG SCORING & QUESTION ENGINE
-# Official Current Pattern: 180 compulsory questions (45P + 45C + 90B) = 720 marks (+4 / -1 / 0).
-# Legacy 200Q Optional Pattern (50P->45, 50C->45, 100B->90) = 720 marks is also supported.
+# NTA NEET UG SCORING & DUAL EXAM PATTERN ENGINE
+# Pattern 1 (compulsory_45): Locks 45 Physics + 45 Chemistry + 90 Biology = 180 compulsory Qs (720 marks).
+# Pattern 2 (optional_50): Shows all 200 Qs (50P + 50C + 100B) & allows skipping 5P + 5C + 10B = 180 Qs (720 marks).
 # ======================================================================
 
 def compute_nta_subject_cap(question_count: int) -> int:
     """
     Computes the attemptable question cap for a subject:
-      - Standard 45 questions (Physics 45, Chemistry 45) -> 45 compulsory.
-      - Standard 90 questions (Biology 90: Botany 45 + Zoology 45) -> 90 compulsory.
-      - Legacy 50-question block (50 -> 45, 100 -> 90): (count // 50) * 45.
+      - 45..50 questions (Physics / Chemistry block) -> 45 attemptable (skip up to 5 if 50 uploaded).
+      - 90..100 questions (Biology block: Botany + Zoology) -> 90 attemptable (skip up to 10 if 100 uploaded).
+      - Multiples of 50 (e.g. 150, 200) -> (count // 50) * 45.
       - All other custom question counts: all questions attemptable.
     """
     c = max(0, int(question_count or 0))
-    if c in (50, 100):
+    if 45 < c <= 50:
+        return 45
+    if 90 < c <= 100:
+        return 90
+    if c in (50, 100, 150, 200):
         return (c // 50) * 45
     return c
+
+
+def lock_compulsory_questions_by_subject(questions_by_subject: dict, attempt_id: str) -> dict:
+    """
+    When a student chooses the `compulsory_45` pattern on a test that has >45 questions
+    in Physics/Chemistry (e.g. 50) or >90 questions in Biology (e.g. 100), deterministically
+    selects and locks a random subset of 45 Physics, 45 Chemistry, and 90 Biology questions
+    (180 total) seeded by `attempt_id`, preserving their natural question order.
+    """
+    if not questions_by_subject:
+        return {}
+    locked = {}
+    seed_base = str(attempt_id or "default")
+    for subj, qs in questions_by_subject.items():
+        q_list = list(qs or [])
+        cap = compute_nta_subject_cap(len(q_list))
+        if len(q_list) > cap > 0:
+            rng = random.Random(f"sangam-compulsory45-{seed_base}-{subj.strip().lower()}")
+            chosen_indices = sorted(rng.sample(range(len(q_list)), cap))
+            locked[subj] = [q_list[idx] for idx in chosen_indices]
+        else:
+            locked[subj] = q_list
+    return locked
+
+
+def get_locked_compulsory_question_ids(test_id: str, attempt_id: str, questions_by_subject: dict = None) -> list:
+    """
+    Returns the flat list of question IDs locked for `attempt_id` under `compulsory_45`.
+    """
+    if questions_by_subject is None:
+        questions_by_subject = get_mock_questions_for_test(test_id) or {}
+    locked_by_subj = lock_compulsory_questions_by_subject(questions_by_subject, attempt_id)
+    out = []
+    for _subj, qs in locked_by_subj.items():
+        for q in qs:
+            if q.get("id"):
+                out.append(q["id"])
+    return out
 
 
 def compute_nta_test_meta(subject_counts: dict, stored_total_marks=None, default_mpq: float = 4.0) -> dict:
     """
     Computes complete NTA scoring & attempt metadata for a mock test given
-    `subject_counts` = {'Physics': 45, 'Chemistry': 45, 'Biology': 90}.
+    `subject_counts` = {'Physics': 45, 'Chemistry': 45, 'Biology': 90} (or 50/50/100).
     Preserves admin-selected `stored_total_marks` (e.g. 720) and never silently
     downgrades a 720-mark configuration to 540 unless the uploaded questions
     actually total 135 attemptable questions and stored_total_marks was unset (0).
@@ -72,12 +131,10 @@ def compute_nta_test_meta(subject_counts: dict, stored_total_marks=None, default
     mpq = float(default_mpq or 4.0)
 
     if total_attemptable > 0:
-        # Standard 180 attemptable questions (either 180 compulsory or 200 with 20 optional) = 720 marks
         if total_attemptable == 180 and (stored_marks <= 0 or stored_marks in (540, 720, 800)):
             effective_marks = 720
             marks_per_question = 4.0
         elif stored_marks > 0 and not (optional_skips > 0 and stored_marks == total_uploaded * 4):
-            # Respect the admin's configured total_marks if valid, or compute from attemptable * 4
             if stored_marks == int(round(total_attemptable * mpq)):
                 effective_marks = stored_marks
                 marks_per_question = mpq
@@ -129,7 +186,6 @@ def parse_structured_syllabus(description_text: str) -> dict:
     Parses `tests.description` into a subject-wise syllabus dict
     `{'Physics': ['Laws of Motion', ...], 'Chemistry': [...], 'Biology': [...]}`
     when the admin entered structured syllabus (either JSON or 'Physics: topic1, topic2' lines).
-    Also returns a clean human-readable summary if present.
     """
     if not description_text or not isinstance(description_text, str):
         return {}
@@ -137,7 +193,6 @@ def parse_structured_syllabus(description_text: str) -> dict:
     if not raw:
         return {}
 
-    # 1. Check if description is JSON or contains embedded JSON syllabus block
     if raw.startswith("{") and raw.endswith("}"):
         try:
             data = json.loads(raw)
@@ -158,9 +213,6 @@ def parse_structured_syllabus(description_text: str) -> dict:
         except Exception:
             pass
 
-    # 2. Parse line-by-line or block-by-block subject headers:
-    #    e.g. "Physics: Laws of Motion, Work Energy\nChemistry: Thermodynamics\nBiology: Cell"
-    #    or multi-line blocks under "Physics", "Chemistry", "Biology"
     out = {}
     current_subj = None
     lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
@@ -181,7 +233,6 @@ def parse_structured_syllabus(description_text: str) -> dict:
             current_subj = canonical
             rest = (m.group(2) or "").strip()
             if rest:
-                # Strip count annotations like "(45 Qs)" or "(50->45)" if that's the only thing
                 cleaned_rest = re.sub(r"\(\s*\d+\s*(?:->\s*\d+)?\s*(?:qs?|questions?)?\s*\)", "", rest, flags=re.I).strip()
                 topics = [t.strip() for t in (re.split(r"[;•|]+", cleaned_rest) if (";" in cleaned_rest or "•" in cleaned_rest or "|" in cleaned_rest) else re.split(r"[,]+", cleaned_rest)) if t.strip()]
                 if topics:
@@ -212,10 +263,6 @@ def _split_syllabus_input(raw_val: str) -> list[str]:
 
 
 def format_syllabus_description(general_desc: str = "", physics_Syl: str = "", chemistry_Syl: str = "", biology_Syl: str = "") -> str:
-    """
-    Combines optional per-subject syllabus inputs and general description into a clean
-    multi-line text stored in `tests.description` (no schema change required, 100% compatible).
-    """
     parts = []
     gen = (general_desc or "").strip()
     p_str = "; ".join(_split_syllabus_input(physics_Syl))
@@ -444,11 +491,12 @@ def get_difficulty_levels():
 @cache.memoize(timeout=300)
 def get_series_for_stream(stream_id: str, stream_slug: str = ""):
     """
-    Fast cached lookup of Mock Test Series folders for a stream.
+    Fast lookup of Mock Test Series folders for a stream using supabase_admin so RLS
+    never hides newly created series folders.
     """
     try:
         raw_series = (
-            supabase_public.table("mock_test_series")
+            supabase_admin.table("mock_test_series")
             .select("*")
             .order("created_at", desc=True)
             .execute()
@@ -475,7 +523,7 @@ def get_series_by_id(series_id: str):
         return None
     try:
         return (
-            supabase_public.table("mock_test_series")
+            supabase_admin.table("mock_test_series")
             .select("*")
             .eq("id", series_id)
             .maybe_single()
@@ -487,11 +535,32 @@ def get_series_by_id(series_id: str):
         return None
 
 
-def _attach_question_counts_and_filter(tests_list, hide_empty=True):
+def _count_questions_for_test_ids(test_ids):
     """
-    Counts mapped questions for each test in `tests_list` from `mock_test_questions`.
-    If `hide_empty=True`, filters out any test that has 0 uploaded questions so
-    students NEVER see an empty/un-uploaded test inside a Test Series folder.
+    Accurately counts mapped questions per test_id in `mock_test_questions` using
+    `supabase_admin` (bypassing RLS) and querying per test_id so Supabase's 1,000-row
+    default response limit across multiple tests never truncates question counts to 0!
+    """
+    counts_by_tid = {tid: 0 for tid in test_ids if tid}
+    for tid in list(counts_by_tid.keys()):
+        try:
+            res = (
+                supabase_admin.table("mock_test_questions")
+                .select("mock_question_id")
+                .eq("test_id", tid)
+                .execute()
+            )
+            counts_by_tid[tid] = len(res.data or [])
+        except Exception as e:
+            logger.warning(f"Could not count mock_test_questions for test {tid}: {e}")
+    return counts_by_tid
+
+
+def _attach_question_counts_and_filter(tests_list, hide_empty=False):
+    """
+    Attaches accurate `question_count`, `attemptable_questions`, `total_marks`, and
+    `has_optional` metadata to each test in `tests_list`.
+    By default (`hide_empty=False`), NEVER hides a created test in a Test Series folder.
     """
     if not tests_list:
         return []
@@ -499,28 +568,13 @@ def _attach_question_counts_and_filter(tests_list, hide_empty=True):
     if not test_ids:
         return []
 
-    counts_by_tid = {tid: 0 for tid in test_ids}
-    try:
-        for i in range(0, len(test_ids), 50):
-            chunk = test_ids[i:i + 50]
-            rows = (
-                supabase_public.table("mock_test_questions")
-                .select("test_id")
-                .in_("test_id", chunk)
-                .execute()
-                .data or []
-            )
-            for r in rows:
-                tid = r.get("test_id")
-                if tid in counts_by_tid:
-                    counts_by_tid[tid] += 1
-    except Exception as e:
-        logger.warning(f"Could not count mock_test_questions for tests: {e}")
-        return tests_list
+    counts_by_tid = _count_questions_for_test_ids(test_ids)
 
     filtered = []
     for t in tests_list:
         row = dict(t)
+        if row.get("is_active") is False:
+            continue
         q_cnt = counts_by_tid.get(row.get("id"), 0)
         row["question_count"] = q_cnt
         if hide_empty and q_cnt <= 0:
@@ -536,27 +590,38 @@ def _attach_question_counts_and_filter(tests_list, hide_empty=True):
         elif q_cnt == 150 and stored_marks in (0, 600):
             row["total_marks"] = 540
             row["attemptable_questions"] = 135
-        elif q_cnt > 0 and stored_marks <= 0:
-            row["attemptable_questions"] = compute_nta_subject_cap(q_cnt)
-            row["total_marks"] = row["attemptable_questions"] * 4
+        elif q_cnt > 0:
+            cap = compute_nta_subject_cap(q_cnt)
+            row["attemptable_questions"] = cap
+            if stored_marks <= 0 or (q_cnt in (50, 100) and stored_marks == q_cnt * 4):
+                row["total_marks"] = cap * 4
         else:
-            row["attemptable_questions"] = 180 if q_cnt in (180, 200) else (135 if q_cnt == 150 else q_cnt)
+            row["attemptable_questions"] = (stored_marks // 4) if stored_marks > 0 else 180
             if stored_marks <= 0:
                 row["total_marks"] = 720
         row["total_uploaded"] = q_cnt
         row["total_attemptable"] = row["attemptable_questions"]
-        row["has_optional"] = row["total_attemptable"] < q_cnt
+        row["has_optional"] = row["total_attemptable"] < q_cnt or q_cnt >= 45
         filtered.append(row)
     return filtered
 
 
-@cache.memoize(timeout=300)
-def get_tests_for_series(series_id: str, stream_id: str = None, include_empty: bool = False):
+@cache.memoize(timeout=60)
+def get_tests_for_series(series_id: str, stream_id: str = None, include_empty: bool = True):
+    """
+    Returns all tests belonging to `series_id`.
+    Queries by `series_id` via `supabase_admin` so uploaded tests are ALWAYS visible
+    to users regardless of RLS policies or stream_id mismatches.
+    """
     try:
-        q = supabase_public.table("tests").select("*").eq("series_id", series_id)
-        if stream_id:
-            q = q.eq("stream_id", stream_id)
-        raw = q.order("created_at", desc=True).execute().data or []
+        raw = (
+            supabase_admin.table("tests")
+            .select("*")
+            .eq("series_id", series_id)
+            .order("created_at", desc=True)
+            .execute()
+            .data or []
+        )
         return _attach_question_counts_and_filter(raw, hide_empty=not include_empty)
     except Exception as e:
         logger.error(f"Error fetching tests for series {series_id}: {e}")
@@ -570,12 +635,11 @@ def invalidate_mock_series_cache(series_id=None, test_id=None):
     try:
         cache.delete_memoized(get_series_for_stream)
         cache.delete_memoized(get_all_tests_for_stream)
+        cache.delete_memoized(get_tests_for_series)
         if series_id:
             cache.delete_memoized(get_series_by_id, series_id)
-            cache.delete_memoized(get_tests_for_series)
         else:
             cache.delete_memoized(get_series_by_id)
-            cache.delete_memoized(get_tests_for_series)
         if test_id:
             cache.delete_memoized(get_test_by_id, test_id)
             cache.delete_memoized(get_test_syllabus, test_id)
@@ -638,44 +702,38 @@ def get_questions_for_practice(chapter_id, is_pyq=False, topic_name=None):
         return []
 
 
-@cache.memoize(timeout=300)
+@cache.memoize(timeout=120)
 def get_all_tests_for_stream(stream_id):
     try:
         res = (
-            supabase_public.table("tests")
-            .select("id, title, description, duration_minutes, total_marks, is_premium, price_inr")
+            supabase_admin.table("tests")
+            .select("id, title, description, duration_minutes, total_marks, is_premium, price_inr, is_active")
             .eq("stream_id", stream_id)
             .eq("is_active", True)
             .order("created_at", desc=True)
             .execute()
         )
-        return _attach_question_counts_and_filter(res.data or [], hide_empty=True)
+        return _attach_question_counts_and_filter(res.data or [], hide_empty=False)
     except Exception as e:
         logger.error(f"Error fetching tests for stream {stream_id}: {e}")
         return []
 
 
-@cache.memoize(timeout=300)
+@cache.memoize(timeout=120)
 def get_test_by_id(test_id):
     try:
-        res = supabase_public.table("tests").select("*").eq("id", test_id).maybe_single().execute()
+        res = supabase_admin.table("tests").select("*").eq("id", test_id).maybe_single().execute()
         return res.data
     except Exception as e:
         logger.error(f"Error fetching test {test_id}: {e}")
         return None
 
 
-@cache.memoize(timeout=300)
+@cache.memoize(timeout=120)
 def get_test_syllabus(test_id):
     """
     Returns subject-wise syllabus for `test_id`:
       `{'Physics': ['Laws of Motion', 'Work, Energy and Power'], 'Chemistry': [...], 'Biology': [...]}`
-    Sources (merged in priority order):
-      1. Structured subject syllabus configured in `tests.description` during quiz creation.
-      2. Distinct `topic_name` values from `mock_questions` mapped to this test, EXCLUDING
-         redundant subject-name placeholders (e.g. 'Physics' under Physics, 'General', etc.).
-    If a subject has questions in the test but no specific topics were configured, its list is
-    empty `[]` so the UI can show a clean graceful empty state instead of repeating the subject name!
     """
     syllabus = {}
     test_row = get_test_by_id(test_id) or {}
@@ -685,7 +743,7 @@ def get_test_syllabus(test_id):
 
     try:
         res = (
-            supabase_public.table("mock_test_questions")
+            supabase_admin.table("mock_test_questions")
             .select("mock_questions(topic_name, subjects(name))")
             .eq("test_id", test_id)
             .execute()
@@ -698,7 +756,6 @@ def get_test_syllabus(test_id):
                 subj_name = q["subjects"]["name"] if q.get("subjects") else "General"
                 syllabus.setdefault(subj_name, [])
                 topic = (q.get("topic_name") or "").strip()
-                # Filter out generic placeholder topic names that just repeat the subject name
                 if (
                     topic
                     and topic.lower() not in ("general", "uncategorized", "default", "all", "full syllabus", subj_name.strip().lower())
@@ -708,7 +765,6 @@ def get_test_syllabus(test_id):
     except Exception as e:
         logger.error(f"Error fetching syllabus for test {test_id}: {e}")
 
-    # Return in canonical subject order: Physics -> Chemistry -> Biology
     ordered = {}
     for subj in sorted(syllabus.keys(), key=_canonical_subject_order):
         ordered[subj] = syllabus[subj]
@@ -724,11 +780,11 @@ def _visible_image(q):
     return url
 
 
-@cache.memoize(timeout=300)
+@cache.memoize(timeout=120)
 def get_mock_questions_for_test(test_id):
     try:
         res = (
-            supabase_public.table("mock_test_questions")
+            supabase_admin.table("mock_test_questions")
             .select(
                 "question_order, "
                 "mock_questions(id, question_text, option_a, option_b, option_c, "
@@ -759,7 +815,6 @@ def get_mock_questions_for_test(test_id):
                 })
                 grouped.setdefault(subj_name, []).append(item)
 
-        # Ensure canonical subject ordering: Physics, Chemistry, Biology
         ordered = {}
         for subj in sorted(grouped.keys(), key=_canonical_subject_order):
             ordered[subj] = grouped[subj]
@@ -781,11 +836,11 @@ def get_test_nta_meta(test_id, stored_total_marks=None):
     return compute_nta_test_meta(subj_counts, stored_total_marks=stored_total_marks)
 
 
-@cache.memoize(timeout=300)
+@cache.memoize(timeout=120)
 def get_mock_question_ids_for_test(test_id):
     try:
         res = (
-            supabase_public.table("mock_test_questions")
+            supabase_admin.table("mock_test_questions")
             .select("mock_question_id")
             .eq("test_id", test_id)
             .execute()
@@ -806,7 +861,7 @@ def _discard_unsubmitted_full_attempts(table, filters):
         logger.warning(f"Could not discard abandoned drafts in {table}: {e}")
 
 
-def create_test_attempt(test_id, user_id=None):
+def create_test_attempt(test_id, user_id=None, exam_pattern="compulsory_45"):
     if not user_id:
         return None
     _discard_unsubmitted_full_attempts("test_attempts", {"test_id": test_id, "user_id": user_id})
@@ -814,7 +869,10 @@ def create_test_attempt(test_id, user_id=None):
         res = supabase_admin.table("test_attempts").insert(
             {"test_id": test_id, "user_id": user_id, "attempt_kind": "full", "parent_attempt_id": None}
         ).execute()
-        return res.data[0]["id"] if res.data else None
+        attempt_id = res.data[0]["id"] if res.data else None
+        if attempt_id:
+            set_attempt_exam_pattern(attempt_id, exam_pattern)
+        return attempt_id
     except Exception as e:
         logger.error(f"Error creating test attempt for test {test_id} user {user_id}: {e}")
         return None
@@ -904,7 +962,7 @@ def get_attempt_answers_map(attempt_id):
     return {}
 
 
-def get_mock_questions_for_test_review(test_id, attempt_id):
+def get_mock_questions_for_test_review(test_id, attempt_id, exam_pattern=None):
     try:
         res = (
             supabase_admin.table("mock_test_questions")
@@ -948,19 +1006,24 @@ def get_mock_questions_for_test_review(test_id, attempt_id):
         ordered = {}
         for subj in sorted(grouped.keys(), key=_canonical_subject_order):
             ordered[subj] = grouped[subj]
+
+        pattern = exam_pattern or get_attempt_exam_pattern(attempt_id, default="compulsory_45")
+        if pattern == "compulsory_45":
+            ordered = lock_compulsory_questions_by_subject(ordered, attempt_id)
         return ordered
     except Exception as e:
         logger.error(f"Error fetching review questions for test {test_id}, attempt {attempt_id}: {e}")
         return {}
 
 
-def submit_test_attempt(attempt_id, test_id, progress_map=None, valid_ids=None, answers=None, time_by_question=None):
+def submit_test_attempt(attempt_id, test_id, progress_map=None, valid_ids=None, answers=None, time_by_question=None, exam_pattern=None):
     """
     Grades and submits a Mock Test Attempt using the Official NTA NEET UG Pattern:
       * Correct Answer: +4 marks (or test's configured marks_per_question)
       * Incorrect Answer: -1 mark (or test's configured negative_marking)
       * Unanswered / Skipped Question: 0 marks
-      * Standard NEET UG Full Mock: 180 questions (45 Physics + 45 Chemistry + 90 Biology) = 720 marks.
+      * Pattern 1 (`compulsory_45`): Locks 45P + 45C + 90B = 180 compulsory questions (720 marks).
+      * Pattern 2 (`optional_50`): Evaluates up to 45/50 in P, 45/50 in C, 90/100 in B = 180 questions (720 marks).
     """
     import datetime
 
@@ -978,7 +1041,17 @@ def submit_test_attempt(attempt_id, test_id, progress_map=None, valid_ids=None, 
             .data or []
         )
 
-        is_partial_reattempt = valid_ids is not None and len(valid_ids) < len(mapped)
+        pattern = exam_pattern or get_attempt_exam_pattern(attempt_id, default=None)
+        if valid_ids is None and pattern == "compulsory_45":
+            by_subj_for_lock = {}
+            for row in mapped:
+                mq = row.get("mock_questions") or {}
+                s_name = (mq.get("subjects") or {}).get("name") or "General"
+                by_subj_for_lock.setdefault(s_name, []).append({"id": row["mock_question_id"], "row": row})
+            locked_map = lock_compulsory_questions_by_subject(by_subj_for_lock, attempt_id)
+            valid_ids = {item["id"] for qs in locked_map.values() for item in qs}
+
+        is_partial_reattempt = valid_ids is not None and len(valid_ids) < len(mapped) and pattern != "compulsory_45"
         if valid_ids is not None:
             mapped = [row for row in mapped if row["mock_question_id"] in valid_ids]
 
@@ -1137,7 +1210,6 @@ def get_attempts_for_user(user_id, series_id=None, valid_test_ids=None):
             if r.get("user_id") and r.get("user_id") != user_id:
                 continue
             t_obj = r.get("tests")
-            # If test was deleted or missing, skip stale reference
             if not t_obj and allowed_tids is None:
                 continue
             if series_id and t_obj and str(t_obj.get("series_id") or "") != str(series_id):
@@ -1187,7 +1259,6 @@ def get_chapter_practice_attempts_for_user(user_id, chapter_id, mode=None, categ
     """
     Returns chapter-wise practice attempts for `user_id` within the given chapter
     (and optional mode / category / folder context).
-    Guarantees contextual separation from Mock Test Series attempts and zero cross-user leakage.
     """
     if not user_id or not chapter_id:
         return []
@@ -1757,9 +1828,28 @@ def get_mock_review_items(attempt_id, test_id, filter_kind="full"):
             if row.get("mock_question_id"):
                 answers[row["mock_question_id"]] = row
 
+        # Determine if this attempt locked 180 compulsory questions out of a larger bank
+        raw_rows = list(res.data or [])
+        pattern = get_attempt_exam_pattern(attempt_id, default=None)
+        if pattern == "compulsory_45":
+            by_subj_for_lock = {}
+            for row in raw_rows:
+                q = row.get("mock_questions") or {}
+                if not q:
+                    continue
+                s_name = (q.get("subjects") or {}).get("name") or "General"
+                by_subj_for_lock.setdefault(s_name, []).append(row)
+            locked_map = lock_compulsory_questions_by_subject(by_subj_for_lock, attempt_id)
+            locked_qids = {
+                (r.get("mock_questions") or {}).get("id")
+                for rows_list in locked_map.values()
+                for r in rows_list
+            }
+            raw_rows = [r for r in raw_rows if (r.get("mock_questions") or {}).get("id") in locked_qids]
+
         items = []
         number = 0
-        for row in (res.data or []):
+        for row in raw_rows:
             q = row.get("mock_questions")
             if not q:
                 continue
@@ -1854,7 +1944,7 @@ def get_latest_mock_reattempt_session(parent_attempt_id):
         return None
 
 
-def start_mock_reattempt(test_id, user_id, kind="full"):
+def start_mock_reattempt(test_id, user_id, kind="full", exam_pattern="compulsory_45"):
     if not user_id:
         return None, "not_logged_in"
     if kind not in PRACTICE_ATTEMPT_KINDS:
@@ -1863,7 +1953,7 @@ def start_mock_reattempt(test_id, user_id, kind="full"):
     if not all_ids:
         return None, "no_questions"
     if kind == "full":
-        new_id = create_test_attempt(test_id, user_id=user_id)
+        new_id = create_test_attempt(test_id, user_id=user_id, exam_pattern=exam_pattern)
         return (new_id, all_ids) if new_id else (None, "db_error")
 
     parent = get_latest_full_mock_attempt(test_id, user_id)
