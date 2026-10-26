@@ -107,31 +107,80 @@
     max-width: 100%;
     height: auto;
   }
+
+  /* =================================================================
+     UNIFIED 2-COLUMN SIDE-BY-SIDE VIEW ACROSS MOBILE, TABLET (VERTICAL
+     & HORIZONTAL), LAPTOP, AND COMPUTER
+     ================================================================= */
+  #practice-runner .nta-unified-shell {
+    width: 100%;
+    min-width: 1024px;
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  @media (max-width: 1023px) {
+    #practice-runner {
+      zoom: 0.76;
+    }
+  }
+  @media (max-width: 767px) {
+    #practice-runner {
+      zoom: 0.56;
+    }
+  }
+  @media (max-width: 479px) {
+    #practice-runner {
+      zoom: 0.39;
+    }
+  }
 </style>
+<script>
+  (function () {
+    var vpMeta = document.querySelector('meta[name="viewport"]'); if (vpMeta) vpMeta.setAttribute('content', 'width=1080, user-scalable=yes');
+    function syncUnifiedPracticeZoom() {
+      var runner = document.getElementById('practice-runner');
+      if (!runner) return;
+      var vw = window.innerWidth || document.documentElement.clientWidth || 1024;
+      if (vw < 1040) {
+        var scale = Math.max(0.34, Math.min(1, vw / 1040));
+        runner.style.zoom = scale.toFixed(4);
+      } else {
+        runner.style.zoom = '1';
+      }
+    }
+    window.addEventListener('resize', syncUnifiedPracticeZoom);
+    window.addEventListener('orientationchange', function () {
+      setTimeout(syncUnifiedPracticeZoom, 60);
+      setTimeout(syncUnifiedPracticeZoom, 220);
+    });
+    document.addEventListener('DOMContentLoaded', syncUnifiedPracticeZoom);
+  })();
+</script>
 {% endblock %}
 
 {% block content %}
 <div id="practice-runner" x-data="practiceRunner()" class="min-h-screen w-full max-w-full overflow-x-hidden flex flex-col font-body">
 
   <!-- =================================================================
-       STICKY TOP PRACTICE HEADER BAR (No redundant subject tabs!)
+       STICKY TOP PRACTICE HEADER BAR (Identical in Horizontal & Vertical)
        ================================================================= -->
-  <header class="nta-panel bg-[#0d111a]/95 backdrop-blur-md border-b border-white/15 px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2 sticky top-0 z-30 shadow-md">
+  <header class="nta-panel bg-[#0d111a]/95 backdrop-blur-md border-b border-white/15 px-5 py-2.5 flex items-center justify-between gap-2 sticky top-0 z-30 shadow-md min-w-[1024px]">
     <div class="flex items-center gap-2.5 min-w-0">
       <img src="{{ url_for('static', filename='img/logo-mark.png') }}"
            onerror="this.onerror=null;this.src=window.SANGAM_LOGO_URI"
            alt="Sangam Study"
-           class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-contain shrink-0">
+           class="w-8 h-8 rounded-lg object-contain shrink-0">
       <div class="min-w-0">
         <p class="text-[10px] text-gold font-bold uppercase tracking-wider truncate">{{ chapter.name }} · {{ 'PYQ Practice' if mode == 'pyq' else 'MCQ Practice' }} · {{ folder }}</p>
-        <h1 class="text-xs sm:text-base font-display font-bold text-white truncate">{{ set_name }}</h1>
+        <h1 class="text-sm sm:text-base font-display font-bold text-white truncate">{{ set_name }}</h1>
       </div>
     </div>
 
-    <div class="shrink-0 flex items-center gap-2">
-      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 border border-white/15">
-        <span class="text-[10px] uppercase tracking-wide text-gray-300 font-bold hidden sm:inline">Time:</span>
-        <span class="font-display text-xs sm:text-sm font-bold tabular-nums text-gold" x-text="formattedTotalTime"></span>
+    <div class="shrink-0 flex items-center gap-2.5">
+      <div class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 border border-white/15">
+        <span class="text-[10px] uppercase tracking-wide text-gray-300 font-bold">Time:</span>
+        <span class="font-display text-sm font-bold tabular-nums text-gold" x-text="formattedTotalTime"></span>
       </div>
 
       <div class="theme-toggle-pill" role="group" aria-label="Color theme">
@@ -139,39 +188,33 @@
         <button type="button" data-theme-btn="light" onclick="window.setSangamTheme('light')" class="theme-toggle-btn">☀️</button>
       </div>
 
-      <button type="button"
-              @click="mobilePaletteOpen = true"
-              class="lg:hidden btn-cute-soft !py-1.5 !px-2.5 !text-xs">
-        <span>Palette</span>
-        <span class="text-[10px] bg-gold/20 text-gold px-1.5 py-0.2 rounded" x-text="(currentIndex + 1) + '/' + questions.length"></span>
-      </button>
-
       <a href="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
          data-back-url="{{ url_for('user.practice_sets', slug=stream.slug, chapter_id=chapter.id, mode=mode, category=category, folder=folder) }}"
-         class="btn-cute-soft !py-1.5 !px-3 !text-xs">
+         class="btn-cute-soft !py-1.5 !px-3.5 !text-xs">
         Exit
       </a>
     </div>
   </header>
 
   {% if attempt_kind != 'full' %}
-  <div class="bg-gold/15 border-b border-gold/30 px-4 py-1.5 text-center text-xs font-bold text-gold">
+  <div class="bg-gold/15 border-b border-gold/30 px-4 py-1.5 text-center text-xs font-bold text-gold min-w-[1024px]">
     🔁 Reattempt Mode — {{ 'Incorrect & Unanswered Questions Only' if attempt_kind == 'wrong_only' else 'Incorrect + Marked Questions' }} ({{ questions|length }} question{{ '' if questions|length == 1 else 's' }})
   </div>
   {% endif %}
 
   <!-- =================================================================
-       2-COLUMN PRACTICE WORKSPACE (Left Question + Right Chapter Palette)
+       PERMANENT 2-COLUMN SIDE-BY-SIDE PRACTICE WORKSPACE
+       (Col-Span-8 Left Question + Col-Span-4 Right Palette on ALL Devices)
        ================================================================= -->
-  <div class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-5 py-4 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+  <div class="flex-1 nta-unified-shell px-5 py-4 grid grid-cols-12 gap-5 items-start">
 
     <!-- LEFT PANEL: QUESTION & OPTIONS -->
-    <div class="lg:col-span-8 flex flex-col w-full min-w-0" x-show="currentQuestion" x-cloak>
+    <div class="col-span-8 flex flex-col w-full min-w-0" x-show="currentQuestion" x-cloak>
 
       <!-- Question Top Header & Clear Visible Marking Scheme Box -->
-      <div class="nta-panel bg-[#111622]/90 border border-white/15 rounded-t-2xl px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2.5">
+      <div class="nta-panel bg-[#111622]/90 border border-white/15 rounded-t-2xl px-5 py-3 flex flex-wrap items-center justify-between gap-2.5">
         <div class="flex items-center gap-2">
-          <span class="px-2.5 py-1 rounded-lg bg-gold/15 border border-gold/35 text-gold font-display font-bold text-xs sm:text-sm">
+          <span class="px-2.5 py-1 rounded-lg bg-gold/15 border border-gold/35 text-gold font-display font-bold text-sm">
             Question <span x-text="currentIndex + 1"></span> of <span x-text="questions.length"></span>
           </span>
         </div>
@@ -192,11 +235,11 @@
         </div>
       </div>
 
-      <div class="q-card bg-[#141926]/95 border-x border-b border-white/15 rounded-b-2xl p-4 sm:p-6 mb-4 shadow-xl overflow-hidden"
+      <div class="q-card bg-[#141926]/95 border-x border-b border-white/15 rounded-b-2xl p-6 mb-4 shadow-xl overflow-hidden"
            x-ref="questionCard" :style="cardStyle">
         <div class="q-swapbar" :class="swapping ? 'on' : ''"></div>
 
-        <div class="question-text text-sm sm:text-base md:text-lg leading-relaxed mb-5 text-gray-100 font-medium"
+        <div class="question-text text-base md:text-lg leading-relaxed mb-5 text-gray-100 font-medium"
              x-html="rendered.question_text"></div>
 
         <!-- Conditional Diagram Rendering: ONLY mounted in DOM when a valid diagram URL exists -->
@@ -217,11 +260,11 @@
         <div class="space-y-3">
           <template x-for="opt in ['A','B','C','D']" :key="opt">
             <button type="button" @click="pickOption(opt)"
-              class="w-full flex items-start gap-3.5 p-3.5 sm:p-4 rounded-xl border text-left transition-all duration-150"
+              class="w-full flex items-start gap-3.5 p-4 rounded-xl border text-left transition-all duration-150"
               :class="optionClass(opt)">
               <span class="mt-0.5 w-6 h-6 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold"
                 :class="optionBadgeClass(opt)" x-text="opt"></span>
-              <span class="option-text text-xs sm:text-sm md:text-base leading-relaxed mt-0.5 flex-1"
+              <span class="option-text text-sm md:text-base leading-relaxed mt-0.5 flex-1"
                     x-html="rendered['option_' + opt.toLowerCase()]"></span>
             </button>
           </template>
@@ -230,13 +273,13 @@
         <!-- Instant Practice Feedback Once Checked -->
         <div x-show="currentQuestion && isChecked(currentQuestion.id)"
              x-cloak class="mt-5 pt-4 border-t border-white/15">
-          <p class="text-xs sm:text-sm font-bold" :class="answers[currentQuestion?.id] === currentQuestion?.correct_option ? 'text-emerald-400' : 'text-red-400'">
+          <p class="text-sm font-bold" :class="answers[currentQuestion?.id] === currentQuestion?.correct_option ? 'text-emerald-400' : 'text-red-400'">
             <span x-text="answers[currentQuestion?.id] === currentQuestion?.correct_option ? '✓ Correct Answer!' : '✗ Incorrect Answer.'"></span>
             <span x-show="answers[currentQuestion?.id] !== currentQuestion?.correct_option" class="ml-1">
               Correct Option: <span x-text="currentQuestion?.correct_option"></span>
             </span>
           </p>
-          <div x-show="currentQuestion?.explanation" x-cloak class="text-xs sm:text-sm text-gray-200 mt-2.5 leading-relaxed bg-white/[0.04] border border-white/10 rounded-xl p-3.5">
+          <div x-show="currentQuestion?.explanation" x-cloak class="text-sm text-gray-200 mt-2.5 leading-relaxed bg-white/[0.04] border border-white/10 rounded-xl p-3.5">
             <span class="text-gold font-bold block mb-1">Explanation: </span>
             <div class="explanation-text" x-html="rendered.explanation"></div>
           </div>
@@ -250,7 +293,7 @@
                       @input="onNoteInput(currentQuestion.id)"
                       @blur="if (noteState[currentQuestion.id] === 'dirty') saveNote(currentQuestion.id)"
                       placeholder="e.g. Misread the sign / forgot formula…"
-                      class="w-full bg-[#0f0f0f] text-gray-100 text-xs sm:text-sm border border-white/10 rounded-lg p-2.5 outline-none focus:border-red-400 resize-y"></textarea>
+                      class="w-full bg-[#0f0f0f] text-gray-100 text-sm border border-white/10 rounded-lg p-2.5 outline-none focus:border-red-400 resize-y"></textarea>
             <div class="flex items-center justify-between mt-1.5 min-h-[22px]">
               <span class="text-[11px] font-semibold"
                     :class="noteState[currentQuestion?.id] === 'error' ? 'text-red-400' : (noteState[currentQuestion?.id] === 'saved' ? 'text-emerald-400' : 'text-gray-400')"
@@ -264,7 +307,7 @@
       </div>
 
       <!-- Practice Bottom Action Bar -->
-      <div class="nta-panel bg-[#111622]/90 border border-white/15 rounded-2xl p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2.5">
+      <div class="nta-panel bg-[#111622]/90 border border-white/15 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-2.5">
         <div class="flex flex-wrap items-center gap-2">
           <button type="button"
                   @click="toggleMark(currentQuestion?.id)"
@@ -297,21 +340,21 @@
 
           <template x-if="currentQuestion && !isChecked(currentQuestion.id) && !isFinished">
             <button type="button" @click="submitAnswer()" :disabled="selected[currentQuestion.id] == null"
-              class="btn-cute !py-2.5 !px-5 !text-xs sm:!text-sm disabled:opacity-40">
+              class="btn-cute !py-2.5 !px-5 !text-sm disabled:opacity-40">
               Save &amp; Check Answer
             </button>
           </template>
 
           <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex < questions.length - 1">
             <button type="button" @click="goNext()"
-              class="btn-cute !py-2.5 !px-5 !text-xs sm:!text-sm">
+              class="btn-cute !py-2.5 !px-5 !text-sm">
               Next Question &rarr;
             </button>
           </template>
 
           <template x-if="currentQuestion && isChecked(currentQuestion.id) && currentIndex === questions.length - 1 && !isFinished">
             <button type="button" @click="showFinishConfirm = true"
-              class="btn-cute !py-2.5 !px-5 !text-xs sm:!text-sm">
+              class="btn-cute !py-2.5 !px-5 !text-sm">
               Finish Practice ✓
             </button>
           </template>
@@ -321,16 +364,10 @@
     </div>
 
     <!-- ===============================================================
-         RIGHT PANEL (lg:col-span-4): CHAPTER QUESTION PALETTE (NO Physics/Chemistry/Biology Tabs!)
+         RIGHT PANEL (col-span-4): ALWAYS-VISIBLE CHAPTER QUESTION PALETTE
          =============================================================== -->
-    <aside class="lg:col-span-4 w-full lg:sticky lg:top-[68px]"
-           :class="mobilePaletteOpen ? 'fixed inset-0 z-50 bg-black/80 p-4 flex items-center justify-center backdrop-blur-sm lg:static lg:bg-transparent lg:p-0 lg:block' : 'hidden lg:block'">
-      <div class="nta-panel bg-[#111622]/95 border border-white/15 rounded-2xl p-4 w-full max-w-md lg:max-w-none max-h-[88vh] lg:max-h-[calc(100vh-84px)] flex flex-col shadow-2xl">
-
-        <div class="flex items-center justify-between pb-3 mb-3 border-b border-white/10 lg:hidden">
-          <h2 class="font-display text-sm font-bold text-white">Practice Question Palette</h2>
-          <button type="button" @click="mobilePaletteOpen = false" class="text-gray-400 hover:text-white text-sm font-bold px-2 py-0.5 rounded">✕ Close</button>
-        </div>
+    <aside class="col-span-4 w-full sticky top-[68px] block" aria-label="Question Palette">
+      <div class="nta-panel bg-[#111622]/95 border border-white/15 rounded-2xl p-4 w-full flex flex-col shadow-2xl">
 
         <!-- Status Legend -->
         <div class="mb-3.5 pb-3.5 border-b border-white/10">
@@ -355,20 +392,20 @@
           </div>
         </div>
 
-        <!-- Single-Chapter Header (No Physics/Chemistry/Biology Tabs!) -->
+        <!-- Single-Chapter Header -->
         <div class="flex items-center justify-between text-xs font-bold mb-2.5 px-0.5">
-          <span class="text-gold uppercase tracking-wider truncate">{{ chapter.name }}</span>
+          <span class="text-gold uppercase tracking-wider truncate">{{ chapter.name }} Palette</span>
           <span class="text-gray-300 tabular-nums shrink-0">
             Solved: <strong class="text-emerald-400" x-text="Object.keys(answers).length"></strong> / <strong class="text-white" x-text="questions.length"></strong>
           </span>
         </div>
 
-        <!-- Vertically Scrollable Question Grid -->
-        <div class="palette-scroll overflow-y-auto flex-1 min-h-[160px] max-h-[340px] lg:max-h-[380px] pr-1 py-1">
-          <div class="grid grid-cols-5 sm:grid-cols-6 lg:grid-cols-5 gap-2">
+        <!-- Vertically Scrollable Question Grid (5 Columns across all devices) -->
+        <div class="palette-scroll overflow-y-auto flex-1 min-h-[160px] max-h-[360px] pr-1 py-1">
+          <div class="grid grid-cols-5 gap-2">
             <template x-for="(q, idx) in questions" :key="'strip-' + q.id">
               <button type="button"
-                @click="jumpTo(idx); mobilePaletteOpen = false"
+                @click="jumpTo(idx)"
                 class="h-9 rounded-lg text-xs font-bold flex items-center justify-center transition-all duration-150 hover:scale-105 tabular-nums"
                 :class="[paletteClass(idx), currentIndex === idx ? 'ring-2 ring-gold ring-offset-2 ring-offset-[#111622]' : '']"
                 x-text="'Q' + (idx + 1)"></button>
@@ -377,7 +414,7 @@
         </div>
 
         <div class="pt-3 mt-3 border-t border-white/10">
-          <button type="button" @click="mobilePaletteOpen = false; showFinishConfirm = true" x-show="!isFinished"
+          <button type="button" @click="showFinishConfirm = true" x-show="!isFinished"
             class="btn-cute !w-full !py-2.5 !text-xs">
             Finish Practice &amp; View Analysis
           </button>
@@ -389,16 +426,16 @@
   </div>
 
   <!-- Finish confirmation modal -->
-  <div x-show="showFinishConfirm" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4" @click.self="showFinishConfirm = false">
+  <div x-show="showFinishConfirm" x-cloak class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4" @click.self="if (!isSubmitting) showFinishConfirm = false">
     <div class="bg-[#141926] border border-white/15 rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl">
       <h3 class="font-display text-lg font-bold text-white mb-2">Finish Practice &amp; View Result?</h3>
       <p class="text-xs text-gray-300 mb-5">Your score and question-by-question solutions will open immediately.</p>
       <p x-show="submitError" x-cloak class="text-xs font-semibold text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-3" x-text="submitError"></p>
       <div class="grid grid-cols-2 gap-2.5">
-        <button type="button" @click="showFinishConfirm = false" :disabled="isSubmitting" class="btn-cute-soft !py-2.5 !text-xs">
+        <button type="button" @click="if (!isSubmitting) showFinishConfirm = false" :disabled="isSubmitting" :class="isSubmitting ? 'opacity-30 pointer-events-none cursor-not-allowed' : ''" class="btn-cute-soft !py-2.5 !text-xs">
           Return to Practice
         </button>
-        <button type="button" @click="finishNow()" :disabled="isSubmitting" class="btn-cute !py-2.5 !text-xs">
+        <button type="button" @click="if (!isSubmitting) finishNow()" :disabled="isSubmitting" :class="isSubmitting ? 'opacity-70 pointer-events-none cursor-not-allowed' : ''" class="btn-cute !py-2.5 !text-xs">
           <span x-text="isSubmitting ? 'Submitting…' : 'Confirm Finish'"></span>
         </button>
       </div>
